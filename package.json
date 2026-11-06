@@ -1,0 +1,55 @@
+{
+  "name": "durandal",
+  "displayName": "Durandal",
+  "description": "Olifant in VS Code: conventions, generators, the TDD loop and plans over olifant lsp",
+  "publisher": "sorcererdev",
+  "version": "0.0.1",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sorcererdev/durandal-vscode"
+  },
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "workspaceContains:**/.olifant/config.toml"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "durandal.path chooses the binary the extension runs."
+    }
+  },
+  "contributes": {},
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap",
+    "compile": "tsc -p .",
+    "lint": "tsc -p . --noEmit && eslint .",
+    "test:unit": "tsc -p . && node --test \"out/test/unit/**/*.test.js\"",
+    "test:e2e": "npm run build && tsc -p . && node out/test/e2e/run.js",
+    "package": "vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^11.0.0",
+    "vscode-languageserver-protocol": "3.18.5"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.20.5",
+    "@types/vscode": "^1.91.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.1.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.14.0",
+    "mocha": "^11.8.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1"
+  }
+}
