@@ -1,0 +1,85 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+env:
+  GHC: '9.10.3'
+  CABAL: '3.16.1.0'
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, vscode: stable, package: true }
+          - { os: macos-latest, vscode: stable, package: false }
+          - { os: ubuntu-latest, vscode: 1.91.0, package: false }
+    name: test (${{ matrix.os }}, vscode ${{ matrix.vscode }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: olifant ref
+        id: ref
+        run: echo "sha=$(cat .olifant-ref)" >> "$GITHUB_OUTPUT"
+      # olifant is private: a fine-grained PAT with read-only Contents on sorcererdev/olifant
+      - uses: actions/checkout@v4
+        with:
+          repository: sorcererdev/olifant
+          ref: ${{ steps.ref.outputs.sha }}
+          path: olifant
+          token: ${{ secrets.OLIFANT_TOKEN }}
+      - uses: haskell-actions/setup@v2
+        id: haskell
+        with:
+          ghc-version: ${{ env.GHC }}
+          cabal-version: ${{ env.CABAL }}
+      # the store (dependencies) and olifant's own build, keyed on the ref: a ref bump rebuilds
+      # olifant on top of the previous store
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.haskell.outputs.cabal-store }}
+            olifant/dist-newstyle
+          key: cabal-${{ runner.os }}-ghc${{ env.GHC }}-${{ steps.ref.outputs.sha }}
+          restore-keys: cabal-${{ runner.os }}-ghc${{ env.GHC }}-
+      - name: olifant
+        working-directory: olifant
+        run: |
+          cabal build -v1 exe:olifant
+          echo "OLIFANT_BIN=$(cabal list-bin exe:olifant)" >> "$GITHUB_ENV"
+          echo "OLIFANT_REPO=$PWD" >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # olifant's rules shell out to the ast-grep CLI (pinned to the version tested locally)
+      - name: ast-grep
+        run: |
+          npm install -g @ast-grep/cli@0.45.3
+          ast-grep --version
+      - run: npm ci
+      - run: npm run lint
+      - name: unit
+        run: npm run test:unit
+      - uses: actions/cache@v4
+        with:
+          path: .vscode-test
+          key: vscode-test-${{ runner.os }}-${{ matrix.vscode }}
+      - name: e2e (fake server, then olifant lsp)
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then xvfb-run -a npm run test:e2e; else npm run test:e2e; fi
+        env:
+          VSCODE_VERSION: ${{ matrix.vscode }}
+      - name: package
+        if: matrix.package
+        run: npm run package
+      - uses: actions/upload-artifact@v4
+        if: matrix.package
+        with:
+          name: vsix
+          path: '*.vsix'
