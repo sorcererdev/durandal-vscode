@@ -26,7 +26,44 @@
       "description": "durandal.path chooses the binary the extension runs."
     }
   },
-  "contributes": {},
+  "contributes": {
+    "configuration": {
+      "title": "Durandal",
+      "properties": {
+        "durandal.path": {
+          "type": "string",
+          "default": "olifant",
+          "markdownDescription": "The `olifant` binary: an absolute path, or a name looked up on `PATH`, `~/.local/bin`, `~/.cabal/bin` and `~/bin`."
+        },
+        "durandal.debounceMs": {
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "markdownDescription": "How long typing must pause before the server's slow work (suggestions) starts (`debounce_ms`)."
+        },
+        "durandal.model": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Which `[model.backends.NAME]` fills holes; empty: the project's `[model]` default."
+        },
+        "durandal.fills": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "A recorded `[fills]` file standing in for the model (tests, demos); empty: none."
+        },
+        "durandal.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace the LSP traffic with olifant lsp into the Durandal output channel."
+        }
+      }
+    }
+  },
   "scripts": {
     "vscode:prepublish": "npm run build",
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap",
