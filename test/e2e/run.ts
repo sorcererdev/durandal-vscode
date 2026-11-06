@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -61,8 +62,26 @@ async function fake(): Promise<void> {
   }
 }
 
+// real: two python-htmx sandboxes (py, py2) served by the olifant at .olifant-ref.
+async function real(bin: string, repo: string): Promise<void> {
+  const ws = realpathSync(mkdtempSync(join(tmpdir(), 'durandal-real-')));
+  try {
+    for (const name of ['py', 'py2']) {
+      execFileSync('bash', [join(repo, 'scripts/try-pack.sh'), 'python-htmx', join(ws, name)], { stdio: 'ignore' });
+    }
+    settings(ws, bin);
+    await launch(ws, { DURANDAL_E2E_SUITE: 'real' });
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+}
+
 async function main(): Promise<void> {
   await fake();
+  const bin = process.env.OLIFANT_BIN;
+  const repo = process.env.OLIFANT_REPO;
+  if (bin && repo) await real(bin, resolve(repo));
+  else console.log('the real-server suite is skipped: set OLIFANT_BIN and OLIFANT_REPO');
 }
 
 main().catch(err => {
