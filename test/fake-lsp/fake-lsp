@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+# A stand-in for `olifant lsp` in tests: speaks just enough LSP (initialize,
+# Vendored from sorcererdev/durandal.nvim tests/fake-lsp at 7969a55; one change: `--help`
+# lists an `lsp` command and exits, so the fake passes durandal-vscode's binary gate.
+# shutdown, exit), records every message it gets to $FAKE_LSP_LOG (one JSON
+# per line), answers olifant/debugState, and exits at once (code 1) on a
+# `test/crash` notification, as a crashed server would. Other requests get
+# the canned answer in $FAKE_LSP_REPLIES/<method>.json (or null; an answer
+# {"lsp_error": "…"} is sent as a RequestFailed error; {"hold": true, "progress":
+# [words…]} reports that progress and answers only a $/cancelRequest, as cancelled);
+# {"notify": [{method, params}], …} sends those notifications first ("$uri" the
+# request's document), then the rest as the answer; one with "request": true is sent as a
+# server request (id "srv-N"; "$version" the document's last version, "$stale" one before).
+import json
+import signal, os, sys
+if "--help" in sys.argv[1:]:
+    print("Available commands:\n  lsp   Run the language server over stdin/stdout")
+    sys.exit(0)
+
+log = open(os.environ.get("FAKE_LSP_LOG", "/dev/null"), "a")
+folders = []
+held = []
+versions = {}
+sent = 0
+
+def read():
+    length = None
+    while True:
+        line = sys.stdin.buffer.readline()
+        if not line:
+            sys.exit(0)
+        line = line.decode().strip()
+        if not line:
+            break
+        if line.lower().startswith("content-length:"):
+            length = int(line.split(":")[1])
+    return json.loads(sys.stdin.buffer.read(length))
+
+def send(msg):
+    body = json.dumps(msg).encode()
+    sys.stdout.buffer.write(b"Content-Length: %d\r\n\r\n" % len(body) + body)
+    sys.stdout.buffer.flush()
+
+while True:
+    msg = read()
+    log.write(json.dumps(msg) + "\n")
+    log.flush()
+    method = msg.get("method")
+    if method is None:
+        continue  # the client's answer to a server request: logged above
+    if method in ("textDocument/didOpen", "textDocument/didChange"):
+        versions[msg["params"]["textDocument"]["uri"]] = msg["params"]["textDocument"].get("version", 0)
+    if method == "initialize":
+        folders = [f["uri"] for f in (msg["params"].get("workspaceFolders") or [])]
+        send({"jsonrpc": "2.0", "id": msg["id"], "result": {"capabilities": {"textDocumentSync": 2, "definitionProvider": True, "foldingRangeProvider": True, "semanticTokensProvider": {"legend": {"tokenTypes": ["planMarker", "planStep", "planStepDone", "planQuestion", "planEvidence", "planClaim", "planTest", "planAlso", "planJournal", "planAnchorPath", "planAnchorUnit", "planVerdict", "planFingerprint"], "tokenModifiers": ["done", "stale", "notFound"]}, "full": True}, "codeLensProvider": {"resolveProvider": False}, "workspace": {"workspaceFolders": {"supported": True, "changeNotifications": True}}}, "serverInfo": {"name": "olifant"}}})
+    elif method == "workspace/didChangeWorkspaceFolders":
+        folders += [f["uri"] for f in msg["params"]["event"]["added"]]
+    elif method == "olifant/debugState":
+        send({"jsonrpc": "2.0", "id": msg["id"], "result": {"documents": [], "projects": {f.replace("file://", ""): 1 for f in folders}}})
+    elif method == "shutdown":
+        send({"jsonrpc": "2.0", "id": msg["id"], "result": None})
+    elif method == "exit":
+        sys.exit(0)
+    elif method == "textDocument/didSave" and os.environ.get("FAKE_LSP_APPLY"):
+        # a region elsewhere follows the save (as olifant lsp keeps regions)
+        send({"jsonrpc": "2.0", "id": "apply-1", "method": "workspace/applyEdit", "params": {"label": "Olifant: regions", "edit": json.load(open(os.environ["FAKE_LSP_APPLY"]))}})
+    elif method == "textDocument/didChange" and os.environ.get("FAKE_LSP_SUGGEST"):
+        # what follows from the edit, for the version it was made at
+        suggestion = json.load(open(os.environ["FAKE_LSP_SUGGEST"]))
+        suggestion["uri"] = msg["params"]["textDocument"]["uri"]
+        suggestion["version"] = msg["params"]["textDocument"]["version"]
+        send({"jsonrpc": "2.0", "method": "olifant/suggestion", "params": suggestion})
+    elif method == "test/crash":
+        sys.exit(1)
+    elif method == "test/kill":
+        # killed by a signal (the OOM killer, kill -9): exit code 0, signal 9
+        os.kill(os.getpid(), signal.SIGKILL)
+    elif method == "test/spin":
+        # work that began and never ended (the server died during it)
+        send({"jsonrpc": "2.0", "method": "$/progress", "params": {"token": "olifant-spin", "value": {"kind": "begin", "title": "planning", "message": "asking the model…"}}})
+    elif method == "codeAction/resolve" and os.environ.get("FAKE_LSP_PROGRESS"):
+        # the words a long resolve reports as it goes
+        for kind, words in [("begin", None), ("report", os.environ["FAKE_LSP_PROGRESS"]), ("end", None)]:
+            value = {"kind": kind, "title": "planning"}
+            if words:
+                value["message"] = words
+            send({"jsonrpc": "2.0", "method": "$/progress", "params": {"token": "olifant-1", "value": value}})
+        reply = os.path.join(os.environ.get("FAKE_LSP_REPLIES", "/nonexistent"), "codeAction_resolve.json")
+        send({"jsonrpc": "2.0", "id": msg["id"], "result": json.load(open(reply)) if os.path.exists(reply) else None})
+    elif method == "$/cancelRequest":
+        # a held request the client gave up on: cancelled, as olifant lsp answers it
+        rid = msg["params"]["id"]
+        if rid in held:
+            held.remove(rid)
+            send({"jsonrpc": "2.0", "id": rid, "error": {"code": -32800, "message": "cancelled"}})
+    elif "id" in msg:
+        # a canned answer per method, from $FAKE_LSP_REPLIES/<method with / as _>.json
+        reply = os.path.join(os.environ.get("FAKE_LSP_REPLIES", "/nonexistent"), method.replace("/", "_") + ".json")
+        result = json.load(open(reply)) if os.path.exists(reply) else None
+        if isinstance(result, dict) and result.get("hold"):
+            # work that goes on: its progress (titled as the answer says), and no answer until cancelled
+            token = "olifant-hold-%s" % msg["id"]
+            send({"jsonrpc": "2.0", "method": "$/progress", "params": {"token": token, "value": {"kind": "begin", "title": result.get("title", "conjuring")}}})
+            for words in result.get("progress", []):
+                send({"jsonrpc": "2.0", "method": "$/progress", "params": {"token": token, "value": {"kind": "report", "message": words}}})
+            held.append(msg["id"])
+            continue
+        if isinstance(result, dict) and "notify" in result:
+            # the server's notifications before its answer ("$uri": the request's document)
+            uri = (msg.get("params") or {}).get("textDocument", {}).get("uri")
+            for n in result.pop("notify"):
+                version = versions.get(uri, 0)
+                params = json.dumps(n["params"]).replace('"$uri"', json.dumps(uri)).replace('"$version"', str(version)).replace('"$stale"', str(version - 1))
+                if n.get("request"):
+                    sent += 1
+                    send({"jsonrpc": "2.0", "id": "srv-%d" % sent, "method": n["method"], "params": json.loads(params)})
+                else:
+                    send({"jsonrpc": "2.0", "method": n["method"], "params": json.loads(params)})
+        if isinstance(result, dict) and "lsp_error" in result:
+            # a refusal, as olifant lsp sends one: RequestFailed with its sentence
+            send({"jsonrpc": "2.0", "id": msg["id"], "error": {"code": -32803, "message": result["lsp_error"]}})
+            continue
+        send({"jsonrpc": "2.0", "id": msg["id"], "result": result})

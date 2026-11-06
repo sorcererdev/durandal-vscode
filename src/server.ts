@@ -199,16 +199,19 @@ export class Server {
     await this.start();
   }
 
+  // request and notify send by the type's method name: the library checks a type object's
+  // parameter structure by identity, so a type made by another copy of the protocol module
+  // (the e2e tests', outside this bundle) would be refused. Every Olifant type is `auto`.
   async request<P, R>(type: RequestType<P, R, void>, params: RequestParam<P>, token?: vscode.CancellationToken): Promise<R> {
     const lc = this.client();
     if (!lc) throw new Error(NOT_RUNNING);
-    return token ? lc.sendRequest(type, params, token) : lc.sendRequest(type, params);
+    return token ? lc.sendRequest<R>(type.method, params, token) : lc.sendRequest<R>(type.method, params);
   }
 
   async notify<P>(type: NotificationType<P>, params: RequestParam<P>): Promise<void> {
     const lc = this.client();
     if (!lc) throw new Error(NOT_RUNNING);
-    await lc.sendNotification(type, params);
+    await lc.sendNotification(type.method, params);
   }
 
   // doctor is olifant doctor for the project of uri (the server never runs tests for it).
