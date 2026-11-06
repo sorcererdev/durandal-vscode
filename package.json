@@ -62,7 +62,219 @@
           "description": "Trace the LSP traffic with olifant lsp into the Durandal output channel."
         }
       }
-    }
+    },
+    "commands": [
+      {
+        "command": "durandal.showHealth",
+        "title": "Show Health",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.restartServer",
+        "title": "Restart Server",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.actions",
+        "title": "Actions Here",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.generate",
+        "title": "Generate…",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.test.file",
+        "title": "Run This File's Tests",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.test.all",
+        "title": "Run All Tests",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.jump",
+        "title": "Jump to Test or Module",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.stub",
+        "title": "Stub a Test",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.conjure",
+        "title": "Conjure",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.mutate",
+        "title": "Mutate",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.plan.ask",
+        "title": "Plan: Ask",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.plan.validate",
+        "title": "Plan: Validate",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.plan.do",
+        "title": "Plan: Do",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.plan.accept",
+        "title": "Plan: Accept",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.plan.reject",
+        "title": "Plan: Reject",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.plan.files",
+        "title": "Plan: Files",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.plan.reconcile",
+        "title": "Plan: Reconcile",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.plan.excerpt",
+        "title": "Plan: Excerpt",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.plan.review",
+        "title": "Plan: Review",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.plan.toggle",
+        "title": "Plan: Toggle Reading",
+        "category": "Durandal"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "durandal.actions",
+        "key": "ctrl+alt+d a",
+        "mac": "cmd+alt+d a",
+        "when": "durandal.inProject"
+      },
+      {
+        "command": "durandal.generate",
+        "key": "ctrl+alt+d g",
+        "mac": "cmd+alt+d g",
+        "when": "durandal.inProject"
+      },
+      {
+        "command": "durandal.test.file",
+        "key": "ctrl+alt+d t",
+        "mac": "cmd+alt+d t",
+        "when": "durandal.inProject"
+      },
+      {
+        "command": "durandal.test.all",
+        "key": "ctrl+alt+d shift+t",
+        "mac": "cmd+alt+d shift+t",
+        "when": "durandal.inProject"
+      },
+      {
+        "command": "durandal.jump",
+        "key": "ctrl+alt+d j",
+        "mac": "cmd+alt+d j",
+        "when": "durandal.inProject"
+      },
+      {
+        "command": "durandal.stub",
+        "key": "ctrl+alt+d s",
+        "mac": "cmd+alt+d s",
+        "when": "durandal.inProject"
+      },
+      {
+        "command": "durandal.conjure",
+        "key": "ctrl+alt+d c",
+        "mac": "cmd+alt+d c",
+        "when": "durandal.inProject"
+      },
+      {
+        "command": "durandal.mutate",
+        "key": "ctrl+alt+d m",
+        "mac": "cmd+alt+d m",
+        "when": "durandal.inProject"
+      },
+      {
+        "command": "durandal.plan.ask",
+        "key": "ctrl+alt+d p q",
+        "mac": "cmd+alt+d p q",
+        "when": "durandal.isPlan"
+      },
+      {
+        "command": "durandal.plan.validate",
+        "key": "ctrl+alt+d p v",
+        "mac": "cmd+alt+d p v",
+        "when": "durandal.isPlan"
+      },
+      {
+        "command": "durandal.plan.do",
+        "key": "ctrl+alt+d p d",
+        "mac": "cmd+alt+d p d",
+        "when": "durandal.isPlan"
+      },
+      {
+        "command": "durandal.plan.accept",
+        "key": "ctrl+alt+d p y",
+        "mac": "cmd+alt+d p y",
+        "when": "durandal.isPlan"
+      },
+      {
+        "command": "durandal.plan.reject",
+        "key": "ctrl+alt+d p n",
+        "mac": "cmd+alt+d p n",
+        "when": "durandal.isPlan"
+      },
+      {
+        "command": "durandal.plan.files",
+        "key": "ctrl+alt+d p f",
+        "mac": "cmd+alt+d p f",
+        "when": "durandal.isPlan"
+      },
+      {
+        "command": "durandal.plan.reconcile",
+        "key": "ctrl+alt+d p c",
+        "mac": "cmd+alt+d p c",
+        "when": "durandal.isPlan"
+      },
+      {
+        "command": "durandal.plan.excerpt",
+        "key": "ctrl+alt+d p e",
+        "mac": "cmd+alt+d p e",
+        "when": "durandal.isPlan"
+      },
+      {
+        "command": "durandal.plan.review",
+        "key": "ctrl+alt+d p r",
+        "mac": "cmd+alt+d p r",
+        "when": "durandal.isPlan"
+      },
+      {
+        "command": "durandal.plan.toggle",
+        "key": "ctrl+alt+d p x",
+        "mac": "cmd+alt+d p x",
+        "when": "durandal.isPlan"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
