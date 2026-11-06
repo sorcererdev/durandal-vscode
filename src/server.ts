@@ -78,9 +78,9 @@ export class Server {
     const added = [...this.known].filter(r => !this.sent.has(r) && !vsFolders.has(r));
     for (const r of added) this.sent.add(r);
     if (added.length === 0) return;
-    void lc.sendNotification(DidChangeWorkspaceFoldersNotification.type, {
+    lc.sendNotification(DidChangeWorkspaceFoldersNotification.type, {
       event: { added: added.map(r => ({ uri: vscode.Uri.file(r).toString(), name: r })), removed: [] },
-    });
+    }).catch((err: Error) => this.output.error(`olifant lsp: sending workspace folders failed: ${err.message}`));
   }
 
   // reportOnce is the one error notification per failure until the next restart.

@@ -2,6 +2,7 @@ import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import { STOPPED } from '../../src/health';
 import { Olifant } from '../../src/protocol';
+import { NOT_RUNNING } from '../../src/server';
 import { added, api, count, file, log, open, reply, restart, running, sleep, until } from './helpers';
 
 describe('lifecycle and health (fake server)', () => {
@@ -39,7 +40,7 @@ describe('lifecycle and health (fake server)', () => {
     assert.equal(count('initialize'), inits, 'no restart');
     assert.deepEqual(a.shown.slice(before).filter(s => s.level === 'error').map(s => s.text), [STOPPED]);
     assert.match((await a.health()).join('\n'), /^error: olifant lsp stopped/m);
-    await assert.rejects(a.server.request(Olifant.testsFile, { textDocument: { uri: file('one/main.py').toString() } }), /not running/);
+    await assert.rejects(a.server.request(Olifant.testsFile, { textDocument: { uri: file('one/main.py').toString() } }), { message: NOT_RUNNING });
   });
 
   it('Restart Server brings it back, with its projects and olifant.doctor', async () => {

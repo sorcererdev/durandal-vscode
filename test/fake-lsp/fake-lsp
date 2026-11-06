@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# A stand-in for `olifant lsp` in tests: speaks just enough LSP (initialize,
 # Vendored from sorcererdev/durandal.nvim tests/fake-lsp at 7969a55; one change: `--help`
 # lists an `lsp` command and exits, so the fake passes durandal-vscode's binary gate.
+# A stand-in for `olifant lsp` in tests: speaks just enough LSP (initialize,
 # shutdown, exit), records every message it gets to $FAKE_LSP_LOG (one JSON
 # per line), answers olifant/debugState, and exits at once (code 1) on a
 # `test/crash` notification, as a crashed server would. Other requests get
