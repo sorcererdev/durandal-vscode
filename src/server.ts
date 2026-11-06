@@ -39,7 +39,11 @@ export class Server {
   private st: ServerState = 'not started';
   private gate: Gate | undefined;
   private reported = false;
-  private stopping = false;
+  // gen is the current start's generation: stop() bumps it, and a start of an older one
+  // gives up (and disposes any client it made). disposed settles once every client stop()
+  // took away is disposed: a new client waits for it (the old one holds olifant.doctor).
+  private gen = 0;
+  private disposed: Promise<unknown> = Promise.resolve();
   private known = new Set<string>();
   private sent = new Set<string>();
 
@@ -92,12 +96,16 @@ export class Server {
 
   // start starts the server once; false when the binary failed its check or the start failed.
   start(): Promise<boolean> {
-    if (!this.starting) this.starting = this.doStart();
+    if (!this.starting) this.starting = this.doStart(this.gen);
     return this.starting;
   }
 
-  private async doStart(): Promise<boolean> {
+  private async doStart(gen: number): Promise<boolean> {
+    // the disposals before this start (not a later stop's, which waits on this start)
+    const prior = this.disposed;
     const gate = await this.checkGate();
+    await prior;
+    if (gen !== this.gen) return false;
     if (!gate.ok || !gate.path) {
       this.st = 'failed';
       this.reportOnce(gate.problem ?? 'olifant: the binary failed its check', 'Open Settings', 'Show Health');
@@ -129,7 +137,8 @@ export class Server {
           return { action: ErrorAction.Continue, handled: true };
         },
         closed: () => {
-          if (!this.stopping && this.st === 'running') {
+          // only the current client's close is a failure: stop() takes it away before disposing
+          if (this.lc === made.lc && this.st === 'running') {
             this.st = 'stopped';
             this.reportOnce(STOPPED, 'Show Health', 'Restart Server');
           }
@@ -150,10 +159,15 @@ export class Server {
         this.lc = undefined;
         this.st = 'failed';
       }
-      if (!this.stopping) this.reportOnce(`olifant lsp failed to start: ${message}`, 'Show Health', 'Restart Server');
+      if (gen === this.gen) this.reportOnce(`olifant lsp failed to start: ${message}`, 'Show Health', 'Restart Server');
       return false;
     }
     lc.quiet = false;
+    if (gen !== this.gen) {
+      // stopped while starting: stop() disposed it already, or will; make sure
+      await lc.dispose().catch(() => undefined);
+      return false;
+    }
     this.st = 'running';
     this.sent.clear();
     await this.sendFolders();
@@ -161,21 +175,20 @@ export class Server {
   }
 
   // stop disposes the client (its features, and the olifant.doctor command it registered).
+  // Safe to call while a start is under way, and concurrently with other stops and restarts.
   async stop(): Promise<void> {
+    this.gen++;
     const lc = this.lc;
     const starting = this.starting;
     this.lc = undefined;
     this.starting = undefined;
-    if (lc) {
-      this.stopping = true;
-      try {
-        await starting;
-        await lc.dispose().catch(() => undefined);
-      } finally {
-        this.stopping = false;
-      }
-    }
     this.st = 'not started';
+    this.disposed = Promise.all([
+      this.disposed,
+      lc?.dispose().catch(() => undefined),
+      starting?.catch(() => false),
+    ]);
+    await this.disposed;
   }
 
   // restart forgets the gate and the reported failure, and starts again.
