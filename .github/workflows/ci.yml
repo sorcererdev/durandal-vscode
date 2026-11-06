@@ -32,14 +32,17 @@ jobs:
           ref: ${{ steps.ref.outputs.sha }}
           path: olifant
           token: ${{ secrets.OLIFANT_TOKEN }}
+          persist-credentials: false
       - uses: haskell-actions/setup@v2
         id: haskell
         with:
           ghc-version: ${{ env.GHC }}
           cabal-version: ${{ env.CABAL }}
       # the store (dependencies) and olifant's own build, keyed on the ref: a ref bump rebuilds
-      # olifant on top of the previous store
-      - uses: actions/cache@v4
+      # olifant on top of the previous store. Saved right after the build (below), not in a post
+      # step, so a later failure does not discard a cold build.
+      - uses: actions/cache/restore@v4
+        id: cabal-cache
         with:
           path: |
             ${{ steps.haskell.outputs.cabal-store }}
@@ -52,6 +55,13 @@ jobs:
           cabal build -v1 exe:olifant
           echo "OLIFANT_BIN=$(cabal list-bin exe:olifant)" >> "$GITHUB_ENV"
           echo "OLIFANT_REPO=$PWD" >> "$GITHUB_ENV"
+      - uses: actions/cache/save@v4
+        if: steps.cabal-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ${{ steps.haskell.outputs.cabal-store }}
+            olifant/dist-newstyle
+          key: cabal-${{ runner.os }}-ghc${{ env.GHC }}-${{ steps.ref.outputs.sha }}
       - uses: astral-sh/setup-uv@v6
       - uses: actions/setup-node@v4
         with:
