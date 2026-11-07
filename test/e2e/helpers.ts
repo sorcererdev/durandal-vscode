@@ -70,3 +70,10 @@ export function added(msgs: Msg[] = log()): string[] {
 }
 
 export const count = (method: string) => log().filter(m => m.method === method).length;
+
+// actionLog is the action log's lines ($DURANDAL_LOG_DIR/actions.jsonl), oldest first.
+export function actionLog(): Record<string, unknown>[] {
+  const p = join(process.env.DURANDAL_LOG_DIR!, 'actions.jsonl');
+  if (!existsSync(p)) return [];
+  return readFileSync(p, 'utf8').split('\n').filter(l => l !== '').map(l => JSON.parse(l) as Record<string, unknown>);
+}
