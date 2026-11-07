@@ -48,6 +48,18 @@ describe('landing a plan (fake server)', () => {
     await revert(ed.document);
   });
 
+  it('a file open and clean, changed on disk since planning: nothing applied (Review Focus 2)', async () => {
+    const a = await running();
+    const t = twoFiles();
+    await open(file('one/other.py'));
+    // no wait for the watcher: the document may still read the planned before
+    writeFileSync(join(root(), 'other.py'), `# outside\n${t.before}`);
+    assert.equal(await a.plans.land(root(), t.plan, t.edit, 'Made'), 'other.py changed since planning; nothing was applied — plan again');
+    assert.ok(!existsSync(join(root(), 'made.py')));
+    assert.equal(disk('one/other.py'), `# outside\n${t.before}`);
+    await settle('one/other.py', t.before);
+  });
+
   it('a file the plan creates, there meanwhile: nothing applied (Review Focus 2)', async () => {
     const a = await running();
     const t = twoFiles();
