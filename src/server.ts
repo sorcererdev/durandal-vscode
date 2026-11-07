@@ -1,7 +1,7 @@
 import * as os from 'node:os';
 import * as vscode from 'vscode';
 import {
-  CloseAction, DidChangeWorkspaceFoldersNotification, ErrorAction, ExecuteCommandRequest,
+  CloseAction, CodeActionResolveRequest, DidChangeWorkspaceFoldersNotification, ErrorAction, ExecuteCommandRequest,
   LanguageClient, LanguageClientOptions, NotificationType, RequestParam, RequestType, ServerOptions,
 } from 'vscode-languageclient/node';
 import { applyServerEdit } from './applyEdit';
@@ -13,6 +13,10 @@ import { initOptions, settingsFrom } from './settings';
 export type Say = (level: 'info' | 'warn' | 'error', text: string, ...actions: string[]) => Thenable<string | undefined>;
 
 export const NOT_RUNNING = 'olifant lsp is not running here (Durandal: Show Health)';
+
+// The command a lightbulb action resolved by the server runs: its edit through applyServerEdit
+// (arguments: the action's title, the server's WorkspaceEdit). Registered by actions/command.ts.
+export const APPLY_RESOLVED = 'durandal.applyResolvedEdit';
 
 // OlifantClient keeps the library's forced notifications out of a start: the extension reports
 // a failed start itself, once. They still reach the output channel.
@@ -129,6 +133,19 @@ export class Server {
           handleApplyEdit: params => made.lc
             ? applyServerEdit(made.lc, params, text => void this.say('info', text))
             : { applied: false, failureReason: NOT_RUNNING },
+        },
+        // a code action picked from the lightbulb (Ctrl+.): resolved here so the server's edit
+        // keeps its versions, then applied durandal.nvim's way (refused if stale, files saved,
+        // no refactor preview) by APPLY_RESOLVED instead of by VS Code (spec §4)
+        resolveCodeAction: async (item, token, next) => {
+          const lc = made.lc;
+          if (!lc) return next(item, token);
+          const raw = await lc.sendRequest(CodeActionResolveRequest.type, await lc.code2ProtocolConverter.asCodeAction(item, token), token);
+          const out = await lc.protocol2CodeConverter.asCodeAction(raw, token);
+          if (!out || !raw?.edit) return out ?? item;
+          out.edit = undefined;
+          out.command = { title: raw.title, command: APPLY_RESOLVED, arguments: [raw.title, raw.edit] };
+          return out;
         },
       },
       errorHandler: {
