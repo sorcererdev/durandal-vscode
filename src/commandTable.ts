@@ -25,6 +25,7 @@ export const NOT_YET: Record<string, { title: string; milestone: number }> = {
 export const BUILT: Record<string, { title: string; enablement?: string }> = {
   'durandal.generate': { title: 'Generate…' },
   'durandal.actions': { title: 'Actions Here' },
+  'durandal.hints.toggle': { title: 'Toggle ⚡ Hints' },
   'durandal.generate.apply': { title: 'Generate: Apply', enablement: 'durandal.formOpen' },
   'durandal.generate.review': { title: 'Generate: Review Plan', enablement: 'durandal.formOpen' },
 };

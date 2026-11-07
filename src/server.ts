@@ -18,6 +18,12 @@ export const NOT_RUNNING = 'olifant lsp is not running here (Durandal: Show Heal
 // (arguments: the action's title, the server's WorkspaceEdit). Registered by actions/command.ts.
 export const APPLY_RESOLVED = 'durandal.applyResolvedEdit';
 
+// ClientHooks are what other parts of the extension put into the client's middleware.
+export interface ClientHooks {
+  // ⚡ hints (spec §6): off draws none; on, shown hears the lines drawn (for the action log)
+  hints?: { enabled(): boolean; shown(uri: string, lines: number[]): void };
+}
+
 // OlifantClient keeps the library's forced notifications out of a start: the extension reports
 // a failed start itself, once. They still reach the output channel.
 class OlifantClient extends LanguageClient {
@@ -51,7 +57,7 @@ export class Server {
   private known = new Set<string>();
   private sent = new Set<string>();
 
-  constructor(private readonly output: vscode.LogOutputChannel, private readonly say: Say) {}
+  constructor(private readonly output: vscode.LogOutputChannel, private readonly say: Say, private readonly hooks: ClientHooks = {}) {}
 
   state(): ServerState { return this.st; }
   roots(): string[] { return [...this.known]; }
@@ -121,6 +127,7 @@ export class Server {
     const serverOptions: ServerOptions = { command: gate.path, args: ['lsp'], options: { env: { ...process.env } } };
     // made.lc is set before start(); the server sends no workspace/applyEdit before that.
     const made: { lc?: OlifantClient } = {};
+    const hooks = this.hooks;
     const clientOptions: LanguageClientOptions = {
       documentSelector: [{ scheme: 'file' }],
       initializationOptions: initOptions(settings, process.platform),
@@ -146,6 +153,13 @@ export class Server {
           out.edit = undefined;
           out.command = { title: raw.title, command: APPLY_RESOLVED, arguments: [raw.title, raw.edit] };
           return out;
+        },
+        provideInlayHints: async (document, viewPort, token, next) => {
+          const h = hooks.hints;
+          if (h && !h.enabled()) return [];
+          const hints = (await next(document, viewPort, token)) ?? [];
+          h?.shown(document.uri.toString(), hints.map(x => x.position.line));
+          return hints;
         },
       },
       errorHandler: {

@@ -6,11 +6,12 @@ import { registerNotYet } from './commands';
 import { errorMessage } from './errors';
 import { Generate } from './generate/command';
 import { DoctorSection, report } from './health';
+import { Hints } from './hints';
 import { Plans } from './land';
 import { discover, trackProjects } from './projects';
 import { quickInputUi } from './quickInput';
 import { findRoot } from './root';
-import { Say, Server } from './server';
+import { ClientHooks, Say, Server } from './server';
 import type { Ui } from './uiTypes';
 import { VirtualDocs } from './virtualDocs';
 
@@ -40,7 +41,8 @@ export function activate(context: vscode.ExtensionContext): Api {
     if (level === 'warn') return vscode.window.showWarningMessage(text, ...actions);
     return vscode.window.showErrorMessage(text, ...actions);
   };
-  const s = new Server(output, say);
+  const hooks: ClientHooks = {};
+  const s = new Server(output, say, hooks);
   server = s;
   const docs = new VirtualDocs();
   docs.register(context);
@@ -53,6 +55,9 @@ export function activate(context: vscode.ExtensionContext): Api {
     enabled: () => vscode.workspace.getConfiguration('durandal').get<boolean>('actionLog', true),
     warn: m => output.warn(m),
   });
+  const hints = new Hints({ server: s, log });
+  hints.register(context);
+  hooks.hints = hints;
   const generate = new Generate({ server: s, docs, plans, log, state: context.workspaceState, ui });
   generate.register(context);
   new Actions({ server: s, plans, generate, log, ui, say }).register(context);
