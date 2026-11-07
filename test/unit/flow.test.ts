@@ -70,17 +70,20 @@ function setup(debounceMs = 0) {
   const snippets: PlanSnippet[] = [];
   const reviews: { plan: Plan; title: string; landed(): void }[] = [];
   let landError: string | undefined;
+  let landGate: Promise<void> | undefined;
   const env: FlowEnv = {
     server, ui, preview: sink, recent: ['p/query'],
     remember: id => { remembered.push(id); },
     log: e => { logged.push(e); },
-    land: async (p, _edit, name) => { landed.push({ plan: p, name }); return landError; },
+    land: async (p, _edit, name) => { landed.push({ plan: p, name }); await landGate; return landError; },
     snippet: async s => { snippets.push(s); return true; },
     review: async (p, _edit, o) => { reviews.push({ plan: p, ...o }); },
     debounceMs,
   };
   const flow = new Flow(env, origin);
-  return { server, ui, sink, logged, remembered, landed, snippets, reviews, flow, failLand: (m: string) => { landError = m; } };
+  // holdLand keeps the next land pending until the returned function is called
+  const holdLand = () => { let release!: () => void; landGate = new Promise(r => { release = r; }); return release; };
+  return { server, ui, sink, logged, remembered, landed, snippets, reviews, flow, failLand: (m: string) => { landError = m; }, holdLand };
 }
 type S = ReturnType<typeof setup>;
 
@@ -415,4 +418,68 @@ test('an edit disarms a waiting Enter: the values it lands on were never confirm
   assert.equal(s.server.count('olifant/plan'), 0);
   assert.equal(s.landed.length, 0);
   assert.ok(s.ui.openForm);
+});
+
+test('Escape while the files are landing: a landing that went through is still logged and remembered', async () => {
+  const s = await ready();
+  const release = s.holdLand();
+  void s.ui.openForm!.answer({ kind: 'apply' });
+  await tick();
+  s.server.take('olifant/plan').resolve(planned());
+  await tick();
+  assert.equal(s.landed.length, 1, 'landing');
+  void s.ui.openForm!.answer({ kind: 'escape' });
+  assert.deepEqual(await s.flow.result, { kind: 'closed' });
+  release();
+  await tick();
+  assert.deepEqual(s.logged, [{ event: 'generate-applied', generator: 'p/command' }]);
+  assert.deepEqual(s.remembered, ['p/command']);
+  assert.deepEqual(s.ui.log.filter(l => l.startsWith('error')), []);
+});
+
+test('Escape while the files are landing: a refused landing still shows its error', async () => {
+  const s = await ready();
+  const release = s.holdLand();
+  s.failLand('src/a.py changed since planning; nothing was applied — plan again');
+  void s.ui.openForm!.answer({ kind: 'apply' });
+  await tick();
+  s.server.take('olifant/plan').resolve(planned());
+  await tick();
+  void s.ui.openForm!.answer({ kind: 'escape' });
+  assert.deepEqual(await s.flow.result, { kind: 'closed' });
+  release();
+  await tick();
+  assert.deepEqual(s.ui.log.filter(l => l.startsWith('error')), ['error src/a.py changed since planning; nothing was applied — plan again']);
+  assert.deepEqual(s.logged, []);
+  assert.deepEqual(s.remembered, []);
+});
+
+test('-32800 on the newest preview frees the form: not updating, a waiting Enter disarmed, nothing painted', async () => {
+  const s = await opened();
+  await type(s, 0, 'command', 'close_table');
+  // the preview for close_table is in flight: Enter waits for it
+  void s.ui.openForm!.answer({ kind: 'apply' });
+  await tick();
+  const texts = s.ui.texts.length;
+  s.server.take('olifant/preview').reject(Object.assign(new Error('cancelled'), { code: -32800 }));
+  await tick();
+  assert.equal(s.ui.openForm!.model.updating, false);
+  assert.equal(s.ui.openForm!.model.error, undefined);
+  assert.deepEqual(s.ui.log.filter(l => l.startsWith('error')), []);
+  assert.equal(s.sink.shown.length, 1, 'nothing painted');
+  assert.equal(s.ui.texts.length, texts, 'the disarmed Enter did nothing');
+  // Enter answers again at once (not ready: the first missing field)
+  void s.ui.openForm!.answer({ kind: 'apply' });
+  await tick();
+  assert.equal(s.ui.texts.length, texts + 1);
+  assert.equal(s.server.count('olifant/plan'), 0);
+});
+
+test('-32800 on the newest preview with the server gone says so and closes the form', async () => {
+  const s = await opened();
+  await type(s, 0, 'command', 'close_table');
+  s.server.up = false;
+  s.server.take('olifant/preview').reject(Object.assign(new Error('Client is not running'), { code: -32800 }));
+  assert.deepEqual(await s.flow.result, { kind: 'closed' });
+  assert.deepEqual(s.ui.log.filter(l => l.startsWith('error')), ['error Client is not running']);
 });
