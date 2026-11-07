@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-# Vendored from sorcererdev/durandal.nvim tests/fake-lsp at 7969a55; one change: `--help`
-# lists an `lsp` command and exits, so the fake passes durandal-vscode's binary gate.
+# Vendored from sorcererdev/durandal.nvim tests/fake-lsp at 7969a55; two changes: `--help`
+# lists an `lsp` command and exits, so the fake passes durandal-vscode's binary gate; and the
+# capabilities add codeActionProvider (with resolve) and inlayHintProvider, so the client
+# registers both features (olifant lsp has both).
 # A stand-in for `olifant lsp` in tests: speaks just enough LSP (initialize,
 # shutdown, exit), records every message it gets to $FAKE_LSP_LOG (one JSON
 # per line), answers olifant/debugState, and exits at once (code 1) on a
@@ -52,7 +54,7 @@ while True:
         versions[msg["params"]["textDocument"]["uri"]] = msg["params"]["textDocument"].get("version", 0)
     if method == "initialize":
         folders = [f["uri"] for f in (msg["params"].get("workspaceFolders") or [])]
-        send({"jsonrpc": "2.0", "id": msg["id"], "result": {"capabilities": {"textDocumentSync": 2, "definitionProvider": True, "foldingRangeProvider": True, "semanticTokensProvider": {"legend": {"tokenTypes": ["planMarker", "planStep", "planStepDone", "planQuestion", "planEvidence", "planClaim", "planTest", "planAlso", "planJournal", "planAnchorPath", "planAnchorUnit", "planVerdict", "planFingerprint"], "tokenModifiers": ["done", "stale", "notFound"]}, "full": True}, "codeLensProvider": {"resolveProvider": False}, "workspace": {"workspaceFolders": {"supported": True, "changeNotifications": True}}}, "serverInfo": {"name": "olifant"}}})
+        send({"jsonrpc": "2.0", "id": msg["id"], "result": {"capabilities": {"textDocumentSync": 2, "definitionProvider": True, "foldingRangeProvider": True, "semanticTokensProvider": {"legend": {"tokenTypes": ["planMarker", "planStep", "planStepDone", "planQuestion", "planEvidence", "planClaim", "planTest", "planAlso", "planJournal", "planAnchorPath", "planAnchorUnit", "planVerdict", "planFingerprint"], "tokenModifiers": ["done", "stale", "notFound"]}, "full": True}, "codeLensProvider": {"resolveProvider": False}, "codeActionProvider": {"resolveProvider": True}, "inlayHintProvider": True, "workspace": {"workspaceFolders": {"supported": True, "changeNotifications": True}}}, "serverInfo": {"name": "olifant"}}})
     elif method == "workspace/didChangeWorkspaceFolders":
         folders += [f["uri"] for f in msg["params"]["event"]["added"]]
     elif method == "olifant/debugState":

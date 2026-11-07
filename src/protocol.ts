@@ -16,19 +16,67 @@ export type Sets = Record<string, unknown>;
 export interface Survivor { line: number; operator: string; from: string; to: string; mutated: string }
 type Open = Record<string, unknown>;
 
-// --- generate (milestone 2)
+// --- generate and actions (milestone 2)
+export type Values = Record<string, string>;
+// olifant/generators lists each generator's full showJson plus `here`; the client reads these.
+// (`pack` is not in the detailed list.)
 export interface GeneratorsParams extends Doc { position?: Position }
-export interface GeneratorItem extends Open { name: string; kind?: string; summary?: string; here?: boolean }
+export interface GeneratorItem extends Open { id: string; name: string; kind?: string; summary?: string; here?: boolean }
 export interface GeneratorsResult extends Open { generators: GeneratorItem[] }
 export interface ChoicesParams extends Doc { generator: string; sets: Sets }
 export interface ChoicesResult extends Open { inputs: unknown[] }
-export interface PreviewParams extends At { steps: unknown[] }
+
+// olifant/preview: the form's fields for every step, the files it would write, the main one's text.
+export type Source = 'you' | 'path' | 'here' | 'only' | 'default' | 'new' | 'suggested';
+export interface Field {
+  name: string; value: string | null; source: Source | null; valid: boolean; why: string | null;
+  choices: string[] | null; needs: string[]; new: string[];
+}
+// Step: a generator of the form, with the values you set; a `+ New` step comes first and
+// `makes` names the later step (0-based) whose input it fills.
+export interface Step { generator: string; sets: Values; makes?: { step: number; input: string } }
+export interface PreviewParams extends At { steps: Step[] }
+export interface PreviewFile { path: string; new: boolean; added: number; removed: number }
+// main: the first new file, else the first changed one; first: its first differing line (1-based)
+export interface PreviewMain { path: string; text: string; first: number }
+export interface PreviewResult {
+  steps: { generator: string; fields: Field[] }[]; files: PreviewFile[]; main: PreviewMain | null; ready: boolean; error: string | null;
+}
+
+// olifant/plan (and codeAction/resolve's data.plan): files relative to the project root.
+export interface PlanFile { path: string; before: string | null; after: string }
+export interface Hole extends Open { name: string; status: string; model?: string | null; why?: string | null; fill?: string | null; file?: string; line?: number }
+// snippet: line is 1-based; its text is replaced by body (TextMate-style tab stops)
+export interface PlanSnippet { file: string; line: number; body: string; ghost?: unknown }
+export interface Conflict { code: string; message: string }
+export interface Plan extends Open {
+  generator?: string; files?: PlanFile[]; conflicts: Conflict[]; warnings: string[]; holes: Hole[]; snippet: PlanSnippet | null;
+}
 // olifant/plan: the generate picker's steps, a follow-up's planId, or a recognition's sets.
 export type PlanParams =
-  | (At & { steps: unknown[] })
+  | (At & { steps: Step[] })
   | { planId: string; fill?: boolean }
   | (Doc & { generator: string; sets: Sets; recognize: true });
-export interface PlanResult extends Open { plan?: unknown; edit?: WorkspaceEdit }
+export interface PlanResult extends Open { plan: Plan; edit?: WorkspaceEdit }
+
+// olifant/fileActions: lines and columns 1-based; range null for a whole-file action.
+export interface FileAction extends Open {
+  generator: string; name: string; label: string; range: { start: [number, number]; end: [number, number] } | null;
+  sets: Sets; missing: string[]; snippet: boolean; trigger?: boolean;
+}
+export interface Nearby extends Open { generator: string; name?: string; label?: string; why: string }
+export interface FileActionsResult extends Open { actions: FileAction[]; nearby: Nearby[] }
+
+// olifant/model's migration (present only while the project migrates).
+export interface Migration extends Open { line: string; switches: { name: string; on: boolean }[]; added_legacy: string[]; unregistered: string[] }
+export interface ModelResult extends Open { migration?: Migration }
+
+// A code action's data (textDocument/codeAction): a generator's action or a rule's fix; what
+// codeAction/resolve adds is the plan.
+export interface ActionData extends Open {
+  kind?: string; generator?: string; rule?: string; sets?: Values; missing?: string[];
+  choices?: Record<string, string[]>; snippet?: boolean; plan?: Plan;
+}
 
 // --- ghosts and follow-ups (milestone 3)
 export interface Suggestion extends Open {
@@ -76,11 +124,11 @@ const note = <P>(method: string) => new NotificationType<P>(method);
 export const Olifant = {
   generators: req<GeneratorsParams, GeneratorsResult>('olifant/generators'),
   choices: req<ChoicesParams, ChoicesResult>('olifant/choices'),
-  preview: req<PreviewParams, Open>('olifant/preview'),
+  preview: req<PreviewParams, PreviewResult>('olifant/preview'),
   plan: req<PlanParams, PlanResult>('olifant/plan'),
-  fileActions: req<Doc, unknown>('olifant/fileActions'),
+  fileActions: req<Doc, FileActionsResult>('olifant/fileActions'),
   holes: req<Doc, unknown>('olifant/holes'),
-  model: req<Doc, Open>('olifant/model'),
+  model: req<Doc, ModelResult | null>('olifant/model'),
   suggest: req<SuggestParams, Suggestion | null>('olifant/suggest'),
   stub: req<StubParams, StubResult>('olifant/stub'),
   conjure: req<ConjureParams, ConjureResult>('olifant/conjure'),
