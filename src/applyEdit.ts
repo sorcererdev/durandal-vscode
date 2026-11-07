@@ -2,6 +2,7 @@ import { basename } from 'node:path';
 import * as vscode from 'vscode';
 import type { ApplyWorkspaceEditParams, ApplyWorkspaceEditResult, LanguageClient } from 'vscode-languageclient/node';
 import { appliedMessage, editedUris, stripAnnotations, versionConflict } from './edits';
+import { errorMessage } from './errors';
 import { isPlanFile } from './root';
 
 // key compares a server's uri with VS Code's spelling of it (encoding differs: %3A, [, ]).
@@ -15,23 +16,27 @@ let lock: Promise<unknown> = Promise.resolve();
 // moved past the version the edit was made at; applied without its annotations; then each
 // edited file that had no unsaved changes before, and is not a plan, is saved (as regions are
 // kept on save); one notice names the files saved, and those it could not save.
+// word: the one notice, from the files saved and those that could not be (default: the label
+// and the names; a plan says "Applied <name>: N files").
 export function applyServerEdit(
   lc: LanguageClient, params: ApplyWorkspaceEditParams, say: (text: string) => void,
+  word: (saved: string[], unsaved: string[]) => string | undefined = (s, u) => appliedMessage(params.label, s, u),
 ): Promise<ApplyWorkspaceEditResult> {
-  const run = lock.then(() => applyNow(lc, params, say));
+  const run = lock.then(() => applyNow(lc, params, say, word));
   lock = run.catch(() => undefined);
   return run;
 }
 
 async function applyNow(
   lc: LanguageClient, params: ApplyWorkspaceEditParams, say: (text: string) => void,
+  word: (saved: string[], unsaved: string[]) => string | undefined,
 ): Promise<ApplyWorkspaceEditResult> {
   const edit = stripAnnotations(params.edit);
   let converted: vscode.WorkspaceEdit;
   try {
     converted = await lc.protocol2CodeConverter.asWorkspaceEdit(edit);
   } catch (err) {
-    return { applied: false, failureReason: err instanceof Error ? err.message : String(err) };
+    return { applied: false, failureReason: errorMessage(err) };
   }
   // from the version check to vscode.workspace.applyEdit, no await: typing cannot slip between
   const conflict = versionConflict(edit, uri => openDoc(key(uri))?.version);
@@ -42,7 +47,7 @@ async function applyNow(
   try {
     ok = await vscode.workspace.applyEdit(converted);
   } catch (err) {
-    return { applied: false, failureReason: err instanceof Error ? err.message : String(err) };
+    return { applied: false, failureReason: errorMessage(err) };
   }
   if (!ok) return { applied: false, failureReason: 'VS Code did not apply the edit' };
   const saved: string[] = [];
@@ -54,7 +59,7 @@ async function applyNow(
     if (!doc || !doc.isDirty) continue;
     (await doc.save() ? saved : unsaved).push(basename(uri.fsPath));
   }
-  const text = appliedMessage(params.label, saved, unsaved);
+  const text = word(saved, unsaved);
   if (text) say(text);
   return { applied: true };
 }
