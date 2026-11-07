@@ -57,6 +57,11 @@
           "default": true,
           "markdownDescription": "Append the actions offered and picked to `actions.jsonl` in `$DURANDAL_LOG_DIR`, else `$XDG_CACHE_HOME/durandal`, else `~/.cache/durandal` (the file durandal.nvim writes), to tune where generators apply."
         },
+        "durandal.hints": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show ⚡ at the end of each line where an Olifant action applies; clicking it opens the actions there. `Durandal: Toggle ⚡ Hints` flips it."
+        },
         "durandal.trace.server": {
           "type": "string",
           "enum": [
@@ -83,6 +88,11 @@
       {
         "command": "durandal.actions",
         "title": "Actions Here",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.hints.toggle",
+        "title": "Toggle ⚡ Hints",
         "category": "Durandal"
       },
       {
