@@ -6,13 +6,11 @@ import type { PlanFile } from '../protocol';
 export const staleMessage = (path: string) => `${path} changed since planning; nothing was applied — plan again`;
 export const NOTHING_TO_CHANGE = 'Nothing to change: the code already has it';
 
-// seenText is a file's text as the user sees it: a dirty document's text; else none when the
-// file is not on disk (a clean document of a removed file is stale); else the document's,
-// else the disk's.
+// seenText is a file's text as an apply would meet it: a dirty document's text; else the
+// disk's (null: not on disk). A clean document is not trusted: the file watcher can lag an
+// outside write by seconds, and the edit would land on the old text and fail to save.
 export function seenText(doc: { dirty: boolean; text: string } | undefined, disk: string | null): string | null {
-  if (doc?.dirty) return doc.text;
-  if (disk === null) return null;
-  return doc ? doc.text : disk;
+  return doc?.dirty ? doc.text : disk;
 }
 
 // firstStale is the first file whose seen text is not its planned before (null: it must not exist).

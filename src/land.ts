@@ -10,12 +10,13 @@ import { NOT_RUNNING, Say, Server } from './server';
 import type { ReviewAnswer, Ui } from './uiTypes';
 import { tabsUnder, VirtualDocs } from './virtualDocs';
 
-// textOf is a file's text as the user sees it (seenText): its open document's, else the disk's.
+// textOf is a file's text as an apply would meet it (seenText): a dirty document's, else the
+// disk's, without a leading BOM (VS Code's document text has none).
 async function textOf(path: string): Promise<string | null> {
   const doc = vscode.workspace.textDocuments.find(d => d.uri.scheme === 'file' && d.uri.fsPath === path);
   let disk: string | null;
   try {
-    disk = await fs.readFile(path, 'utf8');
+    disk = (await fs.readFile(path, 'utf8')).replace(/^\uFEFF/, '');
   } catch {
     disk = null;
   }

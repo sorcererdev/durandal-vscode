@@ -2,11 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { firstStale, landedMessage, seenText, staleMessage } from '../../src/generate/stale';
 
-test('seenText: a dirty document\'s text; a clean one of a file gone is gone; else the document, else the disk', () => {
+test('seenText: a dirty document\'s text; else the disk\'s, even under a clean document (Review Focus 2)', () => {
   assert.equal(seenText({ dirty: true, text: 'typed' }, 'disk'), 'typed');
   assert.equal(seenText({ dirty: true, text: 'typed' }, null), 'typed');
   assert.equal(seenText({ dirty: false, text: 'old' }, null), null);
   assert.equal(seenText({ dirty: false, text: 'doc' }, 'doc'), 'doc');
+  // a clean document the watcher has not reloaded yet: the disk is what will be saved over
+  assert.equal(seenText({ dirty: false, text: 'old' }, 'new'), 'new');
   assert.equal(seenText(undefined, 'disk'), 'disk');
   assert.equal(seenText(undefined, null), null);
 });
