@@ -173,6 +173,8 @@ export class Flow {
   private requestPreview(): void {
     if (this.closed) return;
     this.invalidate();
+    // a new value disarms a waiting Enter or Review: it was asked for on the old values
+    this.afterPreview = undefined;
     this.error = undefined;
     this.updating = true;
     this.render();

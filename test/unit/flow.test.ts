@@ -400,3 +400,19 @@ test('the server gone: the failed preview says so once and the form closes (Revi
   assert.deepEqual(s.ui.log.filter(l => l.startsWith('error')), ['error olifant lsp is not running here (Durandal: Show Health)']);
   assert.ok(s.ui.stepsClosed > 0, 'the open editor closed');
 });
+
+test('an edit disarms a waiting Enter: the values it lands on were never confirmed', async () => {
+  const s = await opened();
+  await type(s, 0, 'command', 'x');
+  // the preview for 'x' is in flight: Enter waits for it
+  void s.ui.openForm!.answer({ kind: 'apply' });
+  await tick();
+  await type(s, 0, 'command', 'close_table');
+  s.server.take('olifant/preview').resolve(missing);
+  await tick();
+  s.server.take('olifant/preview').resolve(filled);
+  await tick();
+  assert.equal(s.server.count('olifant/plan'), 0);
+  assert.equal(s.landed.length, 0);
+  assert.ok(s.ui.openForm);
+});
