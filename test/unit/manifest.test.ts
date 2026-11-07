@@ -25,6 +25,10 @@ test('the keybindings are KEYS under the chord prefix, without clashes', () => {
 
 test('the settings and the activation', () => {
   assert.deepEqual(Object.keys(pkg.contributes.configuration.properties).sort(),
-    ['durandal.debounceMs', 'durandal.fills', 'durandal.model', 'durandal.path', 'durandal.trace.server']);
-  assert.deepEqual(pkg.activationEvents, ['workspaceContains:**/.olifant/config.toml']);
+    ['durandal.actionLog', 'durandal.debounceMs', 'durandal.fills', 'durandal.model', 'durandal.path', 'durandal.trace.server']);
+  // after startup too (issue #1): a project file opened in a window with no project folder
+  assert.deepEqual(pkg.activationEvents, ['workspaceContains:**/.olifant/config.toml', 'onStartupFinished']);
+  const log = (pkg.contributes.configuration.properties as Record<string, { type: string; default: unknown }>)['durandal.actionLog'];
+  assert.equal(log.type, 'boolean');
+  assert.equal(log.default, true);
 });

@@ -56,6 +56,32 @@ async function fake(): Promise<void> {
       DURANDAL_E2E_OUTSIDE: outside,
       FAKE_LSP_LOG: join(base, 'fake.log'),
       FAKE_LSP_REPLIES: replies,
+      DURANDAL_LOG_DIR: join(base, 'log'),
+    });
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+}
+
+// bare: a window whose folder holds no project (issue #1). The extension activates after
+// startup anyway, and a project file opened from outside starts the server.
+async function bare(): Promise<void> {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'durandal-bare-')));
+  const ws = join(base, 'ws');
+  const outside = join(base, 'outside');
+  const replies = join(base, 'replies');
+  try {
+    write(join(ws, 'notes.txt'), 'notes\n');
+    write(join(outside, '.olifant/config.toml'), '');
+    write(join(outside, 'lib.py'), 'z = 3\n');
+    mkdirSync(replies);
+    settings(ws, join(ROOT, 'test/fake-lsp/fake-lsp'));
+    await launch(ws, {
+      DURANDAL_E2E_SUITE: 'bare',
+      DURANDAL_E2E_OUTSIDE: outside,
+      FAKE_LSP_LOG: join(base, 'fake.log'),
+      FAKE_LSP_REPLIES: replies,
+      DURANDAL_LOG_DIR: join(base, 'log'),
     });
   } finally {
     rmSync(base, { recursive: true, force: true });
@@ -78,6 +104,7 @@ async function real(bin: string, repo: string): Promise<void> {
 
 async function main(): Promise<void> {
   await fake();
+  await bare();
   const bin = process.env.OLIFANT_BIN;
   const repo = process.env.OLIFANT_REPO;
   if (bin && repo) await real(bin, resolve(repo));
