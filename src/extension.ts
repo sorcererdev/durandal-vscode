@@ -1,6 +1,7 @@
 import * as os from 'node:os';
 import * as vscode from 'vscode';
 import { ActionLog, logDir } from './actionLog';
+import { Actions } from './actions/command';
 import { registerNotYet } from './commands';
 import { errorMessage } from './errors';
 import { Generate } from './generate/command';
@@ -54,6 +55,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   });
   const generate = new Generate({ server: s, docs, plans, log, state: context.workspaceState, ui });
   generate.register(context);
+  new Actions({ server: s, plans, generate, log, ui, say }).register(context);
 
   // health: the binary, the server, the projects, and olifant doctor for the active file's project
   const health = async (): Promise<string[]> => {

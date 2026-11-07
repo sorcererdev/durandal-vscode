@@ -2,7 +2,6 @@ import { CLIENT_COMMANDS } from './protocol';
 
 // The commands later milestones build (spec §6); until then each says so when run.
 export const NOT_YET: Record<string, { title: string; milestone: number }> = {
-  'durandal.actions': { title: 'Actions Here', milestone: 2 },
   'durandal.test.file': { title: "Run This File's Tests", milestone: 4 },
   'durandal.test.all': { title: 'Run All Tests', milestone: 4 },
   'durandal.jump': { title: 'Jump to Test or Module', milestone: 4 },
@@ -25,6 +24,7 @@ export const NOT_YET: Record<string, { title: string; milestone: number }> = {
 // form keys' commands (spec §9) are enabled only while the generate form is open.
 export const BUILT: Record<string, { title: string; enablement?: string }> = {
   'durandal.generate': { title: 'Generate…' },
+  'durandal.actions': { title: 'Actions Here' },
   'durandal.generate.apply': { title: 'Generate: Apply', enablement: 'durandal.formOpen' },
   'durandal.generate.review': { title: 'Generate: Review Plan', enablement: 'durandal.formOpen' },
 };
@@ -39,15 +39,15 @@ export const FORM_KEYS: { command: string; key: string; mac: string; when: strin
 // never fails with "command not found", not contributed (they need the server's arguments).
 // Keyed by protocol.ts CLIENT_COMMANDS' values, so a command added there must be given a
 // title and milestone here (the Record type fails to compile otherwise).
-const SERVER_NAMED_INFO: Record<keyof typeof CLIENT_COMMANDS, { title: string; milestone: number }> = {
-  showActions: { title: 'Actions', milestone: 2 },
+// showActions is built (actions/command.ts); the rest are later milestones'.
+const SERVER_NAMED_INFO: Record<Exclude<keyof typeof CLIENT_COMMANDS, 'showActions'>, { title: string; milestone: number }> = {
   planReview: { title: 'Plan Review', milestone: 5 },
   planExcerpt: { title: 'Plan Excerpt', milestone: 6 },
   planErrand: { title: 'Plan Delegations', milestone: 6 },
 };
 
 export const SERVER_NAMED: Record<string, { title: string; milestone: number }> = Object.fromEntries(
-  (Object.keys(CLIENT_COMMANDS) as (keyof typeof CLIENT_COMMANDS)[]).map(k => [CLIENT_COMMANDS[k], SERVER_NAMED_INFO[k]]),
+  (Object.keys(SERVER_NAMED_INFO) as (keyof typeof SERVER_NAMED_INFO)[]).map(k => [CLIENT_COMMANDS[k], SERVER_NAMED_INFO[k]]),
 );
 
 export const notYet = (title: string) => `Durandal: ${title} is not implemented yet`;
