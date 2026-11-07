@@ -1,6 +1,9 @@
+import * as os from 'node:os';
 import * as vscode from 'vscode';
+import { ActionLog, logDir } from './actionLog';
 import { registerNotYet } from './commands';
 import { errorMessage } from './errors';
+import { Generate } from './generate/command';
 import { DoctorSection, report } from './health';
 import { Plans } from './land';
 import { discover, trackProjects } from './projects';
@@ -44,6 +47,13 @@ export function activate(context: vscode.ExtensionContext): Api {
   let testUi: Ui | undefined;
   const ui = (): Ui => testUi ?? realUi;
   const plans = new Plans({ server: s, docs, say });
+  const log = new ActionLog({
+    dir: () => logDir(process.env, os.homedir()),
+    enabled: () => vscode.workspace.getConfiguration('durandal').get<boolean>('actionLog', true),
+    warn: m => output.warn(m),
+  });
+  const generate = new Generate({ server: s, docs, plans, log, state: context.workspaceState, ui });
+  generate.register(context);
 
   // health: the binary, the server, the projects, and olifant doctor for the active file's project
   const health = async (): Promise<string[]> => {

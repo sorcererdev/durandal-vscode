@@ -3,7 +3,6 @@ import { CLIENT_COMMANDS } from './protocol';
 // The commands later milestones build (spec §6); until then each says so when run.
 export const NOT_YET: Record<string, { title: string; milestone: number }> = {
   'durandal.actions': { title: 'Actions Here', milestone: 2 },
-  'durandal.generate': { title: 'Generate…', milestone: 2 },
   'durandal.test.file': { title: "Run This File's Tests", milestone: 4 },
   'durandal.test.all': { title: 'Run All Tests', milestone: 4 },
   'durandal.jump': { title: 'Jump to Test or Module', milestone: 4 },
@@ -21,6 +20,20 @@ export const NOT_YET: Record<string, { title: string; milestone: number }> = {
   'durandal.plan.review': { title: 'Plan: Review', milestone: 5 },
   'durandal.plan.toggle': { title: 'Plan: Toggle Reading', milestone: 6 },
 };
+
+// The commands built so far, contributed with these titles (spec §6's rest is NOT_YET). The
+// form keys' commands (spec §9) are enabled only while the generate form is open.
+export const BUILT: Record<string, { title: string; enablement?: string }> = {
+  'durandal.generate': { title: 'Generate…' },
+  'durandal.generate.apply': { title: 'Generate: Apply', enablement: 'durandal.formOpen' },
+  'durandal.generate.review': { title: 'Generate: Review Plan', enablement: 'durandal.formOpen' },
+};
+
+// The keys inside the generate form (a quick input): apply, and review the plan.
+export const FORM_KEYS: { command: string; key: string; mac: string; when: string }[] = [
+  { command: 'durandal.generate.apply', key: 'ctrl+enter', mac: 'cmd+enter', when: 'durandal.formOpen && inQuickOpen' },
+  { command: 'durandal.generate.review', key: 'ctrl+o', mac: 'ctrl+o', when: 'durandal.formOpen && inQuickOpen' },
+];
 
 // Commands the server names in its inlay hints (⚡) and code lenses: registered so a click
 // never fails with "command not found", not contributed (they need the server's arguments).

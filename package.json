@@ -91,6 +91,18 @@
         "category": "Durandal"
       },
       {
+        "command": "durandal.generate.apply",
+        "title": "Generate: Apply",
+        "category": "Durandal",
+        "enablement": "durandal.formOpen"
+      },
+      {
+        "command": "durandal.generate.review",
+        "title": "Generate: Review Plan",
+        "category": "Durandal",
+        "enablement": "durandal.formOpen"
+      },
+      {
         "command": "durandal.test.file",
         "title": "Run This File's Tests",
         "category": "Durandal"
@@ -279,6 +291,18 @@
         "key": "ctrl+alt+d p x",
         "mac": "cmd+alt+d p x",
         "when": "durandal.isPlan"
+      },
+      {
+        "command": "durandal.generate.apply",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "durandal.formOpen && inQuickOpen"
+      },
+      {
+        "command": "durandal.generate.review",
+        "key": "ctrl+o",
+        "mac": "ctrl+o",
+        "when": "durandal.formOpen && inQuickOpen"
       }
     ]
   },
