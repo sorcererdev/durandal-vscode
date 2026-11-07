@@ -197,11 +197,14 @@ export class Flow {
     try {
       r = await this.env.server.request(Olifant.preview, this.at({ steps: stepsPayload(this.steps, false) }));
     } catch (err) {
-      if (this.closed || n !== this.seq || cancelled(err)) return;
+      // an older preview's answer (cancelled or not) never counts
+      if (this.closed || n !== this.seq) return;
       if (!this.env.server.running()) {
         this.env.ui.error(errorMessage(err));
         return this.close();
       }
+      // the newest one cancelled: nothing newer is coming, so the form is free again
+      if (cancelled(err)) return this.onPreviewCancelled();
       return this.onPreviewFailed(n, errorMessage(err));
     }
     this.onPreview(n, r);
@@ -237,6 +240,12 @@ export class Flow {
     this.ready = false;
     this.afterPreview = undefined;
     this.env.preview.show({ steps: [], files: [], main: null, ready: false, error: text });
+    this.render();
+  }
+
+  private onPreviewCancelled(): void {
+    this.updating = false;
+    this.afterPreview = undefined;
     this.render();
   }
 
@@ -377,16 +386,17 @@ export class Flow {
       this.busy = false;
       this.planning = false;
     }
-    if (this.closed) return;
+    // Escape while landing closes the form, not the landing: its outcome is still told
     if (err) {
+      this.env.ui.error(err);
+      if (this.closed) return;
       // the form stays, with its values and why
       this.error = err;
-      this.env.ui.error(err);
       this.render();
       return;
     }
     this.applied(id);
-    this.end({ kind: 'applied' });
+    if (!this.closed) this.end({ kind: 'applied' });
   }
 
   // plan asks for the plan of the fields as they are (with what the server inferred). hold
