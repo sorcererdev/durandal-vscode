@@ -1,9 +1,14 @@
 import * as vscode from 'vscode';
 import { registerNotYet } from './commands';
+import { errorMessage } from './errors';
 import { DoctorSection, report } from './health';
+import { Plans } from './land';
 import { discover, trackProjects } from './projects';
+import { quickInputUi } from './quickInput';
 import { findRoot } from './root';
 import { Say, Server } from './server';
+import type { Ui } from './uiTypes';
+import { VirtualDocs } from './virtualDocs';
 
 export interface Api {
   server: Server;
@@ -11,6 +16,11 @@ export interface Api {
   // every notification the extension showed, in order (the e2e tests read it)
   shown: { level: string; text: string }[];
   inProject(): boolean;
+  // the e2e suites answer the quick inputs with a fake; undefined puts VS Code's back
+  setUi(ui: Ui | undefined): void;
+  // the UI the commands use now
+  ui(): Ui;
+  plans: Plans;
 }
 
 let server: Server | undefined;
@@ -28,6 +38,12 @@ export function activate(context: vscode.ExtensionContext): Api {
   };
   const s = new Server(output, say);
   server = s;
+  const docs = new VirtualDocs();
+  docs.register(context);
+  const realUi = quickInputUi(say);
+  let testUi: Ui | undefined;
+  const ui = (): Ui => testUi ?? realUi;
+  const plans = new Plans({ server: s, docs, say });
 
   // health: the binary, the server, the projects, and olifant doctor for the active file's project
   const health = async (): Promise<string[]> => {
@@ -39,7 +55,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       try {
         doctor = { root, result: await s.doctor(doc.uri) };
       } catch (err) {
-        doctor = { root, error: err instanceof Error ? err.message : String(err) };
+        doctor = { root, error: errorMessage(err) };
       }
     }
     return report(gate, s.state(), s.roots(), doctor);
@@ -65,7 +81,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     for (const r of await discover()) await s.addRoot(r);
     if (s.roots().length > 0) await s.start();
   })();
-  return { server: s, health, shown, inProject: projects.inProject };
+  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans };
 }
 
 export async function deactivate(): Promise<void> {

@@ -1,7 +1,10 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import type { Api } from '../../src/extension';
+import { tabsUnder } from '../../src/virtualDocs';
+
+export { tabsUnder };
 
 export const ws = () => process.env.DURANDAL_E2E_WS!;
 export const file = (rel: string) => vscode.Uri.file(join(ws(), rel));
@@ -46,6 +49,31 @@ export async function open(uri: vscode.Uri): Promise<vscode.TextEditor> {
 export async function revert(doc: vscode.TextDocument): Promise<void> {
   await vscode.window.showTextDocument(doc);
   await vscode.commands.executeCommand('workbench.action.files.revert');
+}
+
+// docOf is the open document of a workspace file, if any.
+export const docOf = (rel: string) => vscode.workspace.textDocuments.find(d => d.uri.toString() === file(rel).toString());
+
+// settle puts rel back to text on disk (null: no file) and waits until an open document of it
+// reads the same. Before a delete, an open document is reverted and emptied and its tabs are
+// closed: VS Code may keep the document, and a later create of rel must not land on old text.
+export async function settle(rel: string, text: string | null): Promise<void> {
+  const p = join(ws(), rel);
+  const d = docOf(rel);
+  if (text === null && d) {
+    if (d.isDirty) await revert(d);
+    await settle(rel, '');
+    const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs)
+      .filter(t => t.input instanceof vscode.TabInputText && t.input.uri.toString() === file(rel).toString());
+    if (tabs.length > 0) await vscode.window.tabGroups.close(tabs);
+  }
+  if (text === null) rmSync(p, { force: true });
+  else writeFileSync(p, text);
+  if (d && text !== null) {
+    // the file watcher can take seconds to report a write right after a save: revert reloads now
+    await revert(d);
+    await until(() => docOf(rel)?.getText() === text && !docOf(rel)!.isDirty, `${rel} reloaded`);
+  }
 }
 
 // Msg is one message the fake server received.
