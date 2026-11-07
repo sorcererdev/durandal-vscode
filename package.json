@@ -96,6 +96,11 @@
         "category": "Durandal"
       },
       {
+        "command": "durandal.migration",
+        "title": "Migration Report",
+        "category": "Durandal"
+      },
+      {
         "command": "durandal.generate",
         "title": "Generate…",
         "category": "Durandal"
