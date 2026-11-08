@@ -39,9 +39,10 @@ describe('ghost text against olifant lsp (python-htmx)', () => {
     // The pinned snippet body starts with blank lines and `@dataclass(frozen=True)`, so the
     // class row is the first one after the inserted blank line that matches.
     const all = ed.document.getText().split('\n');
-    const row = all.findIndex((l, i) => i > cls + 1 && /^class \w+:$/.test(l));
+    const row = all.findIndex((l, i) => i > cls + 1 && i <= cls + 6 && /^class \w+:$/.test(l));
     console.log(`py ghost committed: ${row >= 0 ? all[row] : '(no class row)'} at ${row} (${out})`);
     assert.ok(row >= 0, `a class row after line ${cls + 1}`);
     assert.match(all[row], /^class \w+:$/);
+    assert.equal(all[row - 1], '@dataclass(frozen=True)');
   });
 });

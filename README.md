@@ -53,7 +53,7 @@ durandal.nvim writes). `durandal.actionLog` turns it off.
   stops, then the model fills the holes in place (status bar: "Filling holes"). If you type
   while it fills, your text is kept and the holes stay as they were. `Esc` dismisses it, and
   it is not offered again on that line's text.
-- **Snippets in the completion list** (`Ctrl+Space`, or after `@` or `:`) are the same
+- **Snippets in the completion list** (`Ctrl+Space`) are the same
   snippets by choice; picking one fills its holes the same way.
 - `durandal.ghosts` or `Durandal: Toggle Ghost Text` turns the ghost text off (the completion
   list keeps its snippets). While VS Code's completion list, another extension's ghost text, or
