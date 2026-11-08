@@ -55,6 +55,16 @@ durandal.nvim writes). `durandal.actionLog` turns it off.
   it is not offered again on that line's text.
 - **Snippets in the completion list** (`Ctrl+Space`) are the same
   snippets by choice; picking one fills its holes the same way.
+- **Follow-ups**: after an edit settles, what follows from it (the match arms for a new failure,
+  a test for a new command) shows at the end of the line as `⚡ Tab: review <name> (<summary>)`;
+  a multi-line block as `⚡ Tab: <name> (+N lines)`. `Tab` opens the review window on the plan;
+  Apply plans it again with the model and applies it. `Esc` dismisses it on that line.
+- **Recognitions**: code written your own way that a convention covers shows as
+  `⚡ <name> — Tab: review` (an offer), `⚡ <name> or a <other> — Tab: choose` (two fit: pick
+  one, then answer its inputs) or a quiet `⚡ <name>` (no Tab; it leads the ⚡ menu, where
+  "Show recognitions for … again" undoes the quiet). Accepting or dismissing tells Olifant, which
+  goes quiet about conventions you keep dismissing.
+- The ⚡ hint of a line steps aside while a suggestion is shown there.
 - `durandal.ghosts` or `Durandal: Toggle Ghost Text` turns the ghost text off (the completion
   list keeps its snippets). While VS Code's completion list, another extension's ghost text, or
   a snippet you are filling in has Tab, Tab is theirs.

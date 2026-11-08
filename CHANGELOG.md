@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Follow-ups, ghost blocks and recognitions pushed or answered by the server: an end-of-line ⚡,
+  Tab to review and apply with the model, Esc to dismiss, recognitions' choose flow and feedback,
+  and the ⚡ menu's recognition (milestone 3b).
 - Ghost text for the snippet anticipated at the cursor and fill-on-accept for completion
   snippets, with Esc's per-line dismissal and `durandal.ghosts` (milestone 3a).
 - Actions at the cursor, the generate picker with a live preview and `+ New` steps, the review

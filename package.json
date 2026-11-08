@@ -40,7 +40,7 @@
           "type": "number",
           "default": 300,
           "minimum": 0,
-          "markdownDescription": "How long typing must pause before the server's slow work (suggestions) starts (`debounce_ms`)."
+          "markdownDescription": "How long typing must pause before suggestions are worked out: the server's slow work (`debounce_ms`, after a restart) and the editor's suggestion pause (at once)."
         },
         "durandal.model": {
           "type": "string",
@@ -65,7 +65,7 @@
         "durandal.ghosts": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Show the snippet Olifant anticipates at the cursor as ghost text: Tab inserts it and the model fills its holes, Esc dismisses it on that line. `Durandal: Toggle Ghost Text` flips it. Snippets in the completion list are unaffected."
+          "markdownDescription": "Show what Olifant suggests at the cursor: the anticipated snippet as ghost text (Tab inserts it and the model fills its holes), follow-ups and recognitions as ⚡ at the end of the line (Tab reviews). Esc dismisses a suggestion on that line. `Durandal: Toggle Ghost Text` flips it. Snippets in the completion list are unaffected."
         },
         "durandal.trace.server": {
           "type": "string",
