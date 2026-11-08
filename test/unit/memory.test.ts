@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { MutateResult, MutateSurvivor } from '../../src/protocol';
-import { killedBetween, markText, nextMarked, plainSurvivor, rowsOf, SurvivorMemory } from '../../src/tdd/memory';
+import { killedBetween, markText, nextMarked, plainSurvivor, rowsOf, shiftLine, SurvivorMemory } from '../../src/tdd/memory';
 
 const U = 'file:///p/a.py';
 const s = (line: number, from: string, to: string, dim = false): MutateSurvivor => ({ line, operator: 'swap', from, to, mutated: `    y = a ${to} b`, dim });
@@ -71,6 +71,18 @@ test('shift: survivors on a line a deletion or replacement swallowed collapse to
   assert.deepEqual(m.survivors(U).map(x => x.line), [4, 10, 17]);
   // equal-count replacement elsewhere that swallows nothing changes nothing
   assert.equal(m.shift(U, 14, 0, 15, 1), false);
+});
+
+test('shiftLine: a 1-based line follows an edit as a survivor does (the open picker\'s unit, F5)', () => {
+  // two lines added above line 5 (0-based row 1)
+  assert.equal(shiftLine(5, 1, 0, 1, 2), 7);
+  // an edit below or after column 0 of its own line leaves it
+  assert.equal(shiftLine(5, 8, 0, 8, 3), 5);
+  assert.equal(shiftLine(5, 4, 3, 4, 1), 5);
+  // an insert at column 0 of its line pushes it down
+  assert.equal(shiftLine(5, 4, 0, 4, 1), 6);
+  // a deletion that swallows it collapses it to the deletion's start
+  assert.equal(shiftLine(5, 2, 0, 6, 0), 3);
 });
 
 test('killedBetween: the marks gone, as from → to on line N', () => {

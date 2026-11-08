@@ -15,20 +15,27 @@ export class Marks {
   readonly memory = new SurvivorMemory();
   private readonly tests = vscode.languages.createDiagnosticCollection('durandal tests');
   private readonly mutate = vscode.languages.createDiagnosticCollection('durandal mutate');
+  private readonly shifted = new vscode.EventEmitter<{ uri: vscode.Uri; changes: readonly vscode.TextDocumentContentChangeEvent[] }>();
+  // onDidShift: a document with survivors changed, after its survivors followed the edit (the
+  // open survivors picker follows it too, F5)
+  readonly onDidShift = this.shifted.event;
 
   register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
       this.tests,
       this.mutate,
+      this.shifted,
       vscode.workspace.onDidCloseTextDocument(d => this.forget(d.uri)),
       vscode.workspace.onDidChangeTextDocument(e => {
         const uri = e.document.uri.toString();
+        if (e.contentChanges.length === 0 || this.memory.survivors(uri).length === 0) return;
         let moved = false;
         for (const c of e.contentChanges) {
           const r = c.range;
           moved = this.memory.shift(uri, r.start.line, r.start.character, r.end.line, c.text.split('\n').length - 1) || moved;
         }
         if (moved) this.draw(e.document.uri);
+        this.shifted.fire({ uri: e.document.uri, changes: e.contentChanges });
       }),
     );
   }

@@ -47,21 +47,15 @@ export class SurvivorMemory {
   // column 0 of its line, so an edit that starts at column 0 of that line and adds lines pushes
   // it down too; one that starts after column 0 does not. Returns whether any survivor moved.
   shift(uri: string, startLine: number, startCol: number, endLine: number, inserted: number): boolean {
-    const delta = inserted - (endLine - startLine);
     const all = this.docs.get(uri);
     if (!all) return false;
     let moved = false;
-    const to = (s: MutateSurvivor, line: number) => {
+    for (const s of all) {
+      const line = shiftLine(s.line, startLine, startCol, endLine, inserted);
       if (s.line !== line) {
         s.line = line;
         moved = true;
       }
-    };
-    for (const s of all) {
-      const row = s.line - 1;
-      if (row > endLine) to(s, s.line + delta);
-      else if (row > startLine) to(s, startLine + 1);
-      else if (row === startLine && startCol === 0 && delta > 0) to(s, s.line + delta);
     }
     return moved;
   }
@@ -70,6 +64,17 @@ export class SurvivorMemory {
     if (ss.length === 0) this.docs.delete(uri);
     else this.docs.set(uri, ss);
   }
+}
+
+// shiftLine: where a 1-based line at column 0 goes after an edit (SurvivorMemory.shift's rule;
+// the open picker's unit lines follow edits by it too)
+export function shiftLine(line: number, startLine: number, startCol: number, endLine: number, inserted: number): number {
+  const delta = inserted - (endLine - startLine);
+  const row = line - 1;
+  if (row > endLine) return line + delta;
+  if (row > startLine) return startLine + 1;
+  if (row === startLine && startCol === 0 && delta > 0) return line + delta;
+  return line;
 }
 
 // killedBetween: the marks of before that after no longer holds (mutate.lua :107-116)

@@ -46,7 +46,7 @@ describe('the TDD loop (fake server)', () => {
 
   afterEach(async () => {
     (await api()).setUi(undefined);
-    for (const m of ['olifant/tests/run', 'olifant/tests/file', 'olifant/stub', 'olifant/conjure']) reply(m, null);
+    for (const m of ['olifant/tests/run', 'olifant/tests/file', 'olifant/stub', 'olifant/conjure', 'olifant/mutate', 'olifant/waive']) reply(m, null);
     for (const rel of [MAIN, TEST]) {
       const d = vscode.workspace.textDocuments.find(x => x.uri.toString() === uriOf(rel));
       if (d?.isDirty) await revert(d);
@@ -336,5 +336,146 @@ describe('the TDD loop (fake server)', () => {
     await new Promise<void>(r => setTimeout(r, 500));
     assert.deepEqual(a.shown.slice(from).filter(s => s.level !== 'info' || s.text.includes('cancel') || s.text.startsWith('conjured')), []);
     assert.equal(disk(MAIN), 'x = 1\n');
+  });
+
+  const surv = (line: number, from: string, to: string, dim = false) => ({ line, operator: 'swap', from, to, mutated: `y = 1 ${to} 1`, dim });
+  const mutated = (survivors: ReturnType<typeof surv>[], lines = { first: 1, last: 3 }) => ({
+    file: abs(MAIN), unit: 'f', lines, killed: 4, survived: survivors.length, waived: 0, survivors,
+    summary: `${survivors.length} survivors · 4/${4 + survivors.length} killed`,
+  });
+  const mutateMarks = () => vscode.languages.getDiagnostics(file(MAIN)).filter(d => d.source === 'olifant' && d.severity === vscode.DiagnosticSeverity.Warning);
+  const BODY = 'x = 1\ny = 1 + 1\nz = 3\n';
+
+  // mutateWith: main.py as BODY, the fake UI, a mutate answered as given; the picker it opens
+  async function mutateWith(answer: unknown): Promise<FakeUi> {
+    await settle(MAIN, BODY);
+    const a = await running();
+    const ui = new FakeUi();
+    a.setUi(ui);
+    await open(file(MAIN));
+    reply('olifant/mutate', answer);
+    await said('durandal.mutate', t => t.includes('killed'));
+    return ui;
+  }
+
+  it('mutate: the summary, a warning per survivor, the picker (dim last)', async () => {
+    const ui = await mutateWith(mutated([surv(1, '1', '0', true), surv(2, '+', '-')]));
+    const ds = mutateMarks().sort((x, y) => x.range.start.line - y.range.start.line);
+    assert.deepEqual(ds.map(d => [d.range.start.line, d.message]), [[0, '1 → 0 survives (likely equivalent)'], [1, '+ → - survives']]);
+    const list = await until(() => ui.openList, 'the picker');
+    assert.equal(list.title, '2 survivors · 4/6 killed');
+    assert.deepEqual(list.items.map(i => i.label), ['line 2  swap  + → -', 'line 1  swap  1 → 0']);
+    assert.deepEqual(list.items.map(i => i.description), [undefined, 'likely equivalent']);
+  });
+
+  it('the picker: Enter stubs a test carrying the survivor', async () => {
+    const ui = await mutateWith(mutated([surv(2, '+', '-')]));
+    reply('olifant/stub', { lsp_error: 'stubbed elsewhere' });
+    const list = await until(() => ui.openList, 'the picker');
+    const n = log().filter(m => m.method === 'olifant/stub').length;
+    list.answer({ kind: 'accept', value: list.items[0].value });
+    const sent = await until(() => log().filter(m => m.method === 'olifant/stub')[n], 'the stub sent');
+    assert.deepEqual(sent.params, {
+      textDocument: { uri: uriOf(MAIN) }, position: { line: 1, character: 0 },
+      survivor: { line: 2, operator: 'swap', from: '+', to: '-', mutated: 'y = 1 - 1' },
+    });
+    assert.equal(list.closed, true);
+  });
+
+  it('waive: empty sends nothing and the picker comes back; a reason waives; a refusal keeps it', async () => {
+    const ui = await mutateWith(mutated([surv(1, '1', '0'), surv(2, '+', '-')]));
+    const waives = () => log().filter(m => m.method === 'olifant/waive');
+    const n = waives().length;
+    let list = await until(() => ui.openList, 'the picker');
+    list.answer({ kind: 'button', id: 'waive', value: list.items[1].value });
+    let t = await until(() => ui.texts[ui.texts.length - 1], 'the reason asked');
+    assert.equal(t.title, 'Waive + → - (line 2), because:');
+    t.finish('');
+    list = await until(() => ui.openList, 'the picker again');
+    assert.equal(waives().length, n);
+    reply('olifant/waive', { lsp_error: 'a waiver needs a reason' });
+    list.answer({ kind: 'button', id: 'waive', value: list.items[1].value });
+    t = await until(() => (ui.texts.length > 1 ? ui.texts[ui.texts.length - 1] : undefined), 'the reason asked again');
+    const a = await api();
+    let from = a.shown.length;
+    t.finish('x');
+    await until(() => a.shown.slice(from).find(s => s.text === 'a waiver needs a reason'), 'the refusal said');
+    assert.equal(mutateMarks().length, 2);
+    reply('olifant/waive', { waived: true });
+    list = await until(() => ui.openList, 'the picker a third time');
+    list.answer({ kind: 'button', id: 'waive', value: list.items[1].value });
+    t = await until(() => (ui.texts.length > 2 ? ui.texts[ui.texts.length - 1] : undefined), 'the reason a third time');
+    from = a.shown.length;
+    t.finish('equivalent here');
+    await until(() => a.shown.slice(from).find(s => s.text === 'waived: + → - on line 2'), 'the waiver said');
+    assert.deepEqual(waives()[waives().length - 1].params.reason, 'equivalent here');
+    assert.deepEqual(mutateMarks().map(d => d.range.start.line), [0]);
+    list = await until(() => ui.openList, 'the picker with one left');
+    assert.equal(list.items.length, 1);
+  });
+
+  it('a second unit\'s mutate keeps the first unit\'s marks', async () => {
+    await mutateWith(mutated([surv(2, '+', '-')]));
+    reply('olifant/mutate', { ...mutated([]), lines: { first: 3, last: 3 }, summary: 'no survivors · 4/4 killed' });
+    await said('durandal.mutate', t => t.startsWith('no survivors'));
+    assert.deepEqual(mutateMarks().map(d => d.range.start.line), [1]);
+  });
+
+  it('the picker closes when the active editor changes', async () => {
+    const ui = await mutateWith(mutated([surv(2, '+', '-')]));
+    const list = await until(() => ui.openList, 'the picker');
+    await open(file(TEST));
+    await until(() => list.closed, 'the picker closed');
+  });
+
+  it('a line added above moves the marks and the open picker\'s rows (Review Focus 1)', async () => {
+    const a = await api();
+    const ui = await mutateWith(mutated([surv(2, '+', '-')]));
+    const list = await until(() => ui.openList, 'the picker');
+    const ed = vscode.window.activeTextEditor!;
+    await ed.edit(b => b.insert(new vscode.Position(0, 0), '# note\n'));
+    await until(() => mutateMarks()[0]?.range.start.line === 2, 'the mark moved');
+    assert.equal(a.tdd.survivors(uriOf(MAIN))[0].line, 3);
+    // the open picker's row follows the edit (F5)
+    await until(() => list.items[0]?.label === 'line 3  swap  + → -', 'the picker row moved');
+    assert.equal(ui.openList, list);
+  });
+
+  it('a green run mutates the marked unit again, silently, and says what it killed', async () => {
+    const ui = await mutateWith(mutated([surv(1, '1', '0', true), surv(2, '+', '-')]));
+    const lists = ui.lists.length;
+    reply('olifant/mutate', mutated([surv(1, '1', '0', true)]));
+    reply('olifant/tests/run', green());
+    const n = log().filter(m => m.method === 'olifant/mutate').length;
+    await said('durandal.test.here', t => t.startsWith('killed'));
+    const a = await api();
+    assert.equal(a.shown[a.shown.length - 1].text, 'killed: + → - on line 2');
+    assert.deepEqual(log().filter(m => m.method === 'olifant/mutate')[n].params.position, { line: 0, character: 0 });
+    assert.deepEqual(mutateMarks().map(d => d.range.start.line), [0]);
+    // the open picker followed the answer in place; no new one opened
+    assert.equal(ui.openList?.items.length, 1);
+    assert.equal(ui.lists.length, lists);
+  });
+
+  it('a green run from the test file re-mutates its module (olifant/tests/file)', async () => {
+    await mutateWith(mutated([surv(2, '+', '-')]));
+    reply('olifant/mutate', mutated([]));
+    reply('olifant/tests/run', green());
+    reply('olifant/tests/file', { file: abs(MAIN), kind: 'module', exists: true });
+    await open(file(TEST));
+    await said('durandal.test.here', t => t.startsWith('killed'));
+    assert.equal(mutateMarks().length, 0);
+  });
+
+  it('mutate cancelled (the Cancel button)', async () => {
+    const a = await running();
+    await open(file(MAIN));
+    reply('olifant/mutate', { hold: true, title: 'mutating' });
+    const n = log().filter(m => m.method === 'olifant/mutate').length;
+    const from = a.shown.length;
+    void vscode.commands.executeCommand('durandal.mutate');
+    await until(() => log().filter(m => m.method === 'olifant/mutate').length > n, 'the mutate sent');
+    a.tdd.cancel();
+    await until(() => a.shown.slice(from).find(s => s.text === 'mutate cancelled'), 'the cancel said');
   });
 });

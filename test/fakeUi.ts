@@ -1,5 +1,5 @@
 import type { ReviewFile, ReviewModel } from '../src/generate/review';
-import type { FormAnswer, FormModel, PickOptions, ReviewAnswer, TextOptions, TextView, Ui } from '../src/uiTypes';
+import type { FormAnswer, FormModel, ListAnswer, ListItem, ListOptions, ListView, PickOptions, ReviewAnswer, TextOptions, TextView, Ui } from '../src/uiTypes';
 
 // FakeUi answers the commands in a test (unit and e2e): pick and review call the handlers
 // (default: nothing, as Escape); text and form record what was asked, for the test to answer.
@@ -45,6 +45,24 @@ export class FakeUi implements Ui {
     return { update: (m: FormModel) => { call.model = m; }, close: () => { call.closed = true; } };
   }
 
+  lists: { title: string; items: ListItem<unknown>[]; answer(a: ListAnswer<unknown>): void; onActive?(v: unknown): void; closed: boolean }[] = [];
+
+  list<T>(o: ListOptions<T>, answer: (a: ListAnswer<T>) => void): ListView<T> {
+    const call = {
+      title: o.title, items: o.items as ListItem<unknown>[], closed: false,
+      answer: answer as (a: ListAnswer<unknown>) => void, onActive: o.onActive as ((v: unknown) => void) | undefined,
+    };
+    this.lists.push(call);
+    this.log.push(`list ${o.title}`);
+    return { update: xs => { call.items = xs as ListItem<unknown>[]; }, close: () => { call.closed = true; } };
+  }
+
+  // openList is the list that is up, if any
+  get openList() {
+    const l = this.lists[this.lists.length - 1];
+    return l && !l.closed ? l : undefined;
+  }
+
   async review(m: ReviewModel, o: { title: string; onActive(f: ReviewFile): void }): Promise<ReviewAnswer> {
     this.log.push(`review ${o.title}`);
     return this.onReview(m, o);
@@ -53,6 +71,11 @@ export class FakeUi implements Ui {
   closeSteps() {
     this.stepsClosed++;
     for (const t of this.texts) t.finish(undefined);
+    for (const l of this.lists) {
+      if (l.closed) continue;
+      l.closed = true;
+      l.answer({ kind: 'hidden' });
+    }
   }
 
   // openForm is the form that is up, if any

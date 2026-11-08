@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { ReviewFile, ReviewModel } from './generate/review';
 import type { Say } from './server';
-import type { FormAnswer, FormModel, Item, PickOptions, ReviewAnswer, TextOptions, TextView, Ui } from './uiTypes';
+import type { FormAnswer, FormModel, Item, ListAnswer, ListItem, ListOptions, ListView, PickOptions, ReviewAnswer, TextOptions, TextView, Ui } from './uiTypes';
 
 // quickInput: the Ui on VS Code's quick inputs (alder-vscode ui.ts). Every step keeps
 // ignoreFocusOut, so the preview and the review's diffs can update beside it. A hide nobody
@@ -133,6 +133,60 @@ export function quickInputUi(say: Say): Ui {
           if (closing) return;
           closing = true;
           setFormOpen(false);
+          qp.dispose();
+        },
+      };
+    },
+
+    list<T>(o: ListOptions<T>, answer: (a: ListAnswer<T>) => void): ListView<T> {
+      type I = vscode.QuickPickItem & { value: T };
+      const qp = step(vscode.window.createQuickPick<I>());
+      qp.title = o.title;
+      qp.placeholder = o.placeholder;
+      qp.ignoreFocusOut = true;
+      qp.matchOnDescription = true;
+      qp.matchOnDetail = true;
+      const ids = new Map<vscode.QuickInputButton, string>();
+      const items = (xs: ListItem<T>[]): I[] => xs.map(x => ({
+        label: x.label, description: x.description, detail: x.detail, value: x.value,
+        buttons: (x.buttons ?? []).map(b => {
+          const qb: vscode.QuickInputButton = { iconPath: new vscode.ThemeIcon(b.icon), tooltip: b.tooltip };
+          ids.set(qb, b.id);
+          return qb;
+        }),
+      }));
+      let closing = false;
+      qp.items = items(o.items);
+      qp.onDidChangeActive(a => { if (a[0]) o.onActive?.(a[0].value); });
+      qp.onDidAccept(() => {
+        const i = qp.activeItems[0];
+        if (i) answer({ kind: 'accept', value: i.value });
+      });
+      qp.onDidTriggerItemButton(e => {
+        const id = ids.get(e.button);
+        if (id) answer({ kind: 'button', id, value: e.item.value });
+      });
+      qp.onDidHide(() => {
+        if (closing) return;
+        closing = true;
+        qp.dispose();
+        answer({ kind: 'hidden' });
+      });
+      qp.show();
+      if (qp.items[0]) o.onActive?.(qp.items[0].value);
+      return {
+        update: xs => {
+          // the item you are on stays: the same value (an edit moved it, its label changed),
+          // else the same label (a re-mutate answered new values)
+          const keep = qp.activeItems[0];
+          ids.clear();
+          qp.items = items(xs);
+          const a = keep && (qp.items.find(i => i.value === keep.value) ?? qp.items.find(i => i.label === keep.label));
+          if (a) qp.activeItems = [a];
+        },
+        close: () => {
+          if (closing) return;
+          closing = true;
           qp.dispose();
         },
       };

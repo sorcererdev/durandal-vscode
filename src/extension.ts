@@ -18,7 +18,9 @@ import { newFlights } from './tdd/common';
 import { Conjure } from './tdd/conjure';
 import { Jump } from './tdd/jump';
 import { Marks } from './tdd/marks';
+import { Mutate } from './tdd/mutate';
 import { Stub } from './tdd/stub';
+import { Survivors } from './tdd/survivors';
 import { Tests } from './tdd/tests';
 import type { Ui } from './uiTypes';
 import { Suggest } from './suggest/editor';
@@ -94,11 +96,15 @@ export function activate(context: vscode.ExtensionContext): Api {
   const flights = newFlights();
   const marks = new Marks();
   marks.register(context);
-  const tests = new Tests({ server: s, docs, say, marks, flights, recheck: () => undefined });
-  tests.register(context);
-  new Jump({ server: s, say }).register(context);
   const stub = new Stub({ server: s, say });
   stub.register(context);
+  const survivors = new Survivors({ server: s, say, ui, marks, stub });
+  survivors.register(context);
+  const mutate = new Mutate({ server: s, say, marks, flights, survivors });
+  mutate.register(context);
+  const tests = new Tests({ server: s, docs, say, marks, flights, recheck: uri => void mutate.recheck(uri) });
+  tests.register(context);
+  new Jump({ server: s, say }).register(context);
   const flashes: { first: number; last: number }[] = [];
   new Conjure({ server: s, say, ui, flights, tests, flashes }).register(context);
   const tdd: TddApi = {
