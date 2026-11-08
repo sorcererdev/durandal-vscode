@@ -56,7 +56,7 @@ src/tdd/
   stub.ts       olifant/stub → applyServerEdit → cursor on the name
   conjure.ts    olifant/conjure → landed path; paused → warning with Continue/Stop
   mutate.ts     olifant/mutate → marks, summary, re-mutate after green
-  survivors.ts  the picker (Ui.pick) → stub / waive
+  survivors.ts  the picker (Ui.list) → stub / waive
 ```
 
 - `commandTable.ts`: the six M4 ids move from `NOT_YET` to `BUILT`; `durandal.test.here` is
@@ -65,7 +65,7 @@ src/tdd/
 - `extension.ts` builds `Marks`, `Tests`, `Stub`, `Conjure`, `Mutate` as it builds `Suggest` and
   `Generate`, registers the DocumentLinkProvider for scheme `durandal-doc` (results path only),
   and exposes `Api.tdd` (last run answer, marks snapshot) for e2e.
-- `uiTypes.ts`: `pick` gains item buttons and an `onActive` hook (as `review` has); `text` is the
+- `uiTypes.ts`: `list` (a live list view: the survivors picker) and `ask` (a notice with buttons: the paused warning) are added, not `pick` with item buttons and `onActive`; `text` is the
   waive InputBox. `test/fakeUi.ts` answers both.
 - `protocol.ts` tightened (header comment: "a milestone that consumes a result tightens its type
   here"):
@@ -166,7 +166,7 @@ survives`, plus ` (likely equivalent)` when `dim`. Only marks inside the answer'
 survivor payloads per file and unit range — read by the picker, waive and re-mutate. Marks live
 until replaced, waived, or the document closes (nvim's per-buffer namespaces).
 
-**Survivors picker** (nvim survivors.lua → `Ui.pick`). Opens only when there are survivors and
+**Survivors picker** (nvim survivors.lua → `Ui.list`). Opens only when there are survivors and
 the active editor is still that file. Title: the summary. Items `line N  operator  from → to`;
 non-dim first, dim last with description `likely equivalent`; detail = the mutated line.
 `onActive` reveals and highlights the survivor's line in the editor. Enter = stub a test for it
