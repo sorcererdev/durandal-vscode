@@ -68,7 +68,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   suggest.register(context);
   hooks.suggest = suggest.inline;
   hooks.suggestion = p => suggest.pushed(p);
-  hooks.stopped = () => suggest.controller.off();
+  hooks.stopped = () => suggest.controller.stopped();
   const generate = new Generate({ server: s, docs, plans, log, state: context.workspaceState, ui });
   generate.register(context);
   new Actions({ server: s, plans, generate, log, ui, say, recognition: suggest.recognitions }).register(context);

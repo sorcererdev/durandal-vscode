@@ -154,7 +154,7 @@ test('one request per burst: the cursor settles before anything is asked', async
   assert.equal(st.suggests[0].line, 7, 'olifant/suggest takes the 1-based line');
 });
 
-test('a pulled follow-up with its plan is shown and logged; nothing pulled triggers the inline ghost', async () => {
+test('a pulled follow-up with its plan is shown and logged; nothing pulled clears it and triggers nothing', async () => {
   const { c, st, shown, logged } = considering();
   const p = c.consider();
   await flush();
@@ -163,12 +163,55 @@ test('a pulled follow-up with its plan is shown and logged; nothing pulled trigg
   assert.equal(c.state('file:///p/a.py')?.kind, 'followup');
   assert.equal(shown.at(-1)?.summary, '2 files');
   assert.deepEqual(logged.at(-1), { event: 'followup-shown', generator: 'Failure arms', band: undefined, score: undefined });
-  c.clear('file:///p/a.py');
   const q = c.consider();
   await flush();
   st.suggests[1].d.resolve(null);
   await q;
+  assert.equal(c.state('file:///p/a.py'), undefined, 'the decoration goes');
+  assert.equal(st.triggered, 0, 'an empty consideration asks no inline provider (spec §0)');
+});
+
+test('a pulled snippet triggers the inline ghost; a pulled ghost without a plan does not', async () => {
+  const { c, st, logged } = considering();
+  const p = c.consider();
+  await flush();
+  st.suggests[0].d.resolve({ ...sug({ kind: 'snippet', label: 'p/failure' }), plan: null } as unknown as SuggestResult);
+  await p;
   assert.equal(st.triggered, 1);
+  assert.deepEqual(logged.at(-1), { event: 'snippet-anticipated', generator: 'p/failure', line: 7 });
+  const q = c.consider();
+  await flush();
+  st.suggests[1].d.resolve({ ...sug({ kind: 'followup' }), plan: null } as unknown as SuggestResult);
+  await q;
+  assert.equal(st.triggered, 1);
+});
+
+test('stopped: a pushed follow-up is not offered again from its cached plan; the pull is asked', async () => {
+  const { c, st } = considering();
+  c.pushed(sug());
+  await flush();
+  st.plans[0].d.resolve({ plan: PLAN });
+  await flush();
+  assert.equal(c.state('file:///p/a.py')?.kind, 'followup');
+  c.stopped();
+  assert.equal(c.state('file:///p/a.py'), undefined);
+  assert.equal(c.store.current('file:///p/a.py', 4, 6), undefined, 'the push is gone');
+  const p = c.consider();
+  await flush();
+  assert.equal(st.plans.length, 1, 'no plan asked');
+  assert.equal(st.suggests.length, 1, 'the pull is used');
+  assert.equal(c.state('file:///p/a.py'), undefined, 'nothing offered from the cached plan');
+  st.suggests[0].d.resolve(null);
+  await p;
+});
+
+test('off keeps the pushes (ghosts off); stopped drops them', async () => {
+  const { c } = considering();
+  c.pushed(sug({ version: 3 }));
+  c.off();
+  assert.ok(c.store.current('file:///p/a.py', 3, 6));
+  c.stopped();
+  assert.equal(c.store.current('file:///p/a.py', 3, 6), undefined);
 });
 
 test('a stale answer is dropped: the cursor moved, the version changed, or a newer consideration began', async () => {

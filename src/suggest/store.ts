@@ -16,4 +16,7 @@ export class Store {
   }
 
   forget(uri: string): void { this.m.delete(uri); }
+
+  // clear: every push goes (the server that made them stopped)
+  clear(): void { this.m.clear(); }
 }

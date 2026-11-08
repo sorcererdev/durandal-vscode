@@ -131,13 +131,20 @@ export class Controller {
     this.dismissed.delete(uri);
   }
 
-  // off: ghosts off or the server stopped: nothing shown, nothing asked, nothing pending
+  // off: ghosts off (and the server stopped, through stopped): nothing shown, asked or pending
   off(): void {
     this.cts?.cancel();
     this.cts = undefined;
     if (this.timerHandle !== undefined) this.c?.timer.clear(this.timerHandle);
     this.timerHandle = undefined;
     for (const uri of [...this.states.keys()]) this.clear(uri);
+  }
+
+  // stopped: the server stopped or restarted: off, and its pushes go too (their planIds and
+  // cached plans name offers the new server never made)
+  stopped(): void {
+    this.off();
+    this.store.clear();
   }
 
   // keys: durandal.ghostBand is offer | hint | choice (spec §4)
@@ -200,7 +207,7 @@ export class Controller {
     }
     if (stale()) return;
     if (sg && this.fromAnswer(sg, at)) return;
-    this.anticipated(at);
+    this.anticipated(at, sg?.kind === 'snippet');
   }
 
   // fromPush: true when the push decided (shown, or its plan was asked for); false: pull.
@@ -209,7 +216,7 @@ export class Controller {
     if (s.kind === 'snippet') {
       // the push has no body: the inline completion at this line has it (nvim :276-281)
       this.d.log({ event: 'snippet-anticipated', generator: s.label, line: at.line + 1 });
-      this.anticipated(at);
+      this.anticipated(at, true);
       return true;
     }
     if (s.kind === 'ghost') return this.offer(at, ghostOf(s));
@@ -249,11 +256,13 @@ export class Controller {
     return this.offer(at, sg.kind === 'ghost' ? ghostOf(sg) : followupOf(sg, sg.plan));
   }
 
-  // anticipated: nothing else here; VS Code asks the inline provider (a decoration yields)
-  private anticipated(at: Cursor): void {
+  // anticipated: nothing else here; a decoration goes. Only when a push or the pull named a
+  // snippet at the cursor is the inline ghost asked for (spec §0): the trigger asks every
+  // inline provider, so an empty consideration leaves it to VS Code's own automatic trigger.
+  private anticipated(at: Cursor, snippet: boolean): void {
     const s = this.states.get(at.uri);
     if (s && s.kind !== 'snippet') this.clear(at.uri);
-    this.c?.triggerInline();
+    if (snippet) this.c?.triggerInline();
   }
 
   // offer: shown unless dismissed on this line (nvim offer, :229-239); true when it is shown

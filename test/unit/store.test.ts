@@ -28,3 +28,12 @@ test('the latest push replaces the one before, asked afresh; forget drops it', (
   s.forget('file:///p/a.py');
   assert.equal(s.current('file:///p/a.py', 5, 6), undefined);
 });
+
+test('clear drops every push', () => {
+  const s = new Store();
+  s.receive(push());
+  s.receive(push({ uri: 'file:///p/b.py' }));
+  s.clear();
+  assert.equal(s.current('file:///p/a.py', 4, 6), undefined);
+  assert.equal(s.current('file:///p/b.py', 4, 6), undefined);
+});
