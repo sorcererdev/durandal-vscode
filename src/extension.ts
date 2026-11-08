@@ -14,6 +14,7 @@ import { quickInputUi } from './quickInput';
 import { findRoot } from './root';
 import { ClientHooks, Say, Server } from './server';
 import type { Ui } from './uiTypes';
+import { Suggest } from './suggest/editor';
 import { VirtualDocs } from './virtualDocs';
 
 export interface Api {
@@ -27,6 +28,8 @@ export interface Api {
   // the UI the commands use now
   ui(): Ui;
   plans: Plans;
+  // ghost text and snippets: the controller's state and the fills (the e2e tests read them)
+  suggest: Suggest;
 }
 
 let server: Server | undefined;
@@ -59,6 +62,8 @@ export function activate(context: vscode.ExtensionContext): Api {
   const hints = new Hints({ server: s, log });
   hints.register(context);
   hooks.hints = hints;
+  const suggest = new Suggest({ server: s, log, say });
+  suggest.register(context);
   const generate = new Generate({ server: s, docs, plans, log, state: context.workspaceState, ui });
   generate.register(context);
   new Actions({ server: s, plans, generate, log, ui, say }).register(context);
@@ -100,7 +105,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     for (const r of await discover()) await s.addRoot(r);
     if (s.roots().length > 0) await s.start();
   })();
-  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans };
+  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest };
 }
 
 export async function deactivate(): Promise<void> {

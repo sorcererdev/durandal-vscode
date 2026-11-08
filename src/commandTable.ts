@@ -21,12 +21,15 @@ export const NOT_YET: Record<string, { title: string; milestone: number }> = {
 };
 
 // The commands built so far, contributed with these titles (spec §6's rest is NOT_YET). The
-// form keys' commands (spec §9) are enabled only while the generate form is open.
+// form keys' commands (spec §9) are enabled only while the generate form is open; the
+// suggestion's only while one is shown (M3 spec §4).
 export const BUILT: Record<string, { title: string; enablement?: string }> = {
   'durandal.generate': { title: 'Generate…' },
   'durandal.actions': { title: 'Actions Here' },
   'durandal.hints.toggle': { title: 'Toggle ⚡ Hints' },
   'durandal.migration': { title: 'Migration Report' },
+  'durandal.ghosts.toggle': { title: 'Toggle Ghost Text' },
+  'durandal.suggest.dismiss': { title: 'Dismiss Suggestion', enablement: 'durandal.ghostVisible' },
   'durandal.generate.apply': { title: 'Generate: Apply', enablement: 'durandal.formOpen' },
   'durandal.generate.review': { title: 'Generate: Review Plan', enablement: 'durandal.formOpen' },
 };
@@ -35,6 +38,13 @@ export const BUILT: Record<string, { title: string; enablement?: string }> = {
 export const FORM_KEYS: { command: string; key: string; mac: string; when: string }[] = [
   { command: 'durandal.generate.apply', key: 'ctrl+enter', mac: 'cmd+enter', when: 'durandal.formOpen && inQuickOpen' },
   { command: 'durandal.generate.review', key: 'ctrl+o', mac: 'ctrl+o', when: 'durandal.formOpen && inQuickOpen' },
+];
+
+// The keys of a suggestion (M3 spec §4): Esc dismisses the snippet ghost while VS Code shows
+// it and it is Durandal's (VS Code's own Esc hides it; ours also remembers the line). Tab on
+// the snippet ghost is VS Code's own (editor.action.inlineSuggest.commit).
+export const SUGGEST_KEYS: { command: string; key: string; when: string }[] = [
+  { command: 'durandal.suggest.dismiss', key: 'escape', when: "inlineSuggestionVisible && durandal.ghostVisible && durandal.ghostKind == 'snippet'" },
 ];
 
 // Commands the server names in its inlay hints (⚡) and code lenses: registered so a click

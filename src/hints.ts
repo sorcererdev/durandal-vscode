@@ -4,6 +4,7 @@ import type { ActionLog } from './actionLog';
 import { generatorAt, Seen } from './hintLog';
 import { Olifant } from './protocol';
 import type { Server } from './server';
+import { toggleSetting } from './toggleSetting';
 
 // Hints are the ⚡ hints: the library's inlay hints as olifant serves them (one per line with
 // actions, every visible line; clicking runs olifant.showActions), gated by durandal.hints,
@@ -30,12 +31,7 @@ export class Hints {
 
   register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
-      vscode.commands.registerCommand('durandal.hints.toggle', async () => {
-        const c = vscode.workspace.getConfiguration('durandal');
-        const set = c.inspect<boolean>('hints');
-        const target = set?.workspaceValue !== undefined ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
-        await c.update('hints', !this.enabled(), target);
-      }),
+      vscode.commands.registerCommand('durandal.hints.toggle', () => toggleSetting('hints')),
       vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('durandal.hints')) this.refresh();
       }),

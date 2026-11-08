@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import pkg from '../../package.json';
-import { BUILT, FORM_KEYS, KEYS, NOT_YET, PREFIX, SERVER_NAMED } from '../../src/commandTable';
+import { BUILT, FORM_KEYS, KEYS, NOT_YET, PREFIX, SERVER_NAMED, SUGGEST_KEYS } from '../../src/commandTable';
 
 test('the contributed commands: Health, Restart, the built ones and the not-yet ones, each in the Durandal category', () => {
   const ids = pkg.contributes.commands.map(c => c.command).sort();
@@ -15,17 +15,20 @@ test('the contributed commands: Health, Restart, the built ones and the not-yet 
   for (const id of Object.keys(SERVER_NAMED)) assert.ok(!ids.includes(id), `${id} is registered, not contributed`);
 });
 
-test('the form keys\' commands are contributed, enabled only while the form is open (spec §9)', () => {
+test('enablement: the form keys\' commands while the form is open, the suggestion\'s while one is shown', () => {
   const byId = new Map(pkg.contributes.commands.map(c => [c.command, c as { enablement?: string }]));
   for (const k of FORM_KEYS) assert.equal(byId.get(k.command)?.enablement, 'durandal.formOpen', k.command);
+  for (const [id, b] of Object.entries(BUILT)) assert.equal(byId.get(id)?.enablement, b.enablement, id);
+  assert.equal(BUILT['durandal.suggest.dismiss'].enablement, 'durandal.ghostVisible');
   const enabled = pkg.contributes.commands.filter(c => (c as { enablement?: string }).enablement !== undefined).map(c => c.command).sort();
-  assert.deepEqual(enabled, FORM_KEYS.map(k => k.command).sort());
+  assert.deepEqual(enabled, Object.entries(BUILT).filter(([, b]) => b.enablement).map(([id]) => id).sort());
 });
 
-test('the keybindings are KEYS under the chord prefix, then the form keys, without clashes', () => {
+test('the keybindings are KEYS under the chord prefix, the form keys, then the suggestion keys, without clashes', () => {
   const want = [
     ...KEYS.map(k => ({ command: k.command, key: `${PREFIX.key} ${k.keys}`, mac: `${PREFIX.mac} ${k.keys}`, when: k.when })),
     ...FORM_KEYS,
+    ...SUGGEST_KEYS,
   ];
   assert.deepEqual(pkg.contributes.keybindings, want);
   const byWhen = new Map<string, string[]>();
@@ -36,9 +39,16 @@ test('the keybindings are KEYS under the chord prefix, then the form keys, witho
   assert.ok(FORM_KEYS.every(k => k.when === 'durandal.formOpen && inQuickOpen'));
 });
 
+test('Esc dismisses the snippet ghost only while it is ours and visible (spec §4)', () => {
+  assert.deepEqual(SUGGEST_KEYS.find(k => k.command === 'durandal.suggest.dismiss' && k.when.startsWith('inlineSuggestionVisible')), {
+    command: 'durandal.suggest.dismiss', key: 'escape',
+    when: "inlineSuggestionVisible && durandal.ghostVisible && durandal.ghostKind == 'snippet'",
+  });
+});
+
 test('the settings and the activation', () => {
   assert.deepEqual(Object.keys(pkg.contributes.configuration.properties).sort(),
-    ['durandal.actionLog', 'durandal.debounceMs', 'durandal.fills', 'durandal.hints', 'durandal.model', 'durandal.path', 'durandal.trace.server']);
+    ['durandal.actionLog', 'durandal.debounceMs', 'durandal.fills', 'durandal.ghosts', 'durandal.hints', 'durandal.model', 'durandal.path', 'durandal.trace.server']);
   // after startup too (issue #1): a project file opened in a window with no project folder
   assert.deepEqual(pkg.activationEvents, ['workspaceContains:**/.olifant/config.toml', 'onStartupFinished']);
   const log = (pkg.contributes.configuration.properties as Record<string, { type: string; default: unknown }>)['durandal.actionLog'];
@@ -47,4 +57,7 @@ test('the settings and the activation', () => {
   const hints = (pkg.contributes.configuration.properties as Record<string, { type: string; default: unknown }>)['durandal.hints'];
   assert.equal(hints.type, 'boolean');
   assert.equal(hints.default, true);
+  const ghosts = (pkg.contributes.configuration.properties as Record<string, { type: string; default: unknown }>)['durandal.ghosts'];
+  assert.equal(ghosts.type, 'boolean');
+  assert.equal(ghosts.default, true);
 });
