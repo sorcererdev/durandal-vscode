@@ -30,6 +30,7 @@ export const BUILT: Record<string, { title: string; enablement?: string }> = {
   'durandal.migration': { title: 'Migration Report' },
   'durandal.ghosts.toggle': { title: 'Toggle Ghost Text' },
   'durandal.suggest.dismiss': { title: 'Dismiss Suggestion', enablement: 'durandal.ghostVisible' },
+  'durandal.suggest.accept': { title: 'Accept Suggestion', enablement: 'durandal.ghostVisible' },
   'durandal.generate.apply': { title: 'Generate: Apply', enablement: 'durandal.formOpen' },
   'durandal.generate.review': { title: 'Generate: Review Plan', enablement: 'durandal.formOpen' },
 };
@@ -45,6 +46,7 @@ export const FORM_KEYS: { command: string; key: string; mac: string; when: strin
 // decoration (⚡ at the line's end) wherever Esc means nothing else. Tab on the snippet ghost
 // is VS Code's own (editor.action.inlineSuggest.commit).
 export const SUGGEST_KEYS: { command: string; key: string; when: string }[] = [
+  { command: 'durandal.suggest.accept', key: 'tab', when: "durandal.ghostVisible && durandal.ghostKind != 'snippet' && durandal.ghostBand != 'hint' && editorTextFocus && !inlineSuggestionVisible && !suggestWidgetVisible && !inSnippetMode && !editorReadonly" },
   { command: 'durandal.suggest.dismiss', key: 'escape', when: "inlineSuggestionVisible && durandal.ghostVisible && durandal.ghostKind == 'snippet'" },
   { command: 'durandal.suggest.dismiss', key: 'escape', when: "durandal.ghostVisible && durandal.ghostKind != 'snippet' && durandal.ghostBand != 'hint' && editorTextFocus && !inlineSuggestionVisible && !suggestWidgetVisible && !editorHasSelection && !editorHasMultipleSelections && !findWidgetVisible && !parameterHintsVisible && !inSnippetMode && !renameInputVisible" },
 ];

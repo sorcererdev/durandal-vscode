@@ -1,5 +1,7 @@
 import type { CodeAction } from 'vscode-languageserver-protocol';
 import type { ActionData, FileActionsResult } from '../protocol';
+import { short } from '../suggest/keys';
+import type { Offer } from '../suggest/types';
 
 // menu: the actions-at-cursor menu and its miss, ported from durandal.nvim actions.lua. Pure.
 
@@ -16,6 +18,18 @@ export function menuItems(actions: CodeAction[]): MenuItem[] {
     const missing = dataOf(a).missing ?? [];
     return { label: `${a.kind === 'quickfix' ? 'Fix: ' : ''}${a.title}`, description: missing.length > 0 ? `(asks ${missing.join(', ')})` : undefined, action: a };
   });
+}
+
+export type RecognitionPick = 'recognition' | 'reset';
+
+// recognitionItems: what the server recognised on this line, first in the menu (nvim
+// actions.lua :104-112); a quiet hint can be asked for again.
+export function recognitionItems(rec: Offer): { label: string; pick: RecognitionPick }[] {
+  const reasons = rec.reasons ?? [];
+  const why = reasons.length > 0 ? `  (${reasons.join('; ')})` : '';
+  const items: { label: string; pick: RecognitionPick }[] = [{ label: `⚡ ${rec.label ?? rec.name}${why}`, pick: 'recognition' }];
+  if (rec.band === 'hint') items.push({ label: `Show recognitions for ${short(rec.generator)} again`, pick: 'reset' });
+  return items;
 }
 
 export type AskWay = { kind: 'form'; generator: string; done: boolean } | { kind: 'direct'; missing: string[] };

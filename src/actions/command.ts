@@ -9,12 +9,17 @@ import type { Plans } from '../land';
 import { CLIENT_COMMANDS, FileActionsResult, Olifant, Values } from '../protocol';
 import { findRoot, realRoot } from '../root';
 import { APPLY_RESOLVED, NOT_RUNNING, Say, Server } from '../server';
-import type { Ui } from '../uiTypes';
-import { askWay, dataOf, explainMiss, generatorOf, MenuItem, menuItems, MissItem } from './menu';
+import type { Shown } from '../suggest/types';
+import type { Item, Ui } from '../uiTypes';
+import { askWay, dataOf, explainMiss, generatorOf, MenuItem, menuItems, MissItem, recognitionItems } from './menu';
 
 export const NOT_IN_PROJECT = 'not in an Olifant project (no .olifant/ above this file)';
 
-export interface ActionsDeps { server: Server; plans: Plans; generate: Generate; log: ActionLog; ui(): Ui; say: Say }
+export interface ActionsDeps {
+  server: Server; plans: Plans; generate: Generate; log: ActionLog; ui(): Ui; say: Say;
+  // recognition: the line's recognition (suggest/editor.ts), first in the menu
+  recognition?: { at(uri: string, line: number): Shown | undefined; choose(st: Shown): Promise<void>; reset(st: Shown): void };
+}
 
 // Actions is durandal.actions (the chord, at the cursor) and olifant.showActions (the ⚡ hint's
 // command, at its line), ported from durandal.nvim actions.lua: the server's code actions as a
@@ -65,12 +70,21 @@ export class Actions {
       ui.error(errorMessage(err));
       return;
     }
-    if (actions.length === 0) return this.miss(uri, rel, ui);
+    // what the server recognised on this line comes first (an offer, a choice, a hint)
+    const rec = this.d.recognition?.at(uri.toString(), pos.line);
+    if (actions.length === 0 && !rec) return this.miss(uri, rel, ui);
     const items = menuItems(actions);
     this.d.log.write({ event: 'shown', file: rel, generators: items.map(i => generatorOf(i.action)) });
-    const picked = await ui.pick<MenuItem>({ title: 'Olifant', items: items.map(i => ({ label: i.label, description: i.description, value: i })) });
+    type Pick = { kind: 'action'; item: MenuItem } | { kind: 'recognition' } | { kind: 'reset' };
+    const picks: Item<Pick>[] = [
+      ...(rec ? recognitionItems(rec).map(r => ({ label: r.label, value: { kind: r.pick } as Pick })) : []),
+      ...items.map(i => ({ label: i.label, description: i.description, value: { kind: 'action', item: i } as Pick })),
+    ];
+    const picked = await ui.pick<Pick>({ title: 'Olifant', items: picks });
     if (!picked) return;
-    const a = picked.action;
+    if (picked.kind === 'recognition') return this.d.recognition!.choose(rec!);
+    if (picked.kind === 'reset') return this.d.recognition!.reset(rec!);
+    const a = picked.item.action;
     this.d.log.write({ event: a.kind === 'quickfix' ? 'fix-picked' : 'picked', file: rel, generator: generatorOf(a) });
     const sets = await this.ask(a, ui);
     if (sets) await this.resolve(a, sets, root, ui);

@@ -68,3 +68,11 @@ test('Esc dismisses a decoration suggestion only where Esc means nothing else (s
     when: "durandal.ghostVisible && durandal.ghostKind != 'snippet' && durandal.ghostBand != 'hint' && editorTextFocus && !inlineSuggestionVisible && !suggestWidgetVisible && !editorHasSelection && !editorHasMultipleSelections && !findWidgetVisible && !parameterHintsVisible && !inSnippetMode && !renameInputVisible",
   });
 });
+
+test('Tab accepts a decoration suggestion only when nothing else has Tab (spec §4)', () => {
+  assert.deepEqual(SUGGEST_KEYS.find(k => k.command === 'durandal.suggest.accept'), {
+    command: 'durandal.suggest.accept', key: 'tab',
+    when: "durandal.ghostVisible && durandal.ghostKind != 'snippet' && durandal.ghostBand != 'hint' && editorTextFocus && !inlineSuggestionVisible && !suggestWidgetVisible && !inSnippetMode && !editorReadonly",
+  });
+  assert.equal(BUILT['durandal.suggest.accept'].enablement, 'durandal.ghostVisible');
+});

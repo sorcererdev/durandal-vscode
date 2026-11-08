@@ -64,14 +64,14 @@ export function activate(context: vscode.ExtensionContext): Api {
   hooks.hints = hints;
   // before Suggest, which asks it whether the cursor's file is in a project
   const projects = trackProjects(context, s);
-  const suggest = new Suggest({ server: s, log, say, warn: m => output.warn(m), hints, inProject: () => projects.inProject() });
+  const suggest = new Suggest({ server: s, log, say, warn: m => output.warn(m), hints, inProject: () => projects.inProject(), plans, ui });
   suggest.register(context);
   hooks.suggest = suggest.inline;
   hooks.suggestion = p => suggest.pushed(p);
   hooks.stopped = () => suggest.controller.off();
   const generate = new Generate({ server: s, docs, plans, log, state: context.workspaceState, ui });
   generate.register(context);
-  new Actions({ server: s, plans, generate, log, ui, say }).register(context);
+  new Actions({ server: s, plans, generate, log, ui, say, recognition: suggest.recognitions }).register(context);
   registerMigration(context, { server: s, docs, ui });
 
   // health: the binary, the server, the projects, and olifant doctor for the active file's project

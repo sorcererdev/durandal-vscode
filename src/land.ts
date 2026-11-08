@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import * as vscode from 'vscode';
 import type { WorkspaceEdit } from 'vscode-languageserver-protocol';
 import { applyServerEdit } from './applyEdit';
+import { errorMessage } from './errors';
 import { ReviewFile, reviewModel } from './generate/review';
 import { firstStale, landedMessage, NOTHING_TO_CHANGE, seenText, staleMessage } from './generate/stale';
 import type { Plan, PlanSnippet } from './protocol';
@@ -62,8 +63,10 @@ export class Plans {
   }
 
   // review is the review window: notes and files in a quick pick, the active file's diff
-  // beside; Apply lands the plan (landed runs when it did); a parse warning jumps to its line.
-  async review(ui: Ui, root: string, plan: Plan, edit: WorkspaceEdit | undefined, o: { title: string; landed(): void }): Promise<void> {
+  // beside; Apply lands the plan (refill, when given, plans it again first; landed runs when it
+  // landed); a parse warning jumps to its line.
+  async review(ui: Ui, root: string, plan: Plan, edit: WorkspaceEdit | undefined,
+    o: { title: string; landed(): void; refill?(): Promise<{ plan: Plan; edit?: WorkspaceEdit }> }): Promise<void> {
     const m = reviewModel(plan);
     if (m.files.length === 0 && m.canApply) {
       void this.d.say('info', NOTHING_TO_CHANGE);
@@ -82,7 +85,17 @@ export class Plans {
       return;
     }
     if (a.kind !== 'apply' || !m.canApply) return;
-    const err = await this.land(root, plan, edit, o.title);
+    // refill: what Apply lands, planned again (a suggestion's plan{planId, fill:true})
+    let landing: { plan: Plan; edit?: WorkspaceEdit } = { plan, edit };
+    if (o.refill) {
+      try {
+        landing = await o.refill();
+      } catch (err) {
+        ui.error(errorMessage(err));
+        return;
+      }
+    }
+    const err = await this.land(root, landing.plan, landing.edit, o.title);
     if (err) ui.error(err);
     else o.landed();
   }

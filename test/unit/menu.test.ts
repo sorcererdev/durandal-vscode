@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { CodeAction } from 'vscode-languageserver-protocol';
 import type { FileAction } from '../../src/protocol';
-import { askWay, explainMiss, generatorOf, menuItems } from '../../src/actions/menu';
+import { askWay, explainMiss, generatorOf, menuItems, recognitionItems } from '../../src/actions/menu';
 
 const act = (title: string, kind: string, data: object): CodeAction => ({ title, kind, data });
 const fa = (label: string, line: number): FileAction =>
@@ -47,4 +47,13 @@ test('explainMiss shows what a generator waits for above the actions elsewhere (
 test('(c) explainMiss says when nothing relates to the file', () => {
   assert.deepEqual(explainMiss({ actions: [], nearby: [] }, 'src/a.rs'), { kind: 'none', text: 'No Olifant generators apply to src/a.rs' });
   assert.deepEqual(explainMiss(null, 'src/a.rs'), { kind: 'none', text: 'No Olifant generators apply to src/a.rs' });
+});
+
+test('the line\'s recognition comes first in the ⚡ menu; a hint can be shown again', () => {
+  const rec = { kind: 'recognition' as const, generator: 'p/add-query', name: 'Query', label: 'Query', sets: {}, band: 'offer' as const, reasons: ['the name fits', 'it reads a repo'] };
+  assert.deepEqual(recognitionItems(rec), [{ label: '⚡ Query  (the name fits; it reads a repo)', pick: 'recognition' }]);
+  assert.deepEqual(recognitionItems({ ...rec, band: 'hint', reasons: [] }), [
+    { label: '⚡ Query', pick: 'recognition' },
+    { label: 'Show recognitions for add query again', pick: 'reset' },
+  ]);
 });

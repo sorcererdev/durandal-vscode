@@ -1,10 +1,13 @@
 import * as vscode from 'vscode';
 import type { ActionLog } from '../actionLog';
 import type { Hints } from '../hints';
+import type { Plans } from '../land';
 import { Olifant, Suggestion } from '../protocol';
 import type { Say, Server } from '../server';
 import { settingsFrom } from '../settings';
 import { toggleSetting } from '../toggleSetting';
+import type { Ui } from '../uiTypes';
+import { Accept } from './accept';
 import { Controller } from './controller';
 import { Decorations } from './decorate';
 import { Fill, FillOutcome } from './fill';
@@ -15,16 +18,20 @@ const HIDE_INLINE = 'editor.action.inlineSuggest.hide';
 
 // Suggest is ghost text and snippets in VS Code (durandal.nvim suggest.lua, M3 spec): the
 // controller fed by the active editor, the context keys, durandal.ghosts and its toggle
-// (:DurandalGhosts), Esc's dismissal, the pushes, and the ⚡ decoration with the hint it hides.
+// (:DurandalGhosts), Esc's dismissal, the pushes, the ⚡ decoration with the hint it hides, and
+// Tab's accept.
 export class Suggest {
   readonly controller: Controller;
+  readonly accept: Accept;
   readonly fill: Fill;
   readonly inline: Inline;
   private readonly decorations = new Decorations();
   // focused: the active editor's document (its suggestion goes when it is left, decision 7)
   private focused: string | undefined;
 
-  constructor(private readonly d: { server: Server; log: ActionLog; say: Say; warn(m: string): void; hints: Hints; inProject(): boolean }) {
+  constructor(private readonly d: {
+    server: Server; log: ActionLog; say: Say; warn(m: string): void; hints: Hints; inProject(): boolean; plans: Plans; ui(): Ui;
+  }) {
     this.controller = new Controller({
       view: {
         keys: k => this.keys(k),
@@ -34,6 +41,7 @@ export class Suggest {
       },
       log: e => d.log.write(e),
     });
+    this.accept = new Accept({ server: d.server, plans: d.plans, controller: this.controller, log: d.log, ui: d.ui });
     this.fill = new Fill({ server: d.server, log: d.log, say: d.say, warn: d.warn });
     this.inline = new Inline({ controller: this.controller, fill: this.fill, enabled: () => this.enabled(), warn: d.warn });
     this.controller.attach({
@@ -58,6 +66,16 @@ export class Suggest {
       timer: { set: (f, ms) => setTimeout(f, ms), clear: h => clearTimeout(h as NodeJS.Timeout) },
     });
   }
+
+  // recognitions: the ⚡ menu's view of the line's recognition (actions/command.ts)
+  readonly recognitions = {
+    at: (uri: string, line: number): Shown | undefined => {
+      const st = this.controller.state(uri);
+      return st && st.kind === 'recognition' && st.line === line ? st : undefined;
+    },
+    choose: (st: Shown) => this.accept.choose(st),
+    reset: (st: Shown) => this.controller.feedback(st, 'reset'),
+  };
 
   // pushed: olifant/suggestion, its uri read as VS Code spells it (decision 5)
   pushed(s: Suggestion): void {
@@ -84,6 +102,11 @@ export class Suggest {
         const kind = this.controller.state(uri)?.kind;
         this.controller.dismiss(uri);
         if (kind === 'snippet') await vscode.commands.executeCommand(HIDE_INLINE);
+      }),
+      vscode.commands.registerCommand('durandal.suggest.accept', async () => {
+        const ed = vscode.window.activeTextEditor;
+        const st = ed && this.controller.state(ed.document.uri.toString());
+        if (st) await this.accept.run(st);
       }),
       vscode.window.onDidChangeTextEditorSelection(e => this.moved(e.textEditor)),
       vscode.workspace.onDidChangeTextDocument(e => {

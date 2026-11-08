@@ -117,6 +117,12 @@
         "enablement": "durandal.ghostVisible"
       },
       {
+        "command": "durandal.suggest.accept",
+        "title": "Accept Suggestion",
+        "category": "Durandal",
+        "enablement": "durandal.ghostVisible"
+      },
+      {
         "command": "durandal.generate",
         "title": "Generate…",
         "category": "Durandal"
@@ -334,6 +340,11 @@
         "key": "ctrl+o",
         "mac": "ctrl+o",
         "when": "durandal.formOpen && inQuickOpen"
+      },
+      {
+        "command": "durandal.suggest.accept",
+        "key": "tab",
+        "when": "durandal.ghostVisible && durandal.ghostKind != 'snippet' && durandal.ghostBand != 'hint' && editorTextFocus && !inlineSuggestionVisible && !suggestWidgetVisible && !inSnippetMode && !editorReadonly"
       },
       {
         "command": "durandal.suggest.dismiss",

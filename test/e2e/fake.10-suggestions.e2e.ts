@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
+import { FakeUi } from '../fakeUi';
 import { actionLog, api, file, log, open, reply, restart, revert, settle, sleep, until } from './helpers';
 
 const MAIN = 'one/main.py';
@@ -107,5 +108,114 @@ describe('pushed and pulled suggestions (fake server)', () => {
     await restart();
     assert.equal(await shownKind(), undefined);
     assert.equal((await api()).suggest.decorated(uri()), undefined, 'no decoration left');
+  });
+
+  // planned: main.py's plan as the fake answers it, against the text as it is now
+  const planned = (before: string, after: string) => ({
+    plan: { files: [{ path: 'main.py', before, after }], conflicts: [], warnings: [], holes: [], snippet: null },
+    edit: { changes: { [uri()]: [{ range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } }, newText: after.split('\n')[0] + '\n' }] } },
+  });
+
+  it('Tab reviews the follow-up; Apply asks plan{planId, fill:true} and lands it', async () => {
+    reply('olifant/plan', planned('x = 10\n', 'x = 11\n'));
+    const a = await api();
+    const ui = new FakeUi();
+    ui.onReview = () => ({ kind: 'apply' });
+    a.setUi(ui);
+    const from = actionLog().length;
+    const ed = await edited();
+    await until(async () => (await shownKind()) === 'followup', 'the follow-up shown');
+    const before = plans().length;
+    await vscode.commands.executeCommand('durandal.suggest.accept');
+    await until(() => plans().slice(before).some(m => m.params.fill === true), 'plan{fill:true} sent');
+    assert.deepEqual(plans().slice(before).find(m => m.params.fill === true)!.params, { planId: 7, fill: true });
+    await until(() => ed.document.getText() === 'x = 11\n', 'landed');
+    assert.ok(ui.log.includes('review Failure arms'));
+    assert.equal(events(from, 'followup-reviewed').length, 1);
+    assert.equal(events(from, 'followup-applied').length, 1);
+  });
+
+  it('a ghost block likewise: reviewed first, Apply lands the filled plan', async () => {
+    push({ ...FOLLOWUP, kind: 'ghost', label: 'Arms', lines: ['case A():', '    return x'] });
+    reply('olifant/plan', planned('x = 10\n', 'x = 12\n'));
+    const a = await api();
+    const ui = new FakeUi();
+    ui.onReview = () => ({ kind: 'apply' });
+    a.setUi(ui);
+    const ed = await edited();
+    await until(async () => (await shownKind()) === 'ghost', 'the ghost block shown');
+    await vscode.commands.executeCommand('durandal.suggest.accept');
+    await until(() => ed.document.getText() === 'x = 12\n', 'landed');
+    assert.ok(ui.log.includes('review Arms'));
+  });
+
+  const REC = { ...FOLLOWUP, kind: 'recognition', label: 'Command', generator: 'p/command', sets: { command: 'x' }, band: 'offer', or: null, reasons: ['the name fits'], score: 0.8, planId: 8 };
+  const feedback = () => log().filter(m => m.method === 'olifant/recognitionFeedback').map(m => m.params.outcome as string);
+
+  it('a recognition offer: Tab reviews, Apply lands and says accepted; Esc says dismissed', async () => {
+    push(REC);
+    reply('olifant/plan', planned('x = 10\n', 'x = 13\n'));
+    const a = await api();
+    const ui = new FakeUi();
+    ui.onReview = () => ({ kind: 'apply' });
+    a.setUi(ui);
+    const n = feedback().length;
+    const ed = await edited();
+    await until(async () => (await shownKind()) === 'recognition', 'the offer shown');
+    await vscode.commands.executeCommand('durandal.suggest.accept');
+    await until(() => ed.document.getText() === 'x = 13\n', 'landed');
+    await until(() => feedback().length > n, 'feedback');
+    assert.deepEqual(feedback().slice(n), ['accepted']);
+    await revert(ed.document);
+    await edited();
+    await until(async () => (await shownKind()) === 'recognition', 'offered again after the revert');
+    await vscode.commands.executeCommand('durandal.suggest.dismiss');
+    await until(() => feedback().length > n + 1, 'dismissed said');
+    assert.equal(feedback().at(-1), 'dismissed');
+  });
+
+  it('a recognition choice: Which is it?, the choices loop, then plan{recognize: true}', async () => {
+    push({ ...REC, or: 'p/add-query' });
+    reply('olifant/choices', { inputs: [{ name: 'query', optional: false, default: null, prompt: 'its name', choices: null }] });
+    reply('olifant/plan', planned('x = 10\n', 'x = 14\n'));
+    const a = await api();
+    const ui = new FakeUi();
+    ui.onPick = o => (o.title === 'Which is it?' ? o.items[1].value : undefined);
+    a.setUi(ui);
+    await edited();
+    await until(async () => (await shownKind()) === 'recognition', 'the choice shown');
+    const run = vscode.commands.executeCommand('durandal.suggest.accept');
+    const t = await until(() => ui.texts.at(-1), 'the input asked');
+    assert.equal(t.title, 'query: its name');
+    t.finish('find_tables');
+    await run;
+    const choices = log().filter(m => m.method === 'olifant/choices').at(-1)!;
+    assert.deepEqual(choices.params, { textDocument: { uri: uri() }, generator: 'p/add-query', sets: { query: 'find_tables' } });
+    const p = plans().at(-1)!;
+    assert.deepEqual(p.params, { textDocument: { uri: uri() }, generator: 'p/add-query', sets: { query: 'find_tables' }, recognize: true });
+    assert.ok(ui.log.includes('review add query'));
+  });
+
+  it('a recognition hint: quiet (no plan asked), first in the ⚡ menu, and "show again" says reset', async () => {
+    push({ ...REC, band: 'hint' });
+    reply('textDocument/codeAction', []);
+    const a = await api();
+    const ui = new FakeUi();
+    let menu: string[] = [];
+    ui.onPick = o => {
+      if (o.title !== 'Olifant') return undefined;
+      menu = o.items.map(i => i.label);
+      return o.items[1].value;
+    };
+    a.setUi(ui);
+    const before = plans().length;
+    const n = feedback().length;
+    await edited();
+    await until(async () => (await api()).suggest.state(uri())?.band === 'hint', 'the hint shown');
+    assert.equal(plans().length, before, 'a hint asks no plan');
+    await vscode.commands.executeCommand('durandal.actions');
+    assert.deepEqual(menu, ['⚡ Command  (the name fits)', 'Show recognitions for command again']);
+    await until(() => feedback().length > n, 'reset said');
+    assert.equal(feedback().at(-1), 'reset');
   });
 });
