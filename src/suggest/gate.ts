@@ -1,4 +1,5 @@
 import type { Range } from 'vscode-languageserver-protocol';
+import { errorMessage } from '../errors';
 import type { InlineItem, SnippetData } from '../protocol';
 import { keyOf } from './keys';
 
@@ -51,4 +52,11 @@ export function inlineGate(item: InlineItem | undefined, g: GateIn): Gate {
   if (g.dismissed(key)) return { ok: false, why: 'dismissed here' };
   const body = typeof item.insertText === 'string' ? item.insertText : item.insertText.value;
   return { ok: true, data, body, key };
+}
+
+// fetchFailure: what to write to the output channel when the inline fetch failed: the server's
+// words as sent, or nothing for a cancelled fetch (-32800, or VS Code no longer wants it).
+export function fetchFailure(err: unknown, cancelled: boolean): string | undefined {
+  if (cancelled || (!!err && typeof err === 'object' && (err as { code?: unknown }).code === -32800)) return undefined;
+  return errorMessage(err);
 }

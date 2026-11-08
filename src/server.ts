@@ -30,7 +30,7 @@ export interface ClientHooks {
     inline(document: vscode.TextDocument, position: vscode.Position, context: vscode.InlineCompletionContext,
       token: vscode.CancellationToken, fetch: () => Promise<InlineItem[]>): Promise<vscode.InlineCompletionItem[]>;
     completions(document: vscode.TextDocument, items: vscode.CompletionItem[]): void;
-    resolved(item: vscode.CompletionItem): void;
+    resolved(item: vscode.CompletionItem, resolved: vscode.CompletionItem): void;
   };
 }
 
@@ -187,11 +187,12 @@ export class Server {
           if (r && hooks.suggest) hooks.suggest.completions(document, Array.isArray(r) ? r : r.items);
           return r;
         },
-        // the resolved item is a new one: it keeps the fill command completions gave the item
+        // the resolved item is a new one: it keeps the fill command completions gave the item,
+        // and a snippet's filled body is stashed for that command (VS Code would insert it)
         resolveCompletionItem: async (item, token, next) => {
           const r = await next(item, token);
           if (r && !r.command && item.command) r.command = item.command;
-          if (r && hooks.suggest) hooks.suggest.resolved(r);
+          if (r && hooks.suggest) hooks.suggest.resolved(item, r);
           return r;
         },
       },

@@ -17,10 +17,10 @@ export class Suggest {
   readonly fill: Fill;
   readonly inline: Inline;
 
-  constructor(private readonly d: { server: Server; log: ActionLog; say: Say }) {
+  constructor(private readonly d: { server: Server; log: ActionLog; say: Say; warn(m: string): void }) {
     this.controller = new Controller({ view: { keys: k => this.keys(k) }, log: e => d.log.write(e) });
     this.fill = new Fill({ server: d.server, log: d.log, say: d.say });
-    this.inline = new Inline({ controller: this.controller, fill: this.fill, enabled: () => this.enabled() });
+    this.inline = new Inline({ controller: this.controller, fill: this.fill, enabled: () => this.enabled(), warn: d.warn });
   }
 
   enabled(): boolean {

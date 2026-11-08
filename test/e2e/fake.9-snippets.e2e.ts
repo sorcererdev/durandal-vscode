@@ -8,6 +8,10 @@ const BODY = 'class ${1:Name}:\n    ${2:pass}$0';
 const FILLED = 'class ${1:Cancelled}:\n    ${2:reason: str}$0';
 const RANGE = { start: { line: 1, character: 0 }, end: { line: 1, character: 0 } };
 const DATA = { kind: 'action', path: '/one/main.py', generator: 'p/failure', sets: { app: 'bistro' }, line: 2 };
+const LIST = [{
+  label: 'Failure', kind: 15, detail: 'p/failure', insertTextFormat: 2, filterText: 'Failure',
+  textEdit: { range: RANGE, newText: BODY }, data: DATA,
+}];
 
 const inline = (o: Record<string, unknown> = {}) => reply('textDocument/inlineCompletion', {
   items: [{ insertText: { kind: 'snippet', value: BODY }, range: RANGE, filterText: '', ghost: ['class ⟨Name⟩:', '    pass'], data: DATA, ...o }],
@@ -136,10 +140,7 @@ describe('ghost text and snippets (fake server)', () => {
 
   it('a snippet in the completion list carries the fill command', async () => {
     await running();
-    reply('textDocument/completion', [{
-      label: 'Failure', kind: 15, detail: 'p/failure', insertTextFormat: 2, filterText: 'Failure',
-      textEdit: { range: RANGE, newText: BODY }, data: DATA,
-    }]);
+    reply('textDocument/completion', LIST);
     await settle(MAIN, 'x = 1\n');
     await open(file(MAIN));
     const list = await vscode.commands.executeCommand<vscode.CompletionList>('vscode.executeCompletionItemProvider', file(MAIN), new vscode.Position(1, 0));
@@ -150,5 +151,27 @@ describe('ghost text and snippets (fake server)', () => {
     assert.equal(arg.body, BODY);
     assert.equal(arg.data.generator, 'p/failure');
     assert.equal(arg.uri, uri());
+  });
+
+  it('a list snippet resolved before Enter: the unfilled body goes in, the fill puts the filled one over exactly its lines', async () => {
+    await running();
+    reply('textDocument/completion', LIST);
+    // the model's body has a line more than the unfilled one
+    resolved({ insertTextFormat: 2, textEdit: { range: RANGE, newText: 'class ${1:Cancelled}:\n    ${2:reason: str}\n    ${3:code: int}$0' } });
+    await settle(MAIN, 'x = 1\n\ny = 2\n');
+    const ed = await open(file(MAIN));
+    ed.selection = new vscode.Selection(1, 0, 1, 0);
+    const a = await api();
+    const fills = a.suggest.fills.length;
+    const n = count('completionItem/resolve');
+    await vscode.commands.executeCommand('editor.action.triggerSuggest');
+    await until(() => count('completionItem/resolve') > n, 'the focused item resolved');
+    await sleep(300);
+    await vscode.commands.executeCommand('acceptSelectedSuggestion');
+    await until(() => a.suggest.fills.length > fills, 'the fill done');
+    assert.equal(a.suggest.fills.at(-1), 'filled');
+    assert.equal(ed.document.getText(), 'x = 1\nclass Cancelled:\n    reason: str\n    code: int\ny = 2\n');
+    assert.equal(count('completionItem/resolve'), n + 1, 'the stashed body used: not resolved again');
+    await vscode.commands.executeCommand('hideSuggestWidget');
   });
 });

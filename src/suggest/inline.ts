@@ -4,8 +4,8 @@ import type { InlineItem } from '../protocol';
 import { findRoot } from '../root';
 import type { ClientHooks } from '../server';
 import type { Controller } from './controller';
-import { fillCommand, Fill } from './fill';
-import { early, GateIn, inlineGate, snippetData } from './gate';
+import { FILL, fillCommand, Fill } from './fill';
+import { early, fetchFailure, GateIn, inlineGate, snippetData } from './gate';
 
 const asRange = (r: Range) => new vscode.Range(r.start.line, r.start.character, r.end.line, r.end.character);
 const protoRange = (r: vscode.Range): Range => ({
@@ -16,7 +16,7 @@ const protoRange = (r: vscode.Range): Range => ({
 // item olifant anticipates, gated and given the fill command; the completion list's snippets
 // given the same command; resolved items' bodies stashed for the fill.
 export class Inline implements NonNullable<ClientHooks['suggest']> {
-  constructor(private readonly d: { controller: Controller; fill: Fill; enabled(): boolean }) {}
+  constructor(private readonly d: { controller: Controller; fill: Fill; enabled(): boolean; warn(m: string): void }) {}
 
   async inline(document: vscode.TextDocument, position: vscode.Position, context: vscode.InlineCompletionContext,
     token: vscode.CancellationToken, fetch: () => Promise<InlineItem[]>): Promise<vscode.InlineCompletionItem[]> {
@@ -37,8 +37,10 @@ export class Inline implements NonNullable<ClientHooks['suggest']> {
     let items: InlineItem[];
     try {
       items = await fetch();
-    } catch {
-      // cancelled (-32800) or refused: no ghost
+    } catch (err) {
+      // no ghost; a refusal (not a cancellation) goes to the output channel, never a popup
+      const m = fetchFailure(err, token.isCancellationRequested);
+      if (m) this.d.warn(`inline completion: ${m}`);
       return [];
     }
     // an answer VS Code no longer wants (the text or cursor moved meanwhile): dropped
@@ -71,8 +73,16 @@ export class Inline implements NonNullable<ClientHooks['suggest']> {
     }
   }
 
-  resolved(item: vscode.CompletionItem): void {
+  // resolved: a snippet given the fill command keeps its unfilled body. olifant's resolve puts
+  // the model's body in the resolved item, and VS Code inserts a resolved item's text; the fill
+  // replaces the lines the unfilled body covers, so that body must be what goes in. The
+  // model's body is stashed for the fill instead.
+  resolved(item: vscode.CompletionItem, r: vscode.CompletionItem): void {
     const data = snippetData((item as { data?: unknown }).data);
-    if (data && item.insertText instanceof vscode.SnippetString) this.d.fill.stash(data, item.insertText.value);
+    if (!data || item.command?.command !== FILL) return;
+    const body = r.insertText instanceof vscode.SnippetString ? r.insertText.value : r.insertText;
+    if (body !== undefined) this.d.fill.stash(data, body);
+    r.insertText = item.insertText;
+    r.range = item.range;
   }
 }

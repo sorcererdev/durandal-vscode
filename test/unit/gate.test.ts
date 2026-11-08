@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { early, GateIn, inlineGate, MAX_GHOST_LINES, snippetData } from '../../src/suggest/gate';
+import { early, fetchFailure, GateIn, inlineGate, MAX_GHOST_LINES, snippetData } from '../../src/suggest/gate';
 import { keyOf } from '../../src/suggest/keys';
 import type { InlineItem } from '../../src/protocol';
 
@@ -60,4 +60,10 @@ test('nothing when the item\'s range is not on the cursor line', () => {
   assert.equal(inlineGate(at(5), g()).ok, false);
   assert.equal(inlineGate(at(4, 5), g()).ok, false);
   assert.equal(inlineGate(at(4), g()).ok, true);
+});
+
+test('fetchFailure: a refused inline fetch is said as the server put it; a cancelled one is not', () => {
+  assert.equal(fetchFailure(new Error('no project for this file'), false), 'no project for this file');
+  assert.equal(fetchFailure(Object.assign(new Error('Request cancelled'), { code: -32800 }), false), undefined);
+  assert.equal(fetchFailure(new Error('Canceled'), true), undefined);
 });
