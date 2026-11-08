@@ -66,7 +66,7 @@ test('shift: survivors on a line a deletion or replacement swallowed collapse to
   // 0-based rows 9..12 deleted (one line left): survivor 12 (row 11) collapses to 1-based 10, 20 moves up 3
   assert.equal(m.shift(U, 9, 0, 12, 0), true);
   assert.deepEqual(m.survivors(U).map(x => x.line), [5, 10, 17]);
-  // three lines replaced by three: no net change, but survivor 10 (row 9) is not swallowed; row 5 start
+  // 0-based rows 3..5 replaced by three lines: no net change, yet survivor 5 (row 4) collapses to 1-based 4
   assert.equal(m.shift(U, 3, 2, 5, 2), true);
   assert.deepEqual(m.survivors(U).map(x => x.line), [4, 10, 17]);
   // equal-count replacement elsewhere that swallows nothing changes nothing
