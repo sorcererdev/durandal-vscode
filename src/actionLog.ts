@@ -4,12 +4,17 @@ import { join } from 'node:path';
 // The action log: which actions were offered where and which were picked, one JSON object per
 // line, to tune where generators apply (durandal.nvim util.log; the olifant book ch. 14).
 // Olifant logs nothing itself.
+export type SuggestKind = 'snippet' | 'ghost' | 'followup' | 'recognition';
+
 export type ActionEvent =
   | { event: 'shown'; file: string; generators: string[] }
   | { event: 'picked' | 'fix-picked'; file: string; generator: string }
   | { event: 'generate-applied'; generator: string }
   | { event: 'applied'; generator: string; files: number }
-  | { event: 'hinted'; generator: string };
+  | { event: 'hinted'; generator: string }
+  // ghost text and snippets (durandal.nvim suggest.lua's util.log calls)
+  | { event: `${SuggestKind}-${'shown' | 'dismissed' | 'reviewed' | 'applied'}`; generator: string; band?: string; score?: number; model?: boolean }
+  | { event: 'snippet-anticipated'; generator: string; line: number };
 
 // logDir is durandal.nvim's: $DURANDAL_LOG_DIR, else the cache directory's durandal folder
 // (nvim's stdpath("cache") honours XDG_CACHE_HOME), so both editors write the same file.

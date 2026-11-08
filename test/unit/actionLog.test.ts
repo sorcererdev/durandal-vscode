@@ -47,3 +47,13 @@ test('ActionLog is best effort: an unwritable directory warns once and never thr
   assert.equal(warned.length, 1);
   assert.match(warned[0], /^the action log could not be written \(.*sub\): /);
 });
+
+test('the suggest events: undefined fields are left out, as nvim leaves nil out', () => {
+  const at = new Date('2026-11-08T10:00:00.123Z');
+  assert.equal(logLine({ event: 'snippet-shown', generator: 'p/failure', band: undefined, score: undefined }, at),
+    '{"event":"snippet-shown","generator":"p/failure","t":"2026-11-08T10:00:00Z"}\n');
+  assert.equal(logLine({ event: 'recognition-shown', generator: 'p/command', band: 'hint', score: 0.4, model: true }, at),
+    '{"event":"recognition-shown","generator":"p/command","band":"hint","score":0.4,"model":true,"t":"2026-11-08T10:00:00Z"}\n');
+  assert.equal(logLine({ event: 'snippet-anticipated', generator: 'p/failure', line: 12 }, at),
+    '{"event":"snippet-anticipated","generator":"p/failure","line":12,"t":"2026-11-08T10:00:00Z"}\n');
+});

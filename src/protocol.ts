@@ -4,7 +4,7 @@
 // the truth is src/Olifant/Lsp.hs. No other file spells a method string. A milestone that
 // consumes a result tightens its type here.
 import {
-  NotificationType, Position, RequestType, TextDocumentIdentifier, WorkspaceEdit,
+  NotificationType, Position, Range, RequestType, TextDocumentIdentifier, WorkspaceEdit,
 } from 'vscode-languageserver-protocol';
 
 export interface Doc { textDocument: TextDocumentIdentifier }
@@ -79,6 +79,11 @@ export interface ActionData extends Open {
 }
 
 // --- ghosts and follow-ups (milestone 3)
+// textDocument/inlineCompletion's item as olifant sends it (Lsp.hs ghostItems): the snippet's
+// body over the cursor's whole line and, beyond LSP, the ghost (holes as ⟨name⟩) and the
+// action completionItem/resolve fills (data, as a completion item's).
+export interface SnippetData extends Open { kind: 'action'; path: string; generator: string; sets: Sets; line: number }
+export interface InlineItem { insertText: string | { kind: 'snippet'; value: string }; range: Range; filterText?: string; ghost?: unknown; data?: unknown }
 export interface Suggestion extends Open {
   uri: string; version: number; kind: string; label?: string; summary?: string; line?: number; lines?: unknown; at?: unknown; planId?: string;
 }

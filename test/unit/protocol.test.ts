@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Field, PreviewResult, Plan, FileActionsResult, ModelResult, GeneratorItem } from '../../src/protocol';
+import type { Field, PreviewResult, Plan, FileActionsResult, ModelResult, GeneratorItem, InlineItem, SnippetData } from '../../src/protocol';
 import { CLIENT_COMMANDS, METHODS, Olifant, PLAN_TOKEN_MODIFIERS, PLAN_TOKEN_TYPES, SERVER_COMMANDS } from '../../src/protocol';
 
 const PINNED = [
@@ -86,9 +86,19 @@ const KEYS = [
   'snippet', 'file', 'line', 'body',
   'actions', 'nearby', 'label', 'range', 'missing',
   'migration', 'switches', 'on', 'added_legacy', 'unregistered',
+  'insertText', 'filterText', 'ghost',
 ];
 
 test('the keys the client reads are olifant\'s', { skip: !process.env.OLIFANT_REPO && 'OLIFANT_REPO is not set' }, () => {
   const src = hsFiles(join(process.env.OLIFANT_REPO!, 'src')).map(f => readFileSync(f, 'utf8')).join('\n');
   assert.deepEqual(KEYS.filter(k => !src.includes(`"${k}"`)), []);
+});
+
+test('compile check: the inline item reads as olifant sends it (Lsp.hs ghostItems)', () => {
+  const data: SnippetData = { kind: 'action', path: '/p/a.py', generator: 'p/failure', sets: {}, line: 12 };
+  const it: InlineItem = {
+    insertText: { kind: 'snippet', value: 'class ${1:Name}:' }, range: { start: { line: 11, character: 0 }, end: { line: 11, character: 0 } },
+    filterText: '', ghost: ['class ⟨Name⟩:'], data,
+  };
+  assert.ok(it.range.start.line === 11);
 });
