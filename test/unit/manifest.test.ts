@@ -61,3 +61,10 @@ test('the settings and the activation', () => {
   assert.equal(ghosts.type, 'boolean');
   assert.equal(ghosts.default, true);
 });
+
+test('Esc dismisses a decoration suggestion only where Esc means nothing else (spec §4)', () => {
+  assert.deepEqual(SUGGEST_KEYS.find(k => k.command === 'durandal.suggest.dismiss' && k.when.startsWith('durandal.ghostVisible')), {
+    command: 'durandal.suggest.dismiss', key: 'escape',
+    when: "durandal.ghostVisible && durandal.ghostKind != 'snippet' && durandal.ghostBand != 'hint' && editorTextFocus && !inlineSuggestionVisible && !suggestWidgetVisible && !editorHasSelection && !editorHasMultipleSelections && !findWidgetVisible && !parameterHintsVisible && !inSnippetMode && !renameInputVisible",
+  });
+});

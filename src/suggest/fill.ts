@@ -21,7 +21,7 @@ export class Fill {
   readonly outcomes: FillOutcome[] = [];
   private readonly stashed = new Map<string, string>();
 
-  constructor(private readonly d: { server: Server; log: ActionLog; say: Say }) {}
+  constructor(private readonly d: { server: Server; log: ActionLog; say: Say; warn(m: string): void }) {}
 
   register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(vscode.commands.registerCommand(FILL, (a: FillArgs) => this.run(a)));
@@ -64,11 +64,16 @@ export class Fill {
       return 'changed';
     }
     const ed = vscode.window.visibleTextEditors.find(e => e.document === doc);
-    if (!ed) return 'failed';
+    if (!ed) {
+      this.d.warn(`snippet fill: no editor shows ${a.uri}; holes left as they are`);
+      return 'failed';
+    }
     const s = spanOf(a.range.start.line, a.body);
     const end = Math.min(s.end, doc.lineCount - 1);
     const range = new vscode.Range(s.start, 0, end, doc.lineAt(end).text.length);
-    return (await ed.insertSnippet(new vscode.SnippetString(filled), range)) ? 'filled' : 'failed';
+    if (await ed.insertSnippet(new vscode.SnippetString(filled), range)) return 'filled';
+    this.d.warn('snippet fill: VS Code did not insert the filled body; holes left as they are');
+    return 'failed';
   }
 
   private async resolve(a: FillArgs): Promise<string> {

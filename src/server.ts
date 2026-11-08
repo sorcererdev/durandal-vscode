@@ -6,7 +6,7 @@ import {
 } from 'vscode-languageclient/node';
 import { applyServerEdit } from './applyEdit';
 import { checkBinary, Gate, ServerState, STOPPED } from './health';
-import { DoctorResult, InlineItem, SERVER_COMMANDS } from './protocol';
+import { DoctorResult, InlineItem, Olifant, SERVER_COMMANDS, Suggestion } from './protocol';
 import { realRoot } from './root';
 import { initOptions, settingsFrom } from './settings';
 
@@ -20,8 +20,9 @@ export const APPLY_RESOLVED = 'durandal.applyResolvedEdit';
 
 // ClientHooks are what other parts of the extension put into the client's middleware.
 export interface ClientHooks {
-  // ⚡ hints (spec §6): off draws none; on, shown hears the lines drawn (for the action log)
-  hints?: { enabled(): boolean; shown(uri: string, lines: number[]): void };
+  // ⚡ hints (spec §6): off draws none; on, shown hears the lines drawn (for the action log);
+  // none on hiddenLine, where a suggestion's ⚡ stands instead (M3 spec §2)
+  hints?: { enabled(): boolean; shown(uri: string, lines: number[]): void; hiddenLine(uri: string): number | undefined };
   // ghost text and snippets (M3 spec §3.1/3.2): the inline item gated and given the fill
   // command (the middleware asks the server itself: the library drops olifant's data and
   // ghost; an answer after token's cancellation is dropped); the completion list's snippets
@@ -32,6 +33,10 @@ export interface ClientHooks {
     completions(document: vscode.TextDocument, items: vscode.CompletionItem[]): void;
     resolved(item: vscode.CompletionItem, resolved: vscode.CompletionItem): void;
   };
+  // olifant/suggestion: what follows the last edit, pushed (M3 spec §3.3)
+  suggestion?(s: Suggestion): void;
+  // the server stopped (a stop, a restart, or its client closed): nothing it said stands
+  stopped?(): void;
 }
 
 // OlifantClient keeps the library's forced notifications out of a start: the extension reports
@@ -167,8 +172,10 @@ export class Server {
         provideInlayHints: async (document, viewPort, token, next) => {
           const h = hooks.hints;
           if (h && !h.enabled()) return [];
-          const hints = (await next(document, viewPort, token)) ?? [];
-          h?.shown(document.uri.toString(), hints.map(x => x.position.line));
+          const uri = document.uri.toString();
+          const hidden = h?.hiddenLine(uri);
+          const hints = ((await next(document, viewPort, token)) ?? []).filter(x => x.position.line !== hidden);
+          h?.shown(uri, hints.map(x => x.position.line));
           return hints;
         },
         provideInlineCompletionItems: async (document, position, context, token, next) => {
@@ -205,6 +212,7 @@ export class Server {
           // only the current client's close is a failure: stop() takes it away before disposing
           if (this.lc === made.lc && this.st === 'running') {
             this.st = 'stopped';
+            this.hooks.stopped?.();
             this.reportOnce(STOPPED, 'Show Health', 'Restart Server');
           }
           return { action: CloseAction.DoNotRestart, handled: true };
@@ -213,6 +221,7 @@ export class Server {
     };
     const lc = new OlifantClient('durandal', 'Durandal (olifant lsp)', serverOptions, clientOptions);
     made.lc = lc;
+    lc.onNotification(Olifant.suggestion.method, (p: Suggestion) => hooks.suggestion?.(p));
     this.lc = lc;
     try {
       await lc.start();
@@ -248,6 +257,7 @@ export class Server {
     this.lc = undefined;
     this.starting = undefined;
     this.st = 'not started';
+    this.hooks.stopped?.();
     this.disposed = Promise.all([
       this.disposed,
       lc?.dispose().catch(() => undefined),

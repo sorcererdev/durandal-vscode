@@ -11,6 +11,7 @@ import { toggleSetting } from './toggleSetting';
 // each line logged once (hinted). durandal.hints.toggle is :DurandalHints.
 export class Hints {
   private readonly seen = new Seen();
+  private readonly hidden = new Map<string, number>();
 
   constructor(private readonly d: { server: Server; log: ActionLog }) {}
 
@@ -27,6 +28,16 @@ export class Hints {
         if (g) this.d.log.write({ event: 'hinted', generator: g });
       }
     }, () => undefined);
+  }
+
+  // hiddenLine: the line whose ⚡ a suggestion replaces (nvim suggest.lua :117-121)
+  hiddenLine(uri: string): number | undefined { return this.hidden.get(uri); }
+
+  // hide hides the ⚡ on line (undefined: puts it back) and has VS Code ask again
+  hide(uri: string, line: number | undefined): void {
+    if (line === undefined) this.hidden.delete(uri);
+    else this.hidden.set(uri, line);
+    this.refresh();
   }
 
   register(context: vscode.ExtensionContext): void {

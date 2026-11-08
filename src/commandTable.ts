@@ -41,10 +41,12 @@ export const FORM_KEYS: { command: string; key: string; mac: string; when: strin
 ];
 
 // The keys of a suggestion (M3 spec §4): Esc dismisses the snippet ghost while VS Code shows
-// it and it is Durandal's (VS Code's own Esc hides it; ours also remembers the line). Tab on
-// the snippet ghost is VS Code's own (editor.action.inlineSuggest.commit).
+// it and it is Durandal's (VS Code's own Esc hides it; ours also remembers the line), and a
+// decoration (⚡ at the line's end) wherever Esc means nothing else. Tab on the snippet ghost
+// is VS Code's own (editor.action.inlineSuggest.commit).
 export const SUGGEST_KEYS: { command: string; key: string; when: string }[] = [
   { command: 'durandal.suggest.dismiss', key: 'escape', when: "inlineSuggestionVisible && durandal.ghostVisible && durandal.ghostKind == 'snippet'" },
+  { command: 'durandal.suggest.dismiss', key: 'escape', when: "durandal.ghostVisible && durandal.ghostKind != 'snippet' && durandal.ghostBand != 'hint' && editorTextFocus && !inlineSuggestionVisible && !suggestWidgetVisible && !editorHasSelection && !editorHasMultipleSelections && !findWidgetVisible && !parameterHintsVisible && !inSnippetMode && !renameInputVisible" },
 ];
 
 // Commands the server names in its inlay hints (⚡) and code lenses: registered so a click

@@ -171,7 +171,7 @@ export class Controller {
   // consider: the cursor line's suggestion (suggest.lua consider_server, :220-320): what the
   // server pushed for the document as it is, else what it answers for the line, else the
   // snippet anticipated here (the inline provider). An answer for a cursor, version or line
-  // that has moved on, or after ghosts went off, draws nothing.
+  // that has moved on, or after ghosts went off or the server stopped, draws nothing.
   async consider(): Promise<void> {
     const c = this.c;
     if (!c) return;
@@ -185,7 +185,7 @@ export class Controller {
     const cts = new CancellationTokenSource();
     this.cts = cts;
     const stale = (): boolean => {
-      if (cts.token.isCancellationRequested || !c.enabled()) return true;
+      if (cts.token.isCancellationRequested || !c.enabled() || !c.running()) return true;
       const now = c.cursor();
       return !now || now.uri !== at.uri || now.version !== at.version || now.line !== at.line;
     };

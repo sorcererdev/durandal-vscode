@@ -62,9 +62,13 @@ export function activate(context: vscode.ExtensionContext): Api {
   const hints = new Hints({ server: s, log });
   hints.register(context);
   hooks.hints = hints;
-  const suggest = new Suggest({ server: s, log, say, warn: m => output.warn(m) });
+  // before Suggest, which asks it whether the cursor's file is in a project
+  const projects = trackProjects(context, s);
+  const suggest = new Suggest({ server: s, log, say, warn: m => output.warn(m), hints, inProject: () => projects.inProject() });
   suggest.register(context);
   hooks.suggest = suggest.inline;
+  hooks.suggestion = p => suggest.pushed(p);
+  hooks.stopped = () => suggest.controller.off();
   const generate = new Generate({ server: s, docs, plans, log, state: context.workspaceState, ui });
   generate.register(context);
   new Actions({ server: s, plans, generate, log, ui, say }).register(context);
@@ -101,7 +105,6 @@ export function activate(context: vscode.ExtensionContext): Api {
     }),
   );
   registerNotYet(context, say);
-  const projects = trackProjects(context, s);
   void (async () => {
     for (const r of await discover()) await s.addRoot(r);
     if (s.roots().length > 0) await s.start();

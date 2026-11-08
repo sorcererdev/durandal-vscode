@@ -202,6 +202,16 @@ test('ghosts off drops an in-flight answer', async () => {
   assert.equal(c.state('file:///p/a.py'), undefined);
 });
 
+test('the server stopping drops an in-flight answer', async () => {
+  const { c, st } = considering();
+  const p = c.consider();
+  await flush();
+  st.running = false;
+  st.suggests[0].d.resolve({ ...sug(), plan: PLAN });
+  await p;
+  assert.equal(c.state('file:///p/a.py'), undefined);
+});
+
 test('not running: nothing asked, the suggestion cleared', async () => {
   const { c, st } = considering();
   c.inline({ ...snippet(), uri: 'file:///p/a.py' });
