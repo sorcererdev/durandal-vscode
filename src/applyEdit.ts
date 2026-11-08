@@ -16,11 +16,12 @@ let lock: Promise<unknown> = Promise.resolve();
 // moved past the version the edit was made at; applied without its annotations; then each
 // edited file that had no unsaved changes before, and is not a plan, is saved (as regions are
 // kept on save); one notice names the files saved, and those it could not save.
-// word: the one notice, from the files saved and those that could not be (default: the label
-// and the names; a plan says "Applied <name>: N files").
+// word: the one notice, from the files saved, those that could not be, and those kept unsaved
+// because they had unsaved edits before (default: the label and the names; a plan says
+// "Applied <name>: N files").
 export function applyServerEdit(
   lc: LanguageClient, params: ApplyWorkspaceEditParams, say: (text: string) => void,
-  word: (saved: string[], unsaved: string[]) => string | undefined = (s, u) => appliedMessage(params.label, s, u),
+  word: (saved: string[], unsaved: string[], kept: string[]) => string | undefined = (s, u) => appliedMessage(params.label, s, u),
 ): Promise<ApplyWorkspaceEditResult> {
   const run = lock.then(() => applyNow(lc, params, say, word));
   lock = run.catch(() => undefined);
@@ -29,7 +30,7 @@ export function applyServerEdit(
 
 async function applyNow(
   lc: LanguageClient, params: ApplyWorkspaceEditParams, say: (text: string) => void,
-  word: (saved: string[], unsaved: string[]) => string | undefined,
+  word: (saved: string[], unsaved: string[], kept: string[]) => string | undefined,
 ): Promise<ApplyWorkspaceEditResult> {
   const edit = stripAnnotations(params.edit);
   let converted: vscode.WorkspaceEdit;
@@ -52,14 +53,20 @@ async function applyNow(
   if (!ok) return { applied: false, failureReason: 'VS Code did not apply the edit' };
   const saved: string[] = [];
   const unsaved: string[] = [];
+  // kept: files the edit left unsaved because they had unsaved edits before
+  const kept: string[] = [];
   for (const uri of targets) {
-    if (uri.scheme !== 'file' || dirtyBefore.has(uri.toString()) || await isPlanFile(uri.fsPath)) continue;
+    if (uri.scheme !== 'file' || await isPlanFile(uri.fsPath)) continue;
+    if (dirtyBefore.has(uri.toString())) {
+      kept.push(basename(uri.fsPath));
+      continue;
+    }
     // an edit to a file that was not open leaves it open, unsaved, in VS Code's documents
     const doc = openDoc(uri.toString()) ?? await vscode.workspace.openTextDocument(uri).then(d => d, () => undefined);
     if (!doc || !doc.isDirty) continue;
     (await doc.save() ? saved : unsaved).push(basename(uri.fsPath));
   }
-  const text = word(saved, unsaved);
+  const text = word(saved, unsaved, kept);
   if (text) say(text);
   return { applied: true };
 }

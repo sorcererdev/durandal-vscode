@@ -11,10 +11,18 @@ export class FakeUi implements Ui {
   onPick: (o: PickOptions<unknown>) => unknown = () => undefined;
   onReview: (m: ReviewModel, o: { title: string; onActive(f: ReviewFile): void }) => ReviewAnswer | Promise<ReviewAnswer> = () => ({ kind: 'close' });
   stepsClosed = 0;
+  asks: string[] = [];
+  onAsk: (text: string, actions: string[]) => string | undefined | Promise<string | undefined> = () => undefined;
 
   info(m: string) { this.log.push(`info ${m}`); }
   warn(m: string) { this.log.push(`warn ${m}`); }
   error(m: string) { this.log.push(`error ${m}`); }
+
+  async ask(_level: 'info' | 'warn' | 'error', text: string, actions: string[]): Promise<string | undefined> {
+    this.asks.push(text);
+    this.log.push(`ask ${text}`);
+    return this.onAsk(text, actions);
+  }
 
   async pick<T>(o: PickOptions<T>): Promise<T | undefined> {
     this.picks.push(o as PickOptions<unknown>);

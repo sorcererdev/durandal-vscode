@@ -15,8 +15,10 @@ import { findRoot } from './root';
 import type { MutateSurvivor, TestsRunResult } from './protocol';
 import { ClientHooks, Say, Server } from './server';
 import { newFlights } from './tdd/common';
+import { Conjure } from './tdd/conjure';
 import { Jump } from './tdd/jump';
 import { Marks } from './tdd/marks';
+import { Stub } from './tdd/stub';
 import { Tests } from './tdd/tests';
 import type { Ui } from './uiTypes';
 import { Suggest } from './suggest/editor';
@@ -95,10 +97,14 @@ export function activate(context: vscode.ExtensionContext): Api {
   const tests = new Tests({ server: s, docs, say, marks, flights, recheck: () => undefined });
   tests.register(context);
   new Jump({ server: s, say }).register(context);
+  const stub = new Stub({ server: s, say });
+  stub.register(context);
+  const flashes: { first: number; last: number }[] = [];
+  new Conjure({ server: s, say, ui, flights, tests, flashes }).register(context);
   const tdd: TddApi = {
     last: () => tests.last,
     cancel: () => flights.cancelAll('user'),
-    flashes: [],
+    flashes,
     survivors: uri => marks.memory.survivors(uri),
   };
   hooks.stopped = () => {

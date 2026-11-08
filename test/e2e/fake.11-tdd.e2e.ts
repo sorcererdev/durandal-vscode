@@ -2,7 +2,8 @@ import * as assert from 'node:assert/strict';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { RESULTS_PATH } from '../../src/tdd/results';
-import { api, file, log, open, reply, restart, revert, running, settle, tabsUnder, until, ws } from './helpers';
+import { FakeUi } from '../fakeUi';
+import { api, disk, file, log, open, reply, restart, revert, running, settle, tabsUnder, until, ws } from './helpers';
 
 const MAIN = 'one/main.py';
 const TEST = 'one/main__test.py';
@@ -45,7 +46,7 @@ describe('the TDD loop (fake server)', () => {
 
   afterEach(async () => {
     (await api()).setUi(undefined);
-    for (const m of ['olifant/tests/run', 'olifant/tests/file']) reply(m, null);
+    for (const m of ['olifant/tests/run', 'olifant/tests/file', 'olifant/stub', 'olifant/conjure']) reply(m, null);
     for (const rel of [MAIN, TEST]) {
       const d = vscode.workspace.textDocuments.find(x => x.uri.toString() === uriOf(rel));
       if (d?.isDirty) await revert(d);
@@ -198,5 +199,142 @@ describe('the TDD loop (fake server)', () => {
     await open(file(MAIN));
     reply('olifant/tests/file', { lsp_error: 'python has no [test] table' });
     assert.equal(await said('durandal.jump', () => true), 'python has no [test] table');
+  });
+
+  const stubAnswer = () => ({
+    file: abs(TEST), line: 9, name: 'test_main_2',
+    edits: { documentChanges: [{ textDocument: { uri: uriOf(TEST), version: null }, edits: [
+      { range: { start: { line: 6, character: 0 }, end: { line: 6, character: 0 } }, newText: '\n\ndef test_main_2():\n    ...\n' },
+    ] }] },
+  });
+  const mainEdit = (text: string) => ({ documentChanges: [{ textDocument: { uri: uriOf(MAIN), version: null }, edits: [
+    { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, newText: text },
+  ] }] });
+  const landed = (o: Record<string, unknown> = {}) => ({
+    file: abs(MAIN), unit: 'f', edits: mainEdit('x = 2'), summary: 'green', green: true, tests: green(), rounds: 1, rungs: ['local'], stopped: false, ...o,
+  });
+  const conjures = () => log().filter(m => m.method === 'olifant/conjure');
+
+  it('stub: applied, saved, the test file opened on the name', async () => {
+    await settle(TEST, TEST_TEXT);
+    await running();
+    await open(file(MAIN));
+    reply('olifant/stub', stubAnswer());
+    assert.equal(await said('durandal.stub', t => t.startsWith('stubbed')), 'stubbed test_main_2 · saved main__test.py');
+    assert.ok(disk(TEST).endsWith('\n\n\ndef test_main_2():\n    ...\n'));
+    const ed = vscode.window.activeTextEditor!;
+    assert.equal(ed.document.uri.toString(), uriOf(TEST));
+    assert.deepEqual([ed.selection.active.line, ed.selection.active.character], [8, 4]);
+    await settle(TEST, TEST_TEXT);
+  });
+
+  it('stub: a refusal verbatim', async () => {
+    await open(file(MAIN));
+    reply('olifant/stub', { lsp_error: 'no function or class at line 1: put the cursor in one to stub its test' });
+    assert.equal(await said('durandal.stub', () => true), 'no function or class at line 1: put the cursor in one to stub its test');
+  });
+
+  it('conjure lands: applied and saved, flashed, the cursor on it, info', async () => {
+    await settle(MAIN, 'x = 1\n');
+    const a = await running();
+    await open(file(MAIN));
+    reply('olifant/conjure', landed());
+    const flashes = a.tdd.flashes.length;
+    assert.equal(await said('durandal.conjure', t => t.startsWith('conjured')), 'conjured · green · saved');
+    assert.equal(disk(MAIN), 'x = 2\n');
+    assert.deepEqual(a.tdd.flashes.slice(flashes), [{ first: 0, last: 0 }]);
+    assert.equal(testMarks(TEST).length, 0);
+    await settle(MAIN, 'x = 1\n');
+  });
+
+  it('conjure red: a warning with rounds and rungs; the after-run marked', async () => {
+    await open(file(MAIN));
+    reply('olifant/conjure', landed({ green: false, summary: 'red: test_two · assert 1 == 2', tests: red(), rounds: 3, rungs: ['local', 'cloud'] }));
+    const text = await said('durandal.conjure', t => t.startsWith('conjured'));
+    assert.equal(text, 'conjured · red: test_two · assert 1 == 2 · 3 rounds · local → cloud · saved');
+    const a = await api();
+    assert.equal(a.shown[a.shown.length - 1].level, 'warn');
+    await until(() => testMarks(TEST).length === 1, 'the after-run marked');
+    await settle(MAIN, 'x = 1\n');
+  });
+
+  it('conjure without edits: nothing applied, the summary alone', async () => {
+    await open(file(MAIN));
+    reply('olifant/conjure', landed({ edits: null, summary: 'green: already passes' }));
+    assert.equal(await said('durandal.conjure', t => t.startsWith('conjured')), 'conjured · green: already passes');
+    assert.equal(disk(MAIN), 'x = 1\n');
+  });
+
+  it('a whole-line selection sends its last selected line (Review Focus 2)', async () => {
+    await settle(MAIN, 'x = 1\ny = 2\nz = 3\n');
+    const ed = await open(file(MAIN));
+    ed.selection = new vscode.Selection(0, 0, 2, 0);
+    reply('olifant/conjure', landed({ edits: null }));
+    const n = conjures().length;
+    await said('durandal.conjure', t => t.startsWith('conjured'));
+    assert.deepEqual(conjures()[n].params.selection, { start: 0, end: 1 });
+    await settle(MAIN, 'x = 1\n');
+  });
+
+  it('paused: the warning; Stop sends the resume and nothing lands', async () => {
+    const a = await running();
+    const ui = new FakeUi();
+    a.setUi(ui);
+    await open(file(MAIN));
+    reply('olifant/conjure', { paused: { token: 't1', diagnosis: 'The model keeps failing test_two. Try a hint.' } });
+    ui.onAsk = (_t, actions) => {
+      assert.deepEqual(actions, ['Continue', 'Stop']);
+      reply('olifant/conjure', landed({ edits: null, stopped: true }));
+      return 'Stop';
+    };
+    const n = conjures().length;
+    assert.equal(await said('durandal.conjure', t => t.startsWith('stopped')), 'stopped · nothing landed');
+    assert.deepEqual(ui.asks, ['conjure paused: The model keeps failing test_two. — steering arrives in a later milestone']);
+    assert.deepEqual(conjures()[n + 1].params.resume, { token: 't1', choice: 'stop' });
+  });
+
+  it('paused: Continue resumes and lands', async () => {
+    const a = await running();
+    const ui = new FakeUi();
+    a.setUi(ui);
+    await settle(MAIN, 'x = 1\n');
+    await open(file(MAIN));
+    reply('olifant/conjure', { paused: { token: 't2', diagnosis: 'Stuck.' } });
+    ui.onAsk = () => {
+      reply('olifant/conjure', landed());
+      return 'Continue';
+    };
+    const n = conjures().length;
+    assert.equal(await said('durandal.conjure', t => t.startsWith('conjured')), 'conjured · green · saved');
+    assert.deepEqual(conjures()[n + 1].params.resume, { token: 't2', choice: 'continue' });
+    await settle(MAIN, 'x = 1\n');
+  });
+
+  it('conjure cancelled (the Cancel button): $/cancelRequest, nothing landed', async () => {
+    const a = await running();
+    await open(file(MAIN));
+    reply('olifant/conjure', { hold: true, title: 'conjuring', progress: ['round 1 of 8 · asking local…'] });
+    const n = conjures().length;
+    const from = a.shown.length;
+    void vscode.commands.executeCommand('durandal.conjure');
+    await until(() => conjures().length > n, 'the conjure sent');
+    a.tdd.cancel();
+    await until(() => a.shown.slice(from).find(s => s.text === 'conjure cancelled · nothing landed'), 'the cancel said');
+    assert.ok(log().some(m => m.method === '$/cancelRequest' && m.params.id === conjures()[n].id));
+    assert.equal(disk(MAIN), 'x = 1\n');
+  });
+
+  it('a restart during a conjure: no error, no cancelled notice, nothing landed (Review Focus 3)', async () => {
+    const a = await running();
+    await open(file(MAIN));
+    reply('olifant/conjure', { hold: true, title: 'conjuring' });
+    const n = conjures().length;
+    void vscode.commands.executeCommand('durandal.conjure');
+    await until(() => conjures().length > n, 'the conjure sent');
+    const from = a.shown.length;
+    await restart();
+    await new Promise<void>(r => setTimeout(r, 500));
+    assert.deepEqual(a.shown.slice(from).filter(s => s.level !== 'info' || s.text.includes('cancel') || s.text.startsWith('conjured')), []);
+    assert.equal(disk(MAIN), 'x = 1\n');
   });
 });

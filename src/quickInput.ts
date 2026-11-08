@@ -45,6 +45,7 @@ export function quickInputUi(say: Say): Ui {
     info: m => void say('info', m),
     warn: m => void say('warn', m),
     error: m => void say('error', m),
+    ask: (level, text, actions) => Promise.resolve(say(level, text, ...actions)),
 
     pick<T>(o: PickOptions<T>): Promise<T | undefined> {
       type I = vscode.QuickPickItem & { value?: T };
