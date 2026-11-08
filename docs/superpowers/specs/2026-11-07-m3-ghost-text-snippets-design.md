@@ -263,7 +263,7 @@ recognitions". Builds on M3a's keys and fake.
 
 Both PRs: CHANGELOG, a manual checklist, `.olifant-ref` unchanged.
 
-Olifant issues to file (separate issues against olifant, not M3 work):
+Olifant issues (filed 2026-11-08 as sorcererdev/olifant#3, #4, #5, #6, in this order; not M3 work):
 
 1. Docs: `olifant/suggestion` / `olifant/suggest` kinds (`ghost`, `followup`, `recognition`,
    `snippet`) and recognition fields (`band`, `or`, `reasons`, `score`); `planId` is a number;
