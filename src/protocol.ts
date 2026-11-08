@@ -24,7 +24,9 @@ export interface GeneratorsParams extends Doc { position?: Position }
 export interface GeneratorItem extends Open { id: string; name: string; kind?: string; summary?: string; here?: boolean }
 export interface GeneratorsResult extends Open { generators: GeneratorItem[] }
 export interface ChoicesParams extends Doc { generator: string; sets: Sets }
-export interface ChoicesResult extends Open { inputs: unknown[] }
+// one input as olifant/choices lists it (Output.hs): choices flat when known.
+export interface ChoicesInput extends Open { name: string; type?: string; optional?: boolean; default?: string | null; prompt?: string | null; choices?: string[] | null; errors?: Record<string, string> | string[] | null }
+export interface ChoicesResult extends Open { name?: string; inputs: ChoicesInput[] }
 
 // olifant/preview: the form's fields for every step, the files it would write, the main one's text.
 export type Source = 'you' | 'path' | 'here' | 'only' | 'default' | 'new' | 'suggested';
@@ -55,7 +57,7 @@ export interface Plan extends Open {
 // olifant/plan: the generate picker's steps, a follow-up's planId, or a recognition's sets.
 export type PlanParams =
   | (At & { steps: Step[] })
-  | { planId: string; fill?: boolean }
+  | { planId: number; fill?: boolean }
   | (Doc & { generator: string; sets: Sets; recognize: true });
 export interface PlanResult extends Open { plan: Plan; edit?: WorkspaceEdit }
 
@@ -84,9 +86,15 @@ export interface ActionData extends Open {
 // action completionItem/resolve fills (data, as a completion item's).
 export interface SnippetData extends Open { kind: 'action'; path: string; generator: string; sets: Sets; line: number }
 export interface InlineItem { insertText: string | { kind: 'snippet'; value: string }; range: Range; filterText?: string; ghost?: unknown; data?: unknown }
+// olifant/suggestion (pushed) and olifant/suggest (pulled, with its plan and edit): Lsp.hs suggestionFields; at and line are 1-based; band, or, reasons and score only on a recognition.
+export type SuggestionKind = 'ghost' | 'followup' | 'recognition' | 'snippet';
 export interface Suggestion extends Open {
-  uri: string; version: number; kind: string; label?: string; summary?: string; line?: number; lines?: unknown; at?: unknown; planId?: string;
+  uri: string; version: number; kind: SuggestionKind; label: string; summary: string;
+  line: number | null; lines: string[] | null; at: number | null; planId: number;
+  generator: string | null; sets: Sets;
+  band?: 'offer' | 'hint'; or?: string | null; reasons?: string[]; score?: number;
 }
+export interface SuggestResult extends Suggestion { plan: Plan; edit?: WorkspaceEdit }
 export interface SuggestParams extends Doc { line: number }
 export interface RecognitionFeedbackParams extends Doc { generator: string; outcome: string }
 
@@ -134,7 +142,7 @@ export const Olifant = {
   fileActions: req<Doc, FileActionsResult>('olifant/fileActions'),
   holes: req<Doc, unknown>('olifant/holes'),
   model: req<Doc, ModelResult | null>('olifant/model'),
-  suggest: req<SuggestParams, Suggestion | null>('olifant/suggest'),
+  suggest: req<SuggestParams, SuggestResult | null>('olifant/suggest'),
   stub: req<StubParams, StubResult>('olifant/stub'),
   conjure: req<ConjureParams, ConjureResult>('olifant/conjure'),
   mutate: req<At, MutateResult>('olifant/mutate'),

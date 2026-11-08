@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Field, PreviewResult, Plan, FileActionsResult, ModelResult, GeneratorItem, InlineItem, SnippetData } from '../../src/protocol';
+import type { Field, PreviewResult, Plan, FileActionsResult, ModelResult, GeneratorItem, InlineItem, SnippetData, Suggestion, SuggestResult, ChoicesResult } from '../../src/protocol';
 import { CLIENT_COMMANDS, METHODS, Olifant, PLAN_TOKEN_MODIFIERS, PLAN_TOKEN_TYPES, SERVER_COMMANDS } from '../../src/protocol';
 
 const PINNED = [
@@ -87,6 +87,7 @@ const KEYS = [
   'actions', 'nearby', 'label', 'range', 'missing',
   'migration', 'switches', 'on', 'added_legacy', 'unregistered',
   'insertText', 'filterText', 'ghost',
+  'uri', 'version', 'kind', 'lines', 'at', 'planId', 'band', 'or', 'reasons', 'score', 'data', 'optional', 'default', 'prompt', 'inputs',
 ];
 
 test('the keys the client reads are olifant\'s', { skip: !process.env.OLIFANT_REPO && 'OLIFANT_REPO is not set' }, () => {
@@ -101,4 +102,11 @@ test('compile check: the inline item reads as olifant sends it (Lsp.hs ghostItem
     filterText: '', ghost: ['class ⟨Name⟩:'], data,
   };
   assert.ok(it.range.start.line === 11);
+});
+
+test('compile check: a suggestion, its pulled answer and the choices read as the server sends them', () => {
+  const s: Suggestion = { uri: 'file:///a.py', version: 3, kind: 'recognition', label: 'Command', summary: 's', line: 2, lines: null, at: 2, planId: 7, generator: 'p/command', sets: {}, band: 'offer', or: null, reasons: ['r'], score: 0.9 };
+  const r: SuggestResult = { ...s, plan: { files: [], conflicts: [], warnings: [], holes: [], snippet: null } };
+  const c: ChoicesResult = { name: 'Command', inputs: [{ name: 'command', optional: false, default: null, prompt: null, choices: ['a'] }] };
+  assert.ok(r.planId === 7 && c.inputs.length === 1);
 });
