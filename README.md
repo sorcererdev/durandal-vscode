@@ -69,6 +69,27 @@ durandal.nvim writes). `durandal.actionLog` turns it off.
   list keeps its snippets). While VS Code's completion list, another extension's ghost text, or
   a snippet you are filling in has Tab, Tab is theirs.
 
+## The TDD loop
+
+The chord is Ctrl+Alt+D (Cmd+Alt+D on macOS) followed by a letter.
+
+| Chord | Command | What it does |
+|---|---|---|
+| `t` | Run the Test Here | The test under the cursor; in a module, its test file. |
+| `shift+t` | Run This File's Tests | The file's tests (a module's test file). |
+| (palette) | Run All Tests | The project's tests. |
+| `j` | Jump to Test or Module | Between a module and its test file; a missing test file opens untitled at its path. |
+| `s` | Stub a Test | A new test for the function at the cursor, at the end of its test file, saved; the cursor on its name. |
+| `c` | Conjure | Fills the body at the cursor, or the selected lines, until its tests pass; lands as one undo step. |
+| `m` | Mutate | Mutates the unit at the cursor; survivors are warnings and a picker stubs or waives them. |
+
+A run writes its summary as a notice and its failures as errors on their lines (F8 walks them).
+The full output is in the results document, which opens beside the editor when something failed;
+Ctrl/Cmd-click a `✗` line to go to it. A green run of a module's tests mutates its marked units
+again and says which survivors it killed. Runs, conjures and mutates show a Cancel button. A
+conjure that pauses (a decision model with a ladder) offers Continue and Stop; the steering
+window comes in a later release. There is no Test Explorer: olifant lists no tests.
+
 ## Settings
 
 - `durandal.path`: the binary.
