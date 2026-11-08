@@ -60,6 +60,19 @@ test('shift: an insert at column 0 of the survivor\'s own line moves it, as an e
   assert.deepEqual(m.survivors(U).map(x => x.line), [6]);
 });
 
+test('shift: survivors on a line a deletion or replacement swallowed collapse to its start', () => {
+  const m = new SurvivorMemory();
+  m.replace(U, answer(1, 30, [s(5, '+', '-'), s(12, '<', '<='), s(20, '0', '1')]));
+  // 0-based rows 9..12 deleted (one line left): survivor 12 (row 11) collapses to 1-based 10, 20 moves up 3
+  assert.equal(m.shift(U, 9, 0, 12, 0), true);
+  assert.deepEqual(m.survivors(U).map(x => x.line), [5, 10, 17]);
+  // three lines replaced by three: no net change, but survivor 10 (row 9) is not swallowed; row 5 start
+  assert.equal(m.shift(U, 3, 2, 5, 2), true);
+  assert.deepEqual(m.survivors(U).map(x => x.line), [4, 10, 17]);
+  // equal-count replacement elsewhere that swallows nothing changes nothing
+  assert.equal(m.shift(U, 14, 0, 15, 1), false);
+});
+
 test('killedBetween: the marks gone, as from → to on line N', () => {
   const before = [s(2, '+', '-'), s(4, '<', '<=')];
   assert.deepEqual(killedBetween(before, [s(4, '<', '<=')]), ['+ → - on line 2']);

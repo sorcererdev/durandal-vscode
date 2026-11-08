@@ -41,21 +41,27 @@ export class SurvivorMemory {
   }
 
   // shift: an edit replaced the text from (startLine, startCol) to line endLine (all 0-based,
-  // as a contentChange's range) with text holding `inserted` newlines; the survivors below it
-  // move by the difference. A survivor sits at column 0 of its line, so an edit that starts at
-  // column 0 of that line and adds lines pushes it down too (an nvim extmark at column 0 moves);
-  // one that starts after column 0 does not. A deletion spanning a survivor's line leaves it.
+  // as a contentChange's range) with text holding `inserted` newlines. Survivors below the edit
+  // move by the difference; those on a line it swallowed (after startLine, up to endLine)
+  // collapse to its start, as an nvim extmark inside a deleted range does. A survivor sits at
+  // column 0 of its line, so an edit that starts at column 0 of that line and adds lines pushes
+  // it down too; one that starts after column 0 does not. Returns whether any survivor moved.
   shift(uri: string, startLine: number, startCol: number, endLine: number, inserted: number): boolean {
     const delta = inserted - (endLine - startLine);
     const all = this.docs.get(uri);
-    if (!all || delta === 0) return false;
+    if (!all) return false;
     let moved = false;
-    for (const s of all) {
-      const row = s.line - 1;
-      if (row > endLine || (row === startLine && startCol === 0 && delta > 0)) {
-        s.line += delta;
+    const to = (s: MutateSurvivor, line: number) => {
+      if (s.line !== line) {
+        s.line = line;
         moved = true;
       }
+    };
+    for (const s of all) {
+      const row = s.line - 1;
+      if (row > endLine) to(s, s.line + delta);
+      else if (row > startLine) to(s, startLine + 1);
+      else if (row === startLine && startCol === 0 && delta > 0) to(s, s.line + delta);
     }
     return moved;
   }
