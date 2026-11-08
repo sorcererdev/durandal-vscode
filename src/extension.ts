@@ -12,10 +12,22 @@ import { Plans } from './land';
 import { discover, trackProjects } from './projects';
 import { quickInputUi } from './quickInput';
 import { findRoot } from './root';
+import type { MutateSurvivor, TestsRunResult } from './protocol';
 import { ClientHooks, Say, Server } from './server';
+import { newFlights } from './tdd/common';
+import { Jump } from './tdd/jump';
+import { Marks } from './tdd/marks';
+import { Tests } from './tdd/tests';
 import type { Ui } from './uiTypes';
 import { Suggest } from './suggest/editor';
 import { VirtualDocs } from './virtualDocs';
+
+export interface TddApi {
+  last(): TestsRunResult | undefined;
+  cancel(): void;
+  flashes: { first: number; last: number }[];
+  survivors(uri: string): MutateSurvivor[];
+}
 
 export interface Api {
   server: Server;
@@ -30,6 +42,9 @@ export interface Api {
   plans: Plans;
   // ghost text and snippets: the controller's state and the fills (the e2e tests read them)
   suggest: Suggest;
+  // the TDD loop (M4): the last run's answer, a Cancel click on every request in the air, the
+  // conjure flashes, a document's survivors (the e2e tests read them)
+  tdd: TddApi;
 }
 
 let server: Server | undefined;
@@ -68,11 +83,28 @@ export function activate(context: vscode.ExtensionContext): Api {
   suggest.register(context);
   hooks.suggest = suggest.inline;
   hooks.suggestion = p => suggest.pushed(p);
-  hooks.stopped = () => suggest.controller.stopped();
   const generate = new Generate({ server: s, docs, plans, log, state: context.workspaceState, ui });
   generate.register(context);
   new Actions({ server: s, plans, generate, log, ui, say, recognition: suggest.recognitions }).register(context);
   registerMigration(context, { server: s, docs, ui });
+
+  // the TDD loop (M4 spec §2); a server stop cancels its requests (spec §6)
+  const flights = newFlights();
+  const marks = new Marks();
+  marks.register(context);
+  const tests = new Tests({ server: s, docs, say, marks, flights, recheck: () => undefined });
+  tests.register(context);
+  new Jump({ server: s, say }).register(context);
+  const tdd: TddApi = {
+    last: () => tests.last,
+    cancel: () => flights.cancelAll('user'),
+    flashes: [],
+    survivors: uri => marks.memory.survivors(uri),
+  };
+  hooks.stopped = () => {
+    suggest.controller.stopped();
+    flights.cancelAll('stopped');
+  };
 
   // health: the binary, the server, the projects, and olifant doctor for the active file's project
   const health = async (): Promise<string[]> => {
@@ -109,7 +141,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     for (const r of await discover()) await s.addRoot(r);
     if (s.roots().length > 0) await s.start();
   })();
-  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest };
+  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest, tdd };
 }
 
 export async function deactivate(): Promise<void> {

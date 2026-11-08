@@ -2,9 +2,6 @@ import { CLIENT_COMMANDS } from './protocol';
 
 // The commands later milestones build (spec §6); until then each says so when run.
 export const NOT_YET: Record<string, { title: string; milestone: number }> = {
-  'durandal.test.file': { title: "Run This File's Tests", milestone: 4 },
-  'durandal.test.all': { title: 'Run All Tests', milestone: 4 },
-  'durandal.jump': { title: 'Jump to Test or Module', milestone: 4 },
   'durandal.stub': { title: 'Stub a Test', milestone: 4 },
   'durandal.conjure': { title: 'Conjure', milestone: 4 },
   'durandal.mutate': { title: 'Mutate', milestone: 4 },
@@ -28,6 +25,10 @@ export const BUILT: Record<string, { title: string; enablement?: string }> = {
   'durandal.actions': { title: 'Actions Here' },
   'durandal.hints.toggle': { title: 'Toggle ⚡ Hints' },
   'durandal.migration': { title: 'Migration Report' },
+  'durandal.test.here': { title: 'Run the Test Here' },
+  'durandal.test.file': { title: "Run This File's Tests" },
+  'durandal.test.all': { title: 'Run All Tests' },
+  'durandal.jump': { title: 'Jump to Test or Module' },
   'durandal.ghosts.toggle': { title: 'Toggle Ghost Text' },
   'durandal.suggest.dismiss': { title: 'Dismiss Suggestion', enablement: 'durandal.ghostVisible' },
   'durandal.suggest.accept': { title: 'Accept Suggestion', enablement: 'durandal.ghostVisible' },
@@ -74,8 +75,8 @@ export const PREFIX = { key: 'ctrl+alt+d', mac: 'cmd+alt+d' } as const;
 export const KEYS: { command: string; keys: string; when: string }[] = [
   { command: 'durandal.actions', keys: 'a', when: 'durandal.inProject' },
   { command: 'durandal.generate', keys: 'g', when: 'durandal.inProject' },
-  { command: 'durandal.test.file', keys: 't', when: 'durandal.inProject' },
-  { command: 'durandal.test.all', keys: 'shift+t', when: 'durandal.inProject' },
+  { command: 'durandal.test.here', keys: 't', when: 'durandal.inProject' },
+  { command: 'durandal.test.file', keys: 'shift+t', when: 'durandal.inProject' },
   { command: 'durandal.jump', keys: 'j', when: 'durandal.inProject' },
   { command: 'durandal.stub', keys: 's', when: 'durandal.inProject' },
   { command: 'durandal.conjure', keys: 'c', when: 'durandal.inProject' },

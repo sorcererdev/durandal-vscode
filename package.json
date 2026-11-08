@@ -140,6 +140,11 @@
         "enablement": "durandal.formOpen"
       },
       {
+        "command": "durandal.test.here",
+        "title": "Run the Test Here",
+        "category": "Durandal"
+      },
+      {
         "command": "durandal.test.file",
         "title": "Run This File's Tests",
         "category": "Durandal"
@@ -234,13 +239,13 @@
         "when": "durandal.inProject"
       },
       {
-        "command": "durandal.test.file",
+        "command": "durandal.test.here",
         "key": "ctrl+alt+d t",
         "mac": "cmd+alt+d t",
         "when": "durandal.inProject"
       },
       {
-        "command": "durandal.test.all",
+        "command": "durandal.test.file",
         "key": "ctrl+alt+d shift+t",
         "mac": "cmd+alt+d shift+t",
         "when": "durandal.inProject"

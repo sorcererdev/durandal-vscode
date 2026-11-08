@@ -76,3 +76,12 @@ test('Tab accepts a decoration suggestion only when nothing else has Tab (spec Â
   });
   assert.equal(BUILT['durandal.suggest.accept'].enablement, 'durandal.ghostVisible');
 });
+
+test('the TDD chords match durandal.nvim: t here, shift+t the file, Test All palette only (spec ruling 2)', () => {
+  const keys = (id: string) => KEYS.filter(k => k.command === id).map(k => k.keys);
+  assert.deepEqual(keys('durandal.test.here'), ['t']);
+  assert.deepEqual(keys('durandal.test.file'), ['shift+t']);
+  assert.deepEqual(keys('durandal.test.all'), []);
+  assert.equal(BUILT['durandal.test.here'].title, 'Run the Test Here');
+  for (const id of ['durandal.test.here', 'durandal.test.file', 'durandal.test.all', 'durandal.jump']) assert.ok(id in BUILT && !(id in NOT_YET), id);
+});
