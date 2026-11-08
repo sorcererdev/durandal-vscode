@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Field, PreviewResult, Plan, FileActionsResult, ModelResult, GeneratorItem, InlineItem, SnippetData, Suggestion, SuggestResult, ChoicesResult } from '../../src/protocol';
+import type { Field, PreviewResult, Plan, FileActionsResult, ModelResult, GeneratorItem, InlineItem, SnippetData, Suggestion, SuggestResult, ChoicesResult, ConjureLanded, ConjurePaused, MutateResult, StubResult, TestsRunResult, TestsRunParams, WaiveResult } from '../../src/protocol';
 import { CLIENT_COMMANDS, METHODS, Olifant, PLAN_TOKEN_MODIFIERS, PLAN_TOKEN_TYPES, SERVER_COMMANDS } from '../../src/protocol';
 
 const PINNED = [
@@ -109,4 +109,39 @@ test('compile check: a suggestion, its pulled answer and the choices read as the
   const r: SuggestResult = { ...s, plan: { files: [], conflicts: [], warnings: [], holes: [], snippet: null } };
   const c: ChoicesResult = { name: 'Command', inputs: [{ name: 'command', optional: false, default: null, prompt: null, choices: ['a'] }] };
   assert.ok(r.planId === 7 && c.inputs.length === 1);
+});
+
+test('compile check: the TDD answers read as the server sends them (Lsp.hs :608-944, Tests.hs :199)', () => {
+  const run: TestsRunResult = {
+    file: '/p/a__test.py', passed: ['a__test.py::test_one'], scope: 'test', test: 'a__test.py::test_one',
+    failed: [{ id: 'a__test.py::test_two', file: '/p/a__test.py', line: null, message: 'm', output: '' }], broken: null, seconds: 0.3,
+  };
+  const params: TestsRunParams = { textDocument: { uri: 'file:///p/a.py' }, scope: 'file' };
+  const landed: ConjureLanded = {
+    file: '/p/a.py', unit: 'f', edits: null, summary: 'green', green: true, tests: run, rounds: 1, rungs: ['local'], stopped: false,
+  };
+  const paused: ConjurePaused = { paused: { token: 't', diagnosis: 'd', offers: [] } };
+  const mutate: MutateResult = {
+    file: '/p/a.py', unit: 'f', lines: { first: 3, last: 9 }, killed: 5, survived: 1, waived: 0,
+    survivors: [{ line: 4, operator: 'swap', from: '+', to: '-', mutated: 'y = a - b', dim: false }], summary: '1 survivor · 5/6 killed',
+  };
+  const stub: StubResult = { file: '/p/a__test.py', line: 8, name: 'test_f', edits: { documentChanges: [] } };
+  const waived: WaiveResult = { waived: true };
+  assert.ok(run.failed[0].line === null && params.scope === 'file' && landed.edits === null && paused.paused.token === 't');
+  assert.ok(mutate.lines.first === 3 && stub.line === 8 && waived.waived);
+});
+
+// The keys the TDD commands read or send (spec §2); each a string literal in olifant's source.
+// When one fails, find what the server sends now and fix protocol.ts and its readers; never drop
+// the key from this list to make it pass.
+const TDD_KEYS = [
+  'passed', 'scope', 'test', 'failed', 'broken', 'seconds', 'output', 'exists',
+  'edits', 'green', 'tests', 'rounds', 'rungs', 'stopped', 'paused', 'token', 'diagnosis',
+  'lines', 'first', 'last', 'killed', 'survived', 'waived', 'survivors', 'operator', 'from', 'to', 'mutated', 'dim',
+  'unit', 'reason', 'selection', 'resume', 'choice', 'position', 'summary',
+];
+
+test('the TDD keys are olifant\'s', { skip: !process.env.OLIFANT_REPO && 'OLIFANT_REPO is not set' }, () => {
+  const src = hsFiles(join(process.env.OLIFANT_REPO!, 'src')).map(f => readFileSync(f, 'utf8')).join('\n');
+  assert.deepEqual(TDD_KEYS.filter(k => !src.includes(`"${k}"`)), []);
 });

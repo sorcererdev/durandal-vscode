@@ -98,22 +98,35 @@ export interface SuggestResult extends Suggestion { plan: Plan; edit?: Workspace
 export interface SuggestParams extends Doc { line: number }
 export interface RecognitionFeedbackParams extends Doc { generator: string; outcome: string }
 
-// --- the TDD loop (milestone 4)
-export interface StubParams extends At { survivor?: Survivor }
-export interface StubResult extends Open { file: string; line: number; name: string; edits: WorkspaceEdit }
-export interface ConjureResume { token: string; choice: string; arg?: unknown; land?: boolean; hint?: string }
-export interface ConjureParams extends At { selection?: { start: number; end: number }; resume?: ConjureResume }
-export type ConjureResult =
-  | (Open & { file: string; unit: string; edits: WorkspaceEdit; summary: string; green: boolean; tests?: unknown; rounds?: unknown; rungs?: unknown })
-  | { paused: Open };
-export interface MutateResult extends Open {
-  file: string; unit: string; lines: unknown; killed: number; survived: number; survivors: (Survivor & { dim?: boolean })[]; summary: string;
-}
-export interface WaiveParams extends Doc { survivor: Survivor; reason: string }
-export interface TestsRunResult extends Open {
-  file: string; passed: number; failed: { id: string; line: number; message: string; output: string }[]; broken: string | null; seconds: number;
+// --- the TDD loop (milestone 4): Lsp.hs :608-944, Server/Tests.hs :199-209. Lines 1-based;
+// a selection's start and end 0-based inclusive (the server adds 1).
+export type TestScope = 'test' | 'file' | 'all';
+export interface TestsRunParams extends Doc { scope?: 'file' | 'all'; position?: Position }
+// line: the failing assertion's (null when the runner names none); file: absolute
+export interface TestFailure { id: string; file: string; line: number | null; message: string; output: string }
+export interface TestsRunResult {
+  file: string; passed: string[]; scope: TestScope; test: string | null; failed: TestFailure[]; broken: string | null; seconds: number;
 }
 export interface TestsFileResult { file: string; kind: 'test' | 'module'; exists: boolean }
+export interface StubParams extends At { survivor?: Survivor }
+export interface StubResult { file: string; line: number; name: string; edits: WorkspaceEdit }
+export interface ConjureResume { token: string; choice: string; arg?: unknown; land?: boolean; hint?: string }
+export interface ConjureParams extends At { selection?: { start: number; end: number }; resume?: ConjureResume }
+// landed: edits null when nothing changed; tests the after-run (scope "file")
+export interface ConjureLanded extends Open {
+  file: string; unit: string; edits: WorkspaceEdit | null; summary: string; green: boolean;
+  tests: TestsRunResult; rounds: number; rungs: string[]; stopped?: boolean;
+}
+// paused: only what M4's warning reads; the full shape is M5's
+export interface ConjurePaused { paused: Open & { token: string; diagnosis: string } }
+export type ConjureResult = ConjureLanded | ConjurePaused;
+export interface MutateSurvivor extends Survivor { dim: boolean }
+export interface MutateResult {
+  file: string; unit: string; lines: { first: number; last: number }; killed: number; survived: number; waived: number;
+  survivors: MutateSurvivor[]; summary: string;
+}
+export interface WaiveParams extends Doc { survivor: Survivor; reason: string }
+export interface WaiveResult { waived: true }
 
 // --- plans (milestones 5 and 6)
 export interface ErrandParams extends Row { resume?: unknown; text?: string }
@@ -146,8 +159,8 @@ export const Olifant = {
   stub: req<StubParams, StubResult>('olifant/stub'),
   conjure: req<ConjureParams, ConjureResult>('olifant/conjure'),
   mutate: req<At, MutateResult>('olifant/mutate'),
-  waive: req<WaiveParams, unknown>('olifant/waive'),
-  testsRun: req<Doc, TestsRunResult>('olifant/tests/run'),
+  waive: req<WaiveParams, WaiveResult>('olifant/waive'),
+  testsRun: req<TestsRunParams, TestsRunResult>('olifant/tests/run'),
   testsFile: req<Doc, TestsFileResult>('olifant/tests/file'),
   debugState: req<Record<string, never>, DebugState>('olifant/debugState'),
   plansAsk: req<ErrandParams, ErrandResult>('olifant/plans/ask'),
