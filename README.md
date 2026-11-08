@@ -46,6 +46,19 @@ apply: `$DURANDAL_LOG_DIR/actions.jsonl` if that is set, else
 `$XDG_CACHE_HOME/durandal/actions.jsonl`, else `~/.cache/durandal/actions.jsonl` (the file
 durandal.nvim writes). `durandal.actionLog` turns it off.
 
+## Ghost text and snippets
+
+- **The snippet Olifant anticipates** at the cursor (a failure variant under the last failure,
+  a test case in a describe block) shows as ghost text. `Tab` inserts it with its holes as tab
+  stops, then the model fills the holes in place (status bar: "Filling holes"). If you type
+  while it fills, your text is kept and the holes stay as they were. `Esc` dismisses it, and
+  it is not offered again on that line's text.
+- **Snippets in the completion list** (`Ctrl+Space`, or after `@` or `:`) are the same
+  snippets by choice; picking one fills its holes the same way.
+- `durandal.ghosts` or `Durandal: Toggle Ghost Text` turns the ghost text off (the completion
+  list keeps its snippets). While VS Code's completion list, another extension's ghost text, or
+  a snippet you are filling in has Tab, Tab is theirs.
+
 ## Settings
 
 - `durandal.path`: the binary.
@@ -53,6 +66,7 @@ durandal.nvim writes). `durandal.actionLog` turns it off.
 - `durandal.model`: the model backend for holes (empty: the project's default).
 - `durandal.fills`: a recorded fills file standing in for the model (tests, demos).
 - `durandal.hints`: the ⚡ hints.
+- `durandal.ghosts`: ghost text.
 - `durandal.actionLog`: the action log.
 - `durandal.trace.server`: LSP traffic into the Durandal output channel.
 
