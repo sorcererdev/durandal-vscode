@@ -64,6 +64,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   hooks.hints = hints;
   const suggest = new Suggest({ server: s, log, say });
   suggest.register(context);
+  hooks.suggest = suggest.inline;
   const generate = new Generate({ server: s, docs, plans, log, state: context.workspaceState, ui });
   generate.register(context);
   new Actions({ server: s, plans, generate, log, ui, say }).register(context);

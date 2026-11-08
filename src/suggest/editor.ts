@@ -3,6 +3,8 @@ import type { ActionLog } from '../actionLog';
 import type { Say, Server } from '../server';
 import { toggleSetting } from '../toggleSetting';
 import { Controller } from './controller';
+import { Fill, FillOutcome } from './fill';
+import { Inline } from './inline';
 import type { Shown, SuggestKind } from './types';
 
 const HIDE_INLINE = 'editor.action.inlineSuggest.hide';
@@ -12,9 +14,13 @@ const HIDE_INLINE = 'editor.action.inlineSuggest.hide';
 // (:DurandalGhosts), and Esc's dismissal.
 export class Suggest {
   readonly controller: Controller;
+  readonly fill: Fill;
+  readonly inline: Inline;
 
   constructor(private readonly d: { server: Server; log: ActionLog; say: Say }) {
     this.controller = new Controller({ view: { keys: k => this.keys(k) }, log: e => d.log.write(e) });
+    this.fill = new Fill({ server: d.server, log: d.log, say: d.say });
+    this.inline = new Inline({ controller: this.controller, fill: this.fill, enabled: () => this.enabled() });
   }
 
   enabled(): boolean {
@@ -22,8 +28,10 @@ export class Suggest {
   }
 
   state(uri: string): Shown | undefined { return this.controller.state(uri); }
+  get fills(): FillOutcome[] { return this.fill.outcomes; }
 
   register(context: vscode.ExtensionContext): void {
+    this.fill.register(context);
     context.subscriptions.push(
       vscode.commands.registerCommand('durandal.ghosts.toggle', () => toggleSetting('ghosts')),
       vscode.commands.registerCommand('durandal.suggest.dismiss', async () => {

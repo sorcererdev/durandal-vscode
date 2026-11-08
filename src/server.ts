@@ -2,11 +2,11 @@ import * as os from 'node:os';
 import * as vscode from 'vscode';
 import {
   CloseAction, CodeActionResolveRequest, DidChangeWorkspaceFoldersNotification, ErrorAction, ExecuteCommandRequest,
-  LanguageClient, LanguageClientOptions, NotificationType, RequestParam, RequestType, ServerOptions,
+  InlineCompletionRequest, LanguageClient, LanguageClientOptions, NotificationType, RequestParam, RequestType, ServerOptions,
 } from 'vscode-languageclient/node';
 import { applyServerEdit } from './applyEdit';
 import { checkBinary, Gate, ServerState, STOPPED } from './health';
-import { DoctorResult, SERVER_COMMANDS } from './protocol';
+import { DoctorResult, InlineItem, SERVER_COMMANDS } from './protocol';
 import { realRoot } from './root';
 import { initOptions, settingsFrom } from './settings';
 
@@ -22,6 +22,16 @@ export const APPLY_RESOLVED = 'durandal.applyResolvedEdit';
 export interface ClientHooks {
   // ⚡ hints (spec §6): off draws none; on, shown hears the lines drawn (for the action log)
   hints?: { enabled(): boolean; shown(uri: string, lines: number[]): void };
+  // ghost text and snippets (M3 spec §3.1/3.2): the inline item gated and given the fill
+  // command (the middleware asks the server itself: the library drops olifant's data and
+  // ghost; an answer after token's cancellation is dropped); the completion list's snippets
+  // given the same command; resolved bodies stashed
+  suggest?: {
+    inline(document: vscode.TextDocument, position: vscode.Position, context: vscode.InlineCompletionContext,
+      token: vscode.CancellationToken, fetch: () => Promise<InlineItem[]>): Promise<vscode.InlineCompletionItem[]>;
+    completions(document: vscode.TextDocument, items: vscode.CompletionItem[]): void;
+    resolved(item: vscode.CompletionItem): void;
+  };
 }
 
 // OlifantClient keeps the library's forced notifications out of a start: the extension reports
@@ -160,6 +170,29 @@ export class Server {
           const hints = (await next(document, viewPort, token)) ?? [];
           h?.shown(document.uri.toString(), hints.map(x => x.position.line));
           return hints;
+        },
+        provideInlineCompletionItems: async (document, position, context, token, next) => {
+          const s = hooks.suggest;
+          const lc = made.lc;
+          if (!s || !lc) return next(document, position, context, token);
+          return s.inline(document, position, context, token, async () => {
+            const r = await lc.sendRequest(InlineCompletionRequest.type,
+              lc.code2ProtocolConverter.asInlineCompletionParams(document, position, context), token);
+            if (!r) return [];
+            return (Array.isArray(r) ? r : r.items) as unknown as InlineItem[];
+          });
+        },
+        provideCompletionItem: async (document, position, context, token, next) => {
+          const r = await next(document, position, context, token);
+          if (r && hooks.suggest) hooks.suggest.completions(document, Array.isArray(r) ? r : r.items);
+          return r;
+        },
+        // the resolved item is a new one: it keeps the fill command completions gave the item
+        resolveCompletionItem: async (item, token, next) => {
+          const r = await next(item, token);
+          if (r && !r.command && item.command) r.command = item.command;
+          if (r && hooks.suggest) hooks.suggest.resolved(r);
+          return r;
         },
       },
       errorHandler: {
