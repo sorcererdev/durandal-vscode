@@ -11,7 +11,7 @@ const MODULE = `${DIR}create_booking.py`;
 const TEST = `${DIR}create_booking__test.py`;
 const ASSERTION = 'assert isinstance(result, SlotTaken)';
 
-// run executes a command and waits (up to ms) for a notice matching want
+// said executes a command and waits (up to ms) for a notice matching want
 async function said(command: string, want: RegExp, ms = 120_000): Promise<string> {
   const a = await api();
   const from = a.shown.length;

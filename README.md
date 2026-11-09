@@ -83,9 +83,10 @@ The chord is Ctrl+Alt+D (Cmd+Alt+D on macOS) followed by a letter.
 | `c` | Conjure | Fills the body at the cursor, or the selected lines, until its tests pass; lands as one undo step. |
 | `m` | Mutate | Mutates the unit at the cursor; survivors are warnings and a picker stubs or waives them. |
 
-A run writes its summary as a notice and its failures as errors on their lines (F8 walks them).
+A run writes its summary as a notice and its failures as errors on their lines (press F8 to walk them).
 The full output is in the results document, which opens beside the editor when something failed;
-Ctrl/Cmd-click a `✗` line to go to it. A green run of a module's tests mutates its marked units
+Ctrl/Cmd-click a `✗` line to go to it; `t` or `shift+t` there runs the last run again, and
+`s` works in the untitled test file a jump opens. A green run of a module's tests mutates its marked units
 again and says which survivors it killed. Runs, conjures and mutates show a Cancel button. A
 conjure that pauses (a decision model with a ladder) offers Continue and Stop; the steering
 window comes in a later release. There is no Test Explorer: olifant lists no tests.

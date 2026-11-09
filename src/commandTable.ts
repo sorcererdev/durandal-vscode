@@ -72,13 +72,17 @@ export const notYet = (title: string) => `Durandal: ${title} is not implemented 
 // The chord prefix, then durandal.nvim's letters (spec §4).
 export const PREFIX = { key: 'ctrl+alt+d', mac: 'cmd+alt+d' } as const;
 
+// TDD_WHEN: the test and stub chords also work from the results document (durandal-doc: t and
+// shift+t run the last run again) and the untitled test file the jump opens (s stubs there).
+export const TDD_WHEN = 'durandal.inProject || resourceScheme == durandal-doc || resourceScheme == untitled';
+
 export const KEYS: { command: string; keys: string; when: string }[] = [
   { command: 'durandal.actions', keys: 'a', when: 'durandal.inProject' },
   { command: 'durandal.generate', keys: 'g', when: 'durandal.inProject' },
-  { command: 'durandal.test.here', keys: 't', when: 'durandal.inProject' },
-  { command: 'durandal.test.file', keys: 'shift+t', when: 'durandal.inProject' },
+  { command: 'durandal.test.here', keys: 't', when: TDD_WHEN },
+  { command: 'durandal.test.file', keys: 'shift+t', when: TDD_WHEN },
   { command: 'durandal.jump', keys: 'j', when: 'durandal.inProject' },
-  { command: 'durandal.stub', keys: 's', when: 'durandal.inProject' },
+  { command: 'durandal.stub', keys: 's', when: TDD_WHEN },
   { command: 'durandal.conjure', keys: 'c', when: 'durandal.inProject' },
   { command: 'durandal.mutate', keys: 'm', when: 'durandal.inProject' },
   { command: 'durandal.plan.ask', keys: 'p q', when: 'durandal.isPlan' },

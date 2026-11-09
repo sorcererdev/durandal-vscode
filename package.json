@@ -242,13 +242,13 @@
         "command": "durandal.test.here",
         "key": "ctrl+alt+d t",
         "mac": "cmd+alt+d t",
-        "when": "durandal.inProject"
+        "when": "durandal.inProject || resourceScheme == durandal-doc || resourceScheme == untitled"
       },
       {
         "command": "durandal.test.file",
         "key": "ctrl+alt+d shift+t",
         "mac": "cmd+alt+d shift+t",
-        "when": "durandal.inProject"
+        "when": "durandal.inProject || resourceScheme == durandal-doc || resourceScheme == untitled"
       },
       {
         "command": "durandal.jump",
@@ -260,7 +260,7 @@
         "command": "durandal.stub",
         "key": "ctrl+alt+d s",
         "mac": "cmd+alt+d s",
-        "when": "durandal.inProject"
+        "when": "durandal.inProject || resourceScheme == durandal-doc || resourceScheme == untitled"
       },
       {
         "command": "durandal.conjure",

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import pkg from '../../package.json';
-import { BUILT, FORM_KEYS, KEYS, NOT_YET, PREFIX, SERVER_NAMED, SUGGEST_KEYS } from '../../src/commandTable';
+import { BUILT, FORM_KEYS, KEYS, NOT_YET, PREFIX, SERVER_NAMED, SUGGEST_KEYS, TDD_WHEN } from '../../src/commandTable';
 
 test('the contributed commands: Health, Restart, the built ones and the not-yet ones, each in the Durandal category', () => {
   const ids = pkg.contributes.commands.map(c => c.command).sort();
@@ -34,8 +34,12 @@ test('the keybindings are KEYS under the chord prefix, the form keys, then the s
   const byWhen = new Map<string, string[]>();
   for (const k of KEYS) byWhen.set(k.when, [...(byWhen.get(k.when) ?? []), k.keys]);
   for (const [when, keys] of byWhen) assert.equal(new Set(keys).size, keys.length, `a clash under ${when}`);
+  // the project and TDD contexts overlap: their chords must not clash with each other either
+  const project = KEYS.filter(k => !k.keys.startsWith('p ')).map(k => k.keys);
+  assert.equal(new Set(project).size, project.length, 'a clash among the project chords');
   assert.ok(KEYS.filter(k => k.keys.startsWith('p ')).every(k => k.when === 'durandal.isPlan'));
-  assert.ok(KEYS.filter(k => !k.keys.startsWith('p ')).every(k => k.when === 'durandal.inProject'));
+  const tdd = ['durandal.test.here', 'durandal.test.file', 'durandal.stub'];
+  assert.ok(KEYS.filter(k => !k.keys.startsWith('p ') && !tdd.includes(k.command)).every(k => k.when === 'durandal.inProject'));
   assert.ok(FORM_KEYS.every(k => k.when === 'durandal.formOpen && inQuickOpen'));
 });
 
@@ -75,6 +79,16 @@ test('Tab accepts a decoration suggestion only when nothing else has Tab (spec Â
     when: "durandal.ghostVisible && durandal.ghostKind != 'snippet' && durandal.ghostBand != 'hint' && editorTextFocus && !inlineSuggestionVisible && !suggestWidgetVisible && !inSnippetMode && !editorReadonly",
   });
   assert.equal(BUILT['durandal.suggest.accept'].enablement, 'durandal.ghostVisible');
+});
+
+test('t, shift+t and s also work from the results document and the untitled test file (final-review ruling)', () => {
+  const when = 'durandal.inProject || resourceScheme == durandal-doc || resourceScheme == untitled';
+  assert.equal(TDD_WHEN, when);
+  for (const id of ['durandal.test.here', 'durandal.test.file', 'durandal.stub']) {
+    assert.equal(KEYS.find(k => k.command === id)?.when, when, id);
+    assert.equal(pkg.contributes.keybindings.find((k: { command: string }) => k.command === id)?.when, when, id);
+  }
+  for (const id of ['durandal.conjure', 'durandal.mutate', 'durandal.jump']) assert.equal(KEYS.find(k => k.command === id)?.when, 'durandal.inProject', id);
 });
 
 test('the TDD chords match durandal.nvim: t here, shift+t the file, Test All palette only (spec ruling 2)', () => {
