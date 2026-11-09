@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { applyServerEdit } from '../applyEdit';
-import { ConjureLanded, ConjureParams, ConjurePaused, Olifant } from '../protocol';
+import { ConjureLanded, ConjureParams, ConjureResult, Olifant, Paused } from '../protocol';
 import { NOT_RUNNING, Say, Server } from '../server';
 import type { Ui } from '../uiTypes';
 import { here, NO_FILE, TddFlights, withCancel } from './common';
-import { settle } from './flights';
-import { changedSpan, conjureNotice, pausedNotice, savedWord, selectionLines } from './landing';
+import { Flight, Outcome, settle } from './flights';
+import { changedSpan, conjureNotice, savedWord, selectionLines } from './landing';
 import type { Tests } from './tests';
 
 export interface ConjureDeps {
@@ -14,13 +14,28 @@ export interface ConjureDeps {
   flashes: { first: number; last: number }[];
 }
 
+// PauseSink: where a pause goes (the pause controller, M5 spec §3)
+export interface PauseSink {
+  // a pause answered, to an opening conjure or a resume (params: the request, its position the original)
+  shown(params: ConjureParams, p: Paused): void;
+  // a resume ended without a pause (a landing, an error, a cancel): the running view closes
+  ended(): void;
+  // a conjure is about to go from line of uri: true when it reopened the held pause instead
+  atRun(uri: string, line: number, selection: boolean): boolean;
+}
+
+// ResumeHooks: a resume's flight, for the window's x
+export interface ResumeHooks { started(f: Flight<vscode.CancellationToken>): void }
+
 // Conjure: a body (or the selected lines) filled until its tests pass (durandal.nvim conjure.lua,
-// spec §4). A landing applies the accepted edit, flashes the changed lines, marks the after-run
-// and says one line. A pause, until M5's window, is a warning with Continue and Stop.
+// M4 spec §4). A landing applies the accepted edit, flashes the changed lines, marks the
+// after-run and says one line. A pause goes to the sink (M5 spec §3); a resume comes back
+// through resume() so its landing is this one.
 export class Conjure {
   private readonly landed = vscode.window.createTextEditorDecorationType({
     isWholeLine: true, backgroundColor: new vscode.ThemeColor('diffEditor.insertedLineBackground'),
   });
+  private sink: PauseSink | undefined;
 
   constructor(private readonly d: ConjureDeps) {}
 
@@ -28,54 +43,62 @@ export class Conjure {
     context.subscriptions.push(this.landed, vscode.commands.registerCommand('durandal.conjure', () => this.run()));
   }
 
+  setSink(s: PauseSink): void { this.sink = s; }
+
   async run(): Promise<void> {
     const h = here();
     if (!h) {
       void this.d.say('error', NO_FILE);
       return;
     }
-    const params: ConjureParams = { textDocument: { uri: h.uri }, position: h.position };
     const sel = selectionLines(h.editor.selection.start, h.editor.selection.end);
+    // a conjure inside a held pause's unit reopens it; anywhere else it forgets it (spec §3.4 rule 4)
+    if (this.sink?.atRun(h.uri, h.position.line, !!sel)) return;
+    const params: ConjureParams = { textDocument: { uri: h.uri }, position: h.position };
     if (sel) params.selection = sel;
     await this.ask(params);
   }
 
-  // ask sends a conjure (or a resume), then lands its answer or shows its pause
-  private async ask(params: ConjureParams): Promise<void> {
+  // resume: a pause's answer; the window is its progress (no notification), x cancels the flight
+  async resume(params: ConjureParams, hooks: ResumeHooks): Promise<void> {
+    await this.ask(params, hooks);
+  }
+
+  // ask sends a conjure (or a resume), then lands its answer or hands on its pause
+  private async ask(params: ConjureParams, hooks?: ResumeHooks): Promise<void> {
     if (!this.d.server.client()) {
       void this.d.say('error', NOT_RUNNING);
+      if (hooks) this.sink?.ended();
       return;
     }
     const f = this.d.flights.start('conjure');
-    const o = await withCancel('Durandal: conjuring…', f,
-      () => settle(f, this.d.server.request(Olifant.conjure, params, f.token), Olifant.conjure.method));
+    const send = () => settle(f, this.d.server.request(Olifant.conjure, params, f.token), Olifant.conjure.method);
+    let o: Outcome<ConjureResult>;
+    if (hooks) {
+      hooks.started(f);
+      o = await send();
+    } else {
+      o = await withCancel('Durandal: conjuring…', f, send);
+    }
     if (o.kind === 'cancelled') {
+      if (hooks) this.sink?.ended();
       if (o.why === 'user' || o.why === 'server') void this.d.say('info', 'conjure cancelled · nothing landed');
       return;
     }
     if (o.kind === 'error') {
+      if (hooks) this.sink?.ended();
       void this.d.say('error', o.message);
       return;
     }
     // the one branch point is the answer's shape (conjure.lua :175): {paused: {…}} or a landing.
     // ConjureLanded is open (an index signature), so `in` does not narrow: read it through the cast.
-    const p = (o.value as ConjurePaused).paused;
+    const p = (o.value as { paused?: unknown }).paused;
     if (p && typeof p === 'object') {
-      await this.paused(params, p);
+      this.sink?.shown(params, p as Paused);
       return;
     }
+    if (hooks) this.sink?.ended();
     await this.land(params, o.value as ConjureLanded);
-  }
-
-  // paused: Continue resumes (it may pause again), Stop lands nothing; dismissed, the server's
-  // token expires (spec §4, ruling 3)
-  private async paused(params: ConjureParams, p: ConjurePaused['paused']): Promise<void> {
-    const pick = await this.d.ui().ask('warn', pausedNotice(String(p.diagnosis ?? '')), ['Continue', 'Stop']);
-    if (pick !== 'Continue' && pick !== 'Stop') return;
-    await this.ask({
-      textDocument: params.textDocument, position: params.position,
-      resume: { token: String(p.token), choice: pick === 'Continue' ? 'continue' : 'stop' },
-    });
   }
 
   private async land(params: ConjureParams, a: ConjureLanded): Promise<void> {

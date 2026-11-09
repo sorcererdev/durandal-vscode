@@ -31,18 +31,6 @@ export function conjureNotice(a: ConjureLanded, written: string | undefined): No
   return { level, text };
 }
 
-// firstSentence: the first non-blank line, up to its first sentence end
-export function firstSentence(s: string): string {
-  const line = (s ?? '').split('\n').map(l => l.trim()).find(l => l !== '') ?? '';
-  const m = /^(.*?[.!?])(\s|$)/.exec(line);
-  return m ? m[1] : line;
-}
-
-// pausedNotice: M4's word for a paused conjure (spec §4, ruling 3)
-export function pausedNotice(diagnosis: string): string {
-  return `conjure paused: ${firstSentence(diagnosis)} — steering arrives in a later milestone`;
-}
-
 // changedSpan: the lines of after that differ from before (0-based, inclusive): from the first
 // differing line to the last; a pure deletion flashes the line where it was
 export function changedSpan(before: string[], after: string[]): { first: number; last: number } | undefined {

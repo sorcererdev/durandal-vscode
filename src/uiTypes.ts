@@ -40,8 +40,7 @@ export interface Ui {
   info(m: string): void;
   warn(m: string): void;
   error(m: string): void;
-  // ask: a notice with buttons (a paused conjure's Continue / Stop); the one chosen, or
-  // undefined when it is dismissed
+  // ask: a notice with buttons; the one chosen, or undefined when it is dismissed
   ask(level: 'info' | 'warn' | 'error', text: string, actions: string[]): Promise<string | undefined>;
   pick<T>(o: PickOptions<T>): Promise<T | undefined>;
   text(o: TextOptions): TextView;

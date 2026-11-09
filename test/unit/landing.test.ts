@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ConjureLanded } from '../../src/protocol';
 import {
-  changedSpan, conjureNotice, cursorColumn, firstSentence, pausedNotice, savedWord, selectionLines, stubWord,
+  changedSpan, conjureNotice, cursorColumn, savedWord, selectionLines, stubWord,
 } from '../../src/tdd/landing';
 
 const landed = (o: Partial<ConjureLanded> = {}): ConjureLanded => ({
@@ -40,13 +40,6 @@ test('stopped: the summary, the save, undo; nothing landed without edits', () =>
   assert.deepEqual(conjureNotice(landed({ stopped: true, green: false, summary: 'red: test_x' }), 'saved'),
     { level: 'warn', text: 'red: test_x · saved · undo reverts it' });
   assert.deepEqual(conjureNotice(landed({ stopped: true, edits: null }), undefined), { level: 'info', text: 'stopped · nothing landed' });
-});
-
-test('the paused notice: the diagnosis\'s first sentence', () => {
-  assert.equal(firstSentence('The model keeps failing test_x. Try a hint.'), 'The model keeps failing test_x.');
-  assert.equal(firstSentence('\n  no full stop here\nsecond line'), 'no full stop here');
-  assert.equal(firstSentence(''), '');
-  assert.equal(pausedNotice('Stuck on test_x. More.'), 'conjure paused: Stuck on test_x. — steering arrives in a later milestone');
 });
 
 test('changedSpan: the first to the last changed line of after, 0-based', () => {

@@ -276,40 +276,6 @@ describe('the TDD loop (fake server)', () => {
     await settle(MAIN, 'x = 1\n');
   });
 
-  it('paused: the warning; Stop sends the resume and nothing lands', async () => {
-    const a = await running();
-    const ui = new FakeUi();
-    a.setUi(ui);
-    await open(file(MAIN));
-    reply('olifant/conjure', { paused: { token: 't1', diagnosis: 'The model keeps failing test_two. Try a hint.' } });
-    ui.onAsk = (_t, actions) => {
-      assert.deepEqual(actions, ['Continue', 'Stop']);
-      reply('olifant/conjure', landed({ edits: null, stopped: true }));
-      return 'Stop';
-    };
-    const n = conjures().length;
-    assert.equal(await said('durandal.conjure', t => t.startsWith('stopped')), 'stopped · nothing landed');
-    assert.deepEqual(ui.asks, ['conjure paused: The model keeps failing test_two. — steering arrives in a later milestone']);
-    assert.deepEqual(conjures()[n + 1].params.resume, { token: 't1', choice: 'stop' });
-  });
-
-  it('paused: Continue resumes and lands', async () => {
-    const a = await running();
-    const ui = new FakeUi();
-    a.setUi(ui);
-    await settle(MAIN, 'x = 1\n');
-    await open(file(MAIN));
-    reply('olifant/conjure', { paused: { token: 't2', diagnosis: 'Stuck.' } });
-    ui.onAsk = () => {
-      reply('olifant/conjure', landed());
-      return 'Continue';
-    };
-    const n = conjures().length;
-    assert.equal(await said('durandal.conjure', t => t.startsWith('conjured')), 'conjured · green · saved');
-    assert.deepEqual(conjures()[n + 1].params.resume, { token: 't2', choice: 'continue' });
-    await settle(MAIN, 'x = 1\n');
-  });
-
   it('conjure cancelled (the Cancel button): $/cancelRequest, nothing landed', async () => {
     const a = await running();
     await open(file(MAIN));

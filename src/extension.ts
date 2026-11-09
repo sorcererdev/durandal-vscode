@@ -9,6 +9,10 @@ import { Generate } from './generate/command';
 import { DoctorSection, report } from './health';
 import { Hints } from './hints';
 import { Plans } from './land';
+import { PauseController, SourceKind } from './pause/controller';
+import { PausePanel } from './pause/panel';
+import { Reminders } from './pause/reminder';
+import type { FromPage, View } from './pause/viewModel';
 import { discover, trackProjects } from './projects';
 import { quickInputUi } from './quickInput';
 import { findRoot } from './root';
@@ -33,6 +37,18 @@ export interface TddApi {
   survivors(uri: string): MutateSurvivor[];
 }
 
+// the pause window (M5): its view and source, a key or page message played as if sent, a
+// document's pause and reminder, the footer notices said (the e2e tests read them)
+export interface PauseApi {
+  view(): View | undefined;
+  source(): SourceKind | undefined;
+  press(key: string): Promise<void>;
+  receive(m: FromPage): Promise<void>;
+  stored(uri: string): boolean;
+  reminders(uri: string): number;
+  notices(): string[];
+}
+
 export interface Api {
   server: Server;
   health(): Promise<string[]>;
@@ -49,6 +65,8 @@ export interface Api {
   // the TDD loop (M4): the last run's answer, a Cancel click on every request in the air, the
   // conjure flashes, a document's survivors (the e2e tests read them)
   tdd: TddApi;
+  // the pause window (M5)
+  pause: PauseApi;
 }
 
 let server: Server | undefined;
@@ -106,7 +124,32 @@ export function activate(context: vscode.ExtensionContext): Api {
   tests.register(context);
   new Jump({ server: s, say }).register(context);
   const flashes: { first: number; last: number }[] = [];
-  new Conjure({ server: s, say, ui, flights, tests, flashes }).register(context);
+  const conjure = new Conjure({ server: s, say, ui, flights, tests, flashes });
+  conjure.register(context);
+  // the pause window (M5 spec §2): the panel knows nothing of conjure; the controller decides
+  const reminders = new Reminders();
+  reminders.register(context);
+  // the panel needs the controller and the controller the panel: the holder breaks the cycle
+  const hold: { c?: PauseController } = {};
+  const panel = new PausePanel({
+    extensionUri: context.extensionUri,
+    receive: m => void hold.c?.receive(m),
+    closed: () => hold.c?.closed(),
+  });
+  context.subscriptions.push({ dispose: () => panel.close() });
+  const ctl = new PauseController({ server: s, say, ui, docs, panel, reminders, conjure, platform: process.platform });
+  hold.c = ctl;
+  ctl.register(context);
+  conjure.setSink(ctl);
+  const pause: PauseApi = {
+    view: () => ctl.view(),
+    source: () => ctl.source(),
+    press: k => ctl.press(k),
+    receive: m => ctl.receive(m),
+    stored: uri => !!ctl.store.get(uri),
+    reminders: uri => reminders.count(uri),
+    notices: () => ctl.notices(),
+  };
   const tdd: TddApi = {
     last: () => tests.last,
     cancel: () => flights.cancelAll('user'),
@@ -116,6 +159,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   hooks.stopped = () => {
     suggest.controller.stopped();
     flights.cancelAll('stopped');
+    ctl.stopped();
   };
 
   // health: the binary, the server, the projects, and olifant doctor for the active file's project
@@ -153,7 +197,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     for (const r of await discover()) await s.addRoot(r);
     if (s.roots().length > 0) await s.start();
   })();
-  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest, tdd };
+  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest, tdd, pause };
 }
 
 export async function deactivate(): Promise<void> {
