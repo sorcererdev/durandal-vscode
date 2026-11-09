@@ -4,6 +4,7 @@
 // No vscode import: unit-tested with node --test.
 import type { Paused, PausedFailed, PausedFile, PausedRound, PausedStep, PausedTest } from '../protocol';
 import { cut, given, pad, width, wrap } from './text';
+import { progressWords } from './resume';
 import type { Line, Row, Span, SpanKind, View } from './viewModel';
 
 // ---------------------------------------------------------------------------------------
@@ -848,9 +849,7 @@ export function helpLines(w: number, keys: KeyHelp[]): Line[] {
 // The running status line that replaces the rows (pause.lua offer_lines :969-984): the
 // seconds and the way out always show; the message is cut first.
 function statusLine(r: Running, w: number): Line {
-  let message = r.message ?? 'starting…';
-  if (message.startsWith(`${r.label} · `)) message = message.slice(`${r.label} · `.length);
-  message = message.replace(/^round \d+ of \d+ · /, '');
+  const message = progressWords(r.message ?? 'starting…', r.label).text;
   const secs = Math.floor(r.seconds);
   const tail = ` · ${secs} s · x cancels`;
   const head = `▶ ${r.label} — `;
