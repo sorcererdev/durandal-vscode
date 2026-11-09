@@ -35,6 +35,15 @@ const landed = (o: Record<string, unknown> = {}) => ({
   tests: tests(), rounds: 3, rungs: ['local'], stopped: true, ...o,
 });
 
+// keptAndSaved: the landing is over. The buffer shows the keep as soon as the edit applies, but
+// land() saves after that and says its notice once the save resolves: a test that stopped at the
+// buffer left the save in flight, and it could write the kept text over afterEach's settle.
+async function keptAndSaved(from: number, ms?: number): Promise<void> {
+  const a = await api();
+  await until(() => a.shown.slice(from).some(s => s.text === 'kept round 3 · red: not_found · saved · undo reverts it'), 'the landing saved', ms);
+  assert.equal(vscode.workspace.textDocuments.find(x => x.uri.toString() === uriOf(MAIN))?.lineAt(2).text, 'line_3 = 33');
+}
+
 // conjureAt: a conjure from line (0-based) of main.py (or rel), answered with reply; waits for the panel
 async function conjureAt(line: number, answer: unknown, rel = MAIN): Promise<void> {
   const a = await api();
@@ -109,12 +118,13 @@ describe('the pause window (fake server)', () => {
 
   it('a keeps the selected round: stop, land, arg; the landing applies and closes the window', async () => {
     const a = await running();
+    const from = a.shown.length;
     await conjureAt(3, paused());
     reply('olifant/conjure', landed());
     const r = await pressed('a');
     assert.deepEqual(r, { token: 'conjure-1', choice: 'stop', land: true, arg: '3' });
     await until(() => !a.pause.view(), 'the window closed');
-    await until(() => vscode.workspace.textDocuments.find(x => x.uri.toString() === uriOf(MAIN))?.lineAt(2).text === 'line_3 = 33', 'the keep landed');
+    await keptAndSaved(from);
     assert.ok(!a.pause.stored(uriOf(MAIN)));
     assert.equal(a.pause.reminders(uriOf(MAIN)), 0);
   });
@@ -431,11 +441,12 @@ describe('the pause window (fake server)', () => {
 
   it('q during the run, then a landing: it lands with no window', async () => {
     const a = await running();
+    const from = a.shown.length;
     await conjureAt(3, paused());
     reply('olifant/conjure', { delay: 1.5, ...landed() });
     await a.pause.press('a');
     await a.pause.press('q');
-    await until(() => vscode.workspace.textDocuments.find(x => x.uri.toString() === uriOf(MAIN))?.lineAt(2).text === 'line_3 = 33', 'the keep landed', 10_000);
+    await keptAndSaved(from, 10_000);
     assert.equal(a.pause.view(), undefined);
     assert.ok(!a.pause.stored(uriOf(MAIN)));
   });
