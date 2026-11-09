@@ -1005,3 +1005,17 @@ test('the status line: the label\'s own prefix goes, starting… before any word
   assert.ok(long.endsWith('… · 21 s · x cancels'), long);
   assert.ok(width(long) <= W, long);
 });
+
+test('narrow under 94 columns: the narrow legend whole (never cut by the wide tail); short cut to the pane', () => {
+  const v = view(fixture('wired'), { cols: 90 });
+  assert.equal(v.legend, 'Tab diff · [ ] rounds · 0-9 jump · j k PgDn PgUp scroll · d details · ? help · q close');
+  assert.ok(v.legend.endsWith('? help · q close'));
+  assert.equal(plain(v.short), 'conjure · CancelBooking.handle · ● paused after round 2 of 6 · local · 16 s');
+  const n = view(fixture('wired'), { cols: 60 });
+  assert.equal(n.width, 52);
+  assert.equal(n.legend, 'Tab diff · [ ] rounds · 0-9 jump · j k PgDn PgUp scroll · d details · ? help · q close');
+  const short = plain(n.short);
+  assert.equal(short, `${'conjure · CancelBooking.handle · ● paused after round 2 of 6 · local · 16 s'.slice(0, 51)}…`);
+  assert.equal(width(short), 52);
+  assert.deepEqual(n.short.map(s => s.kind), ['title', 'paused', 'dim']);
+});

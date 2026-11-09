@@ -572,7 +572,7 @@ function situationLines(p: Paused, w: number, es: PauseEntry[], sel: number, run
         const failingNames = list(r.failing);
         // a round the check refused before its tests ran: the check's name, in the wall's colour
         const checked = failingNames.length === 0 && given(r.check);
-        const tool = failure && failure.kind === 'check' ? failure.tool : (failure as { tool?: unknown } | undefined)?.tool;
+        const tool = failure && 'tool' in failure ? failure.tool : undefined;
         const what = checked ? (given(p.checker) ? String(p.checker) : given(tool) ? String(tool) : 'check') : failingNames.join(', ');
         n = row(mark, e.n !== undefined ? String(e.n) : '?', e.n !== undefined && e.n <= 9 ? 'key' : 'dim', e.label, VERDICT[e.label] ?? 'dim', e.body, undefined,
           what, checked ? 'check' : undefined);
@@ -877,12 +877,14 @@ export function conjureView(p: Paused, o: { cols: number; selected: number; runn
   const proposal = entry?.kind === 'proposal';
   // the legend whole when it fits the pane, else without its tail (the page wraps it)
   let legend = conjureLegend({ narrow: g.narrow, proposal, running: running !== undefined, wire: es[0]?.kind === 'wire' });
-  if (!running && width(legend) > g.text) legend = legend.slice(0, -PAUSE_STAYS.length);
+  // only the wide legend has the tail; the narrow one is already short and is never cut
+  if (!running && legend.endsWith(PAUSE_STAYS) && width(legend) > g.text) legend = legend.slice(0, -PAUSE_STAYS.length);
   const view: View = {
     state: running ? 'running' : proposal ? 'proposal' : 'paused',
     tab: `conjure${given(p.title?.unit) ? ` · ${p.title?.unit}` : ''}`,
     title: cutLine(title, Math.max(g.text, 8)),
-    short: t.short,
+    // the page draws short only when narrow: cut there to the pane, as the title is
+    short: g.narrow ? cutLine(t.short, Math.max(g.text, 8)) : t.short,
     lines: sit.lines,
     entryAt: sit.entryAt,
     entries: es.length,
