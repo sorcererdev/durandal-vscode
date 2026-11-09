@@ -1,0 +1,144 @@
+/* The pause window (spec §4.3): a grid with no measuring in JS. The model lays every line out
+   in cells, so the left column is as wide as its widest line (max-content) and the diff takes
+   the rest. Colours come only from the --vscode-* variables VS Code injects (light, dark and
+   high contrast follow). Words and glyphs carry the meaning; colour never does alone. */
+
+html, body { margin: 0; padding: 0; height: 100%; }
+
+body {
+  background: var(--vscode-editor-background);
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+  font-weight: var(--vscode-editor-font-weight);
+  line-height: 1.4;
+}
+
+/* the 100 cells the page measures; inline-block so its height is one line */
+#measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-block;
+  visibility: hidden;
+  white-space: pre;
+  pointer-events: none;
+}
+
+main {
+  display: grid;
+  box-sizing: border-box;
+  height: 100vh;
+  padding: 0.5em 1ch;
+  column-gap: 2ch;
+  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "sit diff"
+    "off diff"
+    "foot diff";
+}
+
+#sit { grid-area: sit; overflow: auto; }
+#off { grid-area: off; padding-top: 0.5em; }
+#foot { grid-area: foot; padding-top: 0.5em; color: var(--vscode-descriptionForeground); }
+#foot.notice { color: var(--vscode-editorWarning-foreground); }
+#diff {
+  grid-area: diff;
+  overflow: auto;
+  padding-left: 2ch;
+  border-left: 1px solid var(--vscode-panel-border);
+}
+
+.line { display: block; white-space: pre; }
+#sit > .title, #diff > .title { padding-bottom: 0.25em; }
+
+/* narrow (below 110 cells): one column, the diff under the offers, the whole stack scrolls and
+   the footer stays at the bottom; Tab moves between the panes (main.ts scrolls them in) */
+main.narrow {
+  overflow-y: auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: none;
+  grid-template-areas:
+    "sit"
+    "off"
+    "diff"
+    "foot";
+}
+main.narrow #sit { overflow-x: auto; overflow-y: hidden; }
+main.narrow #diff {
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin-top: 0.5em;
+  padding-top: 0.5em;
+  padding-left: 0;
+  border-left: 0;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+main.narrow #foot {
+  position: sticky;
+  bottom: 0;
+  background: var(--vscode-editor-background);
+}
+
+/* span kinds (viewModel SpanKind), spec §4.3's colours */
+.k-strong { font-weight: bold; }
+.k-dim { color: var(--vscode-descriptionForeground); }
+.k-red { color: var(--vscode-errorForeground); }
+.k-green { color: var(--vscode-testing-iconPassed); }
+.k-check { color: var(--vscode-editorWarning-foreground); }
+.k-place { color: var(--vscode-textLink-foreground); }
+.k-key { color: var(--vscode-textPreformat-foreground); }
+.k-running { color: var(--vscode-progressBar-background); }
+.k-title { font-weight: bold; }
+.k-paused { font-weight: bold; color: var(--vscode-editorWarning-foreground); }
+.k-proposal { color: var(--vscode-editorInfo-foreground); }
+.k-section { font-weight: bold; }
+.k-spinner {
+  display: inline-block;
+  color: var(--vscode-progressBar-background);
+  animation: durandal-spin 1s steps(8) infinite;
+}
+@keyframes durandal-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .k-spinner { animation: none; } }
+
+/* the key badge: no padding or border width, so the cells stay aligned */
+kbd {
+  font: inherit;
+  border-radius: 3px;
+  background: var(--vscode-keybindingLabel-background);
+  box-shadow: inset 0 -1px 0 var(--vscode-keybindingLabel-bottomBorder);
+}
+
+/* entries: clickable lines; the selected entry is a band */
+.entry { cursor: pointer; }
+.entry:hover { background: var(--vscode-list-hoverBackground); }
+.entry.selected {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+/* rows: buttons that look like the text they hold */
+button.row {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.row:hover:not(:disabled) { background: var(--vscode-list-hoverBackground); }
+button.row:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+button.row:disabled { cursor: default; color: var(--vscode-disabledForeground); }
+
+/* the 150 ms flash on a pressed row or a newly selected entry */
+.flash {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+  background: var(--vscode-editor-findMatchHighlightBackground);
+}

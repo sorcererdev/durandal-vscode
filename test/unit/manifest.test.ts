@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import pkg from '../../package.json';
 import { BUILT, FORM_KEYS, KEYS, NOT_YET, PREFIX, SERVER_NAMED, SUGGEST_KEYS, TDD_WHEN } from '../../src/commandTable';
 
@@ -98,4 +100,15 @@ test('the TDD chords match durandal.nvim: t here, shift+t the file, Test All pal
   assert.deepEqual(keys('durandal.test.all'), []);
   assert.equal(BUILT['durandal.test.here'].title, 'Run the Test Here');
   for (const id of ['durandal.test.here', 'durandal.test.file', 'durandal.test.all', 'durandal.jump']) assert.ok(id in BUILT && !(id in NOT_YET), id);
+});
+
+test('the webview: a second bundle and the stylesheet, both packaged; lint checks the page too (spec §2)', () => {
+  const build = pkg.scripts.build;
+  assert.ok(build.startsWith('esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap && '), build);
+  assert.ok(build.includes('esbuild webview/main.ts --bundle --outfile=dist/webview.js --format=iife --platform=browser --target=es2022'), build);
+  assert.ok(build.includes("require('fs').copyFileSync('webview/pause.css','dist/pause.css')"), build);
+  assert.ok(pkg.scripts.lint.includes('tsc -p webview --noEmit'), pkg.scripts.lint);
+  // out/test/unit → the repository root
+  const ignore = readFileSync(join(__dirname, '..', '..', '..', '.vscodeignore'), 'utf8').split('\n').map(l => l.trim());
+  for (const f of ['!dist/extension.js', '!dist/webview.js', '!dist/pause.css']) assert.ok(ignore.includes(f), `.vscodeignore lacks ${f}`);
 });

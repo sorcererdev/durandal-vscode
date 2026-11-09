@@ -365,9 +365,9 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap && esbuild webview/main.ts --bundle --outfile=dist/webview.js --format=iife --platform=browser --target=es2022 && node -e \"require('fs').copyFileSync('webview/pause.css','dist/pause.css')\"",
     "compile": "tsc -p .",
-    "lint": "tsc -p . --noEmit && eslint .",
+    "lint": "tsc -p . --noEmit && tsc -p webview --noEmit && eslint .",
     "test:unit": "tsc -p . && node --test \"out/test/unit/**/*.test.js\"",
     "test:e2e": "npm run build && tsc -p . && node out/test/e2e/run.js",
     "package": "vsce package --no-dependencies"
