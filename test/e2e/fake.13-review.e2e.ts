@@ -83,6 +83,28 @@ describe('the review window (fake server)', () => {
     assert.ok(vscode.workspace.textDocuments.find(d => d.uri.toString() === uriOf(PLAN))!.getText().includes('  ✓ kept line'));
   });
 
+  it('a press while the answer\'s edit lands still waits: one choose (final review I1)', async () => {
+    const a = await running();
+    await open(file(PLAN));
+    await showing(reviewFixture('do'));
+    reply('olifant/plans/review/choose', { done: false, said: 'kept', edit: planEdit('  ✓ kept line\n'), review: reviewFixture('do') });
+    const n = chooses().length;
+    // pressed from inside the landing: the plan's change event fires before the edit's promise settles
+    let during: Promise<void> | undefined;
+    const sub = vscode.workspace.onDidChangeTextDocument(e => {
+      if (!during && e.document.uri.toString() === uriOf(PLAN)) during = a.pause.press('a');
+    });
+    try {
+      await a.pause.press('a');
+      await until(() => during !== undefined, 'a press during the landing');
+      await during;
+    } finally {
+      sub.dispose();
+    }
+    assert.equal(chooses().length, n + 1);
+    assert.ok(a.pause.notices().includes('a: the last answer is still on its way'));
+  });
+
   it('t: the facts land on the plan and the window redraws with what it said', async () => {
     const a = await running();
     await open(file(PLAN));
@@ -220,7 +242,7 @@ describe('the review window (fake server)', () => {
     const before = a.pause.notices().length;
     await a.pause.press('a');
     await until(() => a.pause.notices().length > before, 'the refusal');
-    assert.ok(a.pause.notices().at(-1)!.startsWith('a: '));
+    assert.equal(a.pause.notices().at(-1), 'a: p.md changed since');
     assert.equal(a.pause.source(), 'do');
     assert.ok(!ed.document.getText().includes('kept line'));
   });

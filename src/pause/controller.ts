@@ -464,22 +464,31 @@ export class PauseController implements PauseSink {
       this.paint();
       return errorMessage(err);
     }
-    r.busy = undefined;
     return this.answered(r, choice, res);
   }
 
   // answered: the edit as one undo step, the facts on the plan, then done (close and say) or the
   // new review in place with what it said (review.lua answered :168-200). files: VS Code reloads
-  // unmodified files from disk itself.
+  // unmodified files from disk itself. busy (set by the caller) holds until the answer has landed:
+  // a press while the edit applies still waits.
   private async answered(r: RevState, choice: string, res: ChooseResult): Promise<true | string> {
-    const failed = await this.landReview(r.planUri, res.edit, res.facts);
+    let failed: string | undefined;
+    try {
+      failed = await this.landReview(r.planUri, res.edit, res.facts);
+    } finally {
+      // a throw on the way (the plan unreadable) must not leave the review busy for good
+      r.busy = undefined;
+    }
     const kind = r.review.kind === 'reconcile' ? 'reconcile' : 'do';
     if (failed) {
       if (this.rev !== r) {
         void this.d.say('error', failed);
         return true;
       }
-      if (res.review) r.review = res.review;
+      if (res.review) {
+        r.review = res.review;
+        r.selected = Math.min(r.selected, Math.max(countOf(r.review) - 1, 0));
+      }
       this.paint();
       return failed;
     }
@@ -488,13 +497,13 @@ export class PauseController implements PauseSink {
       void this.d.say('info', `${kind}: ${res.said ?? choice}`);
       return true;
     }
-    if (this.rev === r) {
-      if (res.review) {
-        r.review = res.review;
-        r.selected = Math.min(r.selected, Math.max(countOf(r.review) - 1, 0));
-      }
-      this.paint();
+    // the window moved on (closed, or another review): what it said is not that window's (nvim is silent)
+    if (this.rev !== r) return true;
+    if (res.review) {
+      r.review = res.review;
+      r.selected = Math.min(r.selected, Math.max(countOf(r.review) - 1, 0));
     }
+    this.paint();
     return res.said ?? 'done';
   }
 
@@ -580,7 +589,6 @@ export class PauseController implements PauseSink {
       this.paint();
       return errorMessage(err);
     }
-    r.busy = undefined;
     const said = await this.answered(r, 'reopen', res);
     if (res.reopen) await this.redo(r.planUri, res.reopen.id, line, text);
     return said;
