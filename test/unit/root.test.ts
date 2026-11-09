@@ -79,6 +79,7 @@ test('a plan file is a markdown file under <root>/plans/', async () => {
   assert.equal(await isPlanFile(join(svc, 'plans/sub/q.md')), true);
   assert.equal(await isPlanFile(join(svc, 'plans/p.txt')), false);
   assert.equal(await isPlanFile(join(svc, 'docs/p.md')), false);
+  assert.equal(await isPlanFile(join(svc, 'plans/P.MD')), true, 'the one plan rule: .md in any case');
   mkdirSync(join(t, 'loose/plans'), { recursive: true });
   writeFileSync(join(t, 'loose/plans/p.md'), '');
   assert.equal(await isPlanFile(join(t, 'loose/plans/p.md')), false, 'no project, no plan');

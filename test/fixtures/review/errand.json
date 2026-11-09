@@ -1,0 +1,78 @@
+{
+  "id": "R1",
+  "kind": "errand",
+  "plan": "plans/t.md",
+  "row": 2,
+  "title": {
+    "verb": "do",
+    "step": 1,
+    "unit": "Table.label",
+    "badge": "◆ answered · kept",
+    "model": "sonnet",
+    "seconds": 42,
+    "cost": 0.06
+  },
+  "summary": "The do changed 2 files.",
+  "step": "- [ ] add a label @src/a.py:Table.label",
+  "said": [
+    "changed @src/a.py:Table.label"
+  ],
+  "tests": {
+    "ran": true,
+    "passed": 1,
+    "failed": 0,
+    "list": [
+      {
+        "test": "test_label",
+        "status": "passed"
+      }
+    ]
+  },
+  "denials": [
+    {
+      "tool": "Bash",
+      "input": "python -m pytest t.py",
+      "pattern": "Bash(python -m pytest*)",
+      "allowed": false
+    }
+  ],
+  "denied": [
+    "tried `python -m pytest t.py` 3 times; not allowed.",
+    "Allowed: `uv run …`."
+  ],
+  "landing": {
+    "diff": "--- a/src/a.py\n+++ b/src/a.py\n@@ -1,1 +1,2 @@\n class Table:\n+    def label(self) -> str: return self.id\n",
+    "files": [
+      {
+        "file": "src/a.py",
+        "status": "modified",
+        "diff": "--- a/src/a.py\n+++ b/src/a.py\n@@ -1,1 +1,2 @@\n class Table:\n+    def label(self) -> str: return self.id\n"
+      },
+      {
+        "file": "src/b.py",
+        "status": "added",
+        "diff": "--- a/src/b.py\n+++ b/src/b.py\n@@ -0,0 +1,1 @@\n+y = 1\n"
+      }
+    ],
+    "edit": null
+  },
+  "offers": [
+    {
+      "choice": "reopen",
+      "key": "o",
+      "label": "reopen: ask for more in the same thread",
+      "detail": "a do on the step resumes its thread"
+    }
+  ],
+  "details": [
+    {
+      "title": "the step",
+      "text": "- [ ] add a label"
+    },
+    {
+      "title": "diff · src/a.py",
+      "text": "--- a/src/a.py\n+++ b/src/a.py\n@@ -1,1 +1,2 @@\n class Table:\n+    def label(self) -> str: return self.id\n",
+      "lang": "diff"
+    }
+  ]
+}

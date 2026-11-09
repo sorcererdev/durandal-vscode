@@ -1,0 +1,90 @@
+{
+  "id": "reconcile",
+  "kind": "reconcile",
+  "plan": "plans/t.md",
+  "title": {
+    "verb": "reconcile",
+    "count": 2
+  },
+  "summary": "2 readings to review",
+  "entries": [
+    {
+      "id": "done|src/a.py|Table.label|abc1234",
+      "kind": "done",
+      "row": 2,
+      "step": 1,
+      "summary": "Step 1 looks done",
+      "offers": [
+        {
+          "choice": "apply",
+          "key": "a",
+          "label": "tick it",
+          "detail": "the step's line ticked"
+        },
+        {
+          "choice": "leave",
+          "key": "r",
+          "label": "leave it",
+          "detail": "the step stays open"
+        }
+      ],
+      "landing": {
+        "edit": null,
+        "diff": "--- a/plans/t.md\n+++ b/plans/t.md\n@@ -3,1 +3,1 @@\n-- [ ] add a label @src/a.py:Table.label\n+- [x] add a label @src/a.py:Table.label ✓ abc1234\n\n--- a/src/a.py\n+++ b/src/a.py\n@@ -1,1 +1,2 @@\n+    def label(self) -> str: return self.id",
+        "facts": 1
+      }
+    },
+    {
+      "id": "unplaced|src/a.py|spare|def5678",
+      "kind": "unplaced",
+      "row": null,
+      "step": null,
+      "summary": "Not in any step: `spare` in a.py",
+      "offers": [
+        {
+          "choice": "apply",
+          "key": "a",
+          "label": "add it as a new step",
+          "detail": "- [ ] def spare() @src/a.py:spare"
+        },
+        {
+          "choice": "place",
+          "key": "1",
+          "label": "under Step 1",
+          "detail": "- [ ] add a label",
+          "step": 2
+        },
+        {
+          "choice": "place",
+          "key": "2",
+          "label": "under Step 2",
+          "detail": "- [ ] next",
+          "step": 3
+        },
+        {
+          "choice": "new",
+          "key": "n",
+          "label": "a new step",
+          "detail": "- [ ] def spare() @src/a.py:spare"
+        },
+        {
+          "choice": "ignore",
+          "key": "i",
+          "label": "not work: ignore it",
+          "detail": "until it changes again"
+        }
+      ],
+      "landing": {
+        "edit": null,
+        "diff": "--- a/plans/t.md\n+++ b/plans/t.md\n@@ -4,1 +4,2 @@\n - [ ] next\n+- [ ] def spare() @src/a.py:spare",
+        "facts": 1
+      }
+    }
+  ],
+  "details": [
+    {
+      "title": "readings",
+      "text": "done|src/a.py|Table.label|abc1234\n"
+    }
+  ]
+}

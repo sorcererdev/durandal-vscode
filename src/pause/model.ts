@@ -383,7 +383,7 @@ function joined(chunks: Chunk[]): Line {
 const lineText = (l: Line): string => l.map(s => s.text).join('');
 
 // LINE cut to W display cells, ending in … when cut.
-function cutLine(l: Line, w: number): Line {
+export function cutLine(l: Line, w: number): Line {
   const full = lineText(l);
   if (width(full) <= w) return l;
   const keep = cut(full, w).length - 1;
@@ -788,6 +788,9 @@ function reasonOf(p: Paused, entry: PauseEntry | undefined): string | undefined 
   return undefined;
 }
 
+// The scroll keys of both legends: j k a line, PgDn PgUp a page.
+export const SCROLL_WORDS = 'j k PgDn PgUp scroll';
+
 const PAUSE_STAYS = ' (the pause stays)';
 
 // legend: the footer for a state (pause.lua :860-869, the running one :1266-1267). The scroll
@@ -798,7 +801,7 @@ export function conjureLegend(o: { narrow: boolean; proposal: boolean; running: 
   if (o.narrow) parts.push('Tab diff');
   parts.push('[ ] rounds');
   if (o.narrow || !o.proposal) parts.push(`${o.wire ? '0-9' : '1-9'} jump`);
-  parts.push('j k PgDn PgUp scroll', 'd details', '? help', 'q close');
+  parts.push(SCROLL_WORDS, 'd details', '? help', 'q close');
   const short = parts.join(' · ');
   return o.narrow ? short : short + PAUSE_STAYS;
 }

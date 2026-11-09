@@ -204,7 +204,9 @@ export interface ReconcileReview {
   entries: ReadingEntry[]; details: DetailsSection[];
 }
 export type Review = DoReview | ReconcileReview;
-// facts: plan lines the client writes (nvim plans.apply_facts); Task 7 pins the shapes the server sends
+// facts (olifant Loop.hs factJson, ReviewReadings.hs applyFactsText): rows are 0-based rows of
+// the plan text before the answer. {row, text} replaces a row; {after, lines} inserts below a
+// row (several at one row in order); {from, to, lines} replaces rows from..to, to inclusive.
 export type Fact = { row: number; text: string } | { after: number; lines: string[] } | { from: number; to: number; lines: string[] };
 export interface ChooseResult {
   done: boolean; said?: string; edit?: WorkspaceEdit | null; facts?: Fact[]; files?: string[]; review?: Review | null; reopen?: { id: string } | null;

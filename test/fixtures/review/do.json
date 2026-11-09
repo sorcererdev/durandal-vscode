@@ -1,0 +1,96 @@
+{
+  "id": "R1",
+  "kind": "do",
+  "plan": "plans/t.md",
+  "row": 2,
+  "title": {
+    "verb": "do",
+    "step": 1,
+    "unit": "Table.label",
+    "badge": "◆ answered",
+    "model": "sonnet",
+    "seconds": 42,
+    "cost": 0.06
+  },
+  "summary": "The do changed 2 files.",
+  "step": "- [ ] add a label @src/a.py:Table.label",
+  "said": [
+    "changed @src/a.py:Table.label"
+  ],
+  "tests": {
+    "ran": true,
+    "passed": 1,
+    "failed": 0,
+    "list": [
+      {
+        "test": "test_label",
+        "status": "passed"
+      }
+    ]
+  },
+  "denials": [
+    {
+      "tool": "Bash",
+      "input": "python -m pytest t.py",
+      "pattern": "Bash(python -m pytest*)",
+      "allowed": false
+    }
+  ],
+  "denied": [
+    "tried `python -m pytest t.py` 3 times; not allowed.",
+    "Allowed: `uv run …`."
+  ],
+  "landing": {
+    "diff": "--- a/src/a.py\n+++ b/src/a.py\n@@ -1,1 +1,2 @@\n class Table:\n+    def label(self) -> str: return self.id\n",
+    "files": [
+      {
+        "file": "src/a.py",
+        "status": "modified",
+        "diff": "--- a/src/a.py\n+++ b/src/a.py\n@@ -1,1 +1,2 @@\n class Table:\n+    def label(self) -> str: return self.id\n"
+      },
+      {
+        "file": "src/b.py",
+        "status": "added",
+        "diff": "--- a/src/b.py\n+++ b/src/b.py\n@@ -0,0 +1,1 @@\n+y = 1\n"
+      }
+    ],
+    "edit": null
+  },
+  "offers": [
+    {
+      "choice": "keep",
+      "key": "a",
+      "label": "keep the change",
+      "detail": "the files stay"
+    },
+    {
+      "choice": "revert",
+      "key": "r",
+      "label": "revert the change",
+      "detail": "files restored"
+    },
+    {
+      "choice": "test",
+      "key": "t",
+      "label": "run the step's tests now",
+      "detail": "their marks land"
+    },
+    {
+      "choice": "allow",
+      "key": "p",
+      "label": "allow `Bash(python -m pytest*)`",
+      "detail": "in future dos"
+    }
+  ],
+  "details": [
+    {
+      "title": "the step",
+      "text": "- [ ] add a label"
+    },
+    {
+      "title": "diff · src/a.py",
+      "text": "--- a/src/a.py\n+++ b/src/a.py\n@@ -1,1 +1,2 @@\n class Table:\n+    def label(self) -> str: return self.id\n",
+      "lang": "diff"
+    }
+  ]
+}

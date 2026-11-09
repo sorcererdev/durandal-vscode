@@ -1,9 +1,6 @@
 import { promises as fs } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
-
-// The folder, under a project, whose markdown files are plans (durandal.nvim's plans.dir
-// default; milestone 6 makes it a setting).
-export const PLANS_DIR = 'plans';
+import { dirname, join, resolve } from 'node:path';
+import { isPlanPath } from './plans/isPlan';
 
 // hasMarker reports whether dir has an entry named exactly `.olifant` that is a directory (or a
 // symlink to one). It reads the listing instead of stat-ing dir/.olifant: on a case-insensitive
@@ -58,10 +55,8 @@ export function rootOfConfig(configPath: string): string {
   return dirname(dirname(configPath));
 }
 
-// isPlanFile: a markdown file under its project's plans/ folder, at any depth.
+// isPlanFile: a markdown file under its project's plans/ folder, at any depth (the one plan
+// rule, isPlanPath; a file's language is not known here, so only a .md name counts).
 export async function isPlanFile(path: string): Promise<boolean> {
-  if (!path.endsWith('.md')) return false;
-  const root = await findRoot(path);
-  if (!root) return false;
-  return relative(root, resolve(path)).split(sep)[0] === PLANS_DIR;
+  return isPlanPath(resolve(path), await findRoot(path), '');
 }
