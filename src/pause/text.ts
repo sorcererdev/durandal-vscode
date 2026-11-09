@@ -9,7 +9,7 @@ export function given<T>(v: T | null | undefined): v is T {
 }
 
 // ZERO: marks, zero-width space to right-to-left mark (U+200B-U+200F), variation selectors
-const ZERO = /[\p{Mn}\p{Me}​-‏︀-️]/u;
+const ZERO = /[\p{Mn}\p{Me}\u200B-\u200F\uFE00-\uFE0F]/u;
 // WIDE: emoji presentation, Hangul Jamo, CJK radicals to symbols, kana to compatibility,
 // CJK extension A and ideographs, Yi, Hangul syllables, compatibility ideographs and forms,
 // full-width forms, supplementary ideographs

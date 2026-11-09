@@ -20,6 +20,13 @@ test('width: display cells, as nvim_strwidth', () => {
   assert.equal(width('●◆✓✗▶→…⠋·—'), 10);
 });
 
+test('width: marks, joiners and variation selectors take no cells', () => {
+  assert.equal(width('e\u0301'), 1);
+  assert.equal(width('a\u200Db'), 2);
+  assert.equal(width('\u26A1\uFE0F'), 2);
+  assert.equal(width('\uFE0F'), 0);
+});
+
 test('cut: fits the cells, ending in … when cut', () => {
   assert.equal(cut('abcdef', 6), 'abcdef');
   assert.equal(cut('abcdef', 4), 'abc…');
