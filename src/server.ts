@@ -208,8 +208,12 @@ export class Server {
         },
         // seen, then shown by the library as before (its status-bar progress)
         handleWorkDoneProgress: (token, params, next) => {
-          hooks.progress?.(token, params);
-          next(token, params);
+          // a hook that throws must not strand the library's own progress
+          try {
+            hooks.progress?.(token, params);
+          } finally {
+            next(token, params);
+          }
         },
       },
       errorHandler: {

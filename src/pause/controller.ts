@@ -12,7 +12,7 @@ import { conjureView, defaultSelected, entries, layout, noRow, PauseRow, rows, R
 import type { PausePanel } from './panel';
 import { Claim, ProgressClaims, ProgressValue } from './progress';
 import type { Reminders } from './reminder';
-import { progressWords, resumeParams, runningLabel, runningRound } from './resume';
+import { acted, progressWords, resumeParams, runningLabel, runningRound } from './resume';
 import { held, Pause, PauseStore } from './store';
 import type { FromPage, View } from './viewModel';
 
@@ -136,7 +136,7 @@ export class PauseController implements PauseSink {
       return;
     }
     const k = this.table().find(x => x.keys.includes(key));
-    await this.answer(key, k ? await k.act(key) : 'nothing to do here');
+    await this.answer(key, k ? await acted(() => k.act(key), key) : 'nothing to do here');
   }
 
   view(): View | undefined { return this.d.panel.isOpen() ? this.d.panel.last() : undefined; }

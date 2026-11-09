@@ -1,5 +1,6 @@
 import type { ConjureLanded, ConjureParams, ConjureResult, ConjureResume, Paused, ResumeChoice } from '../protocol';
 import type { PauseRow } from './model';
+import { errorMessage } from '../errors';
 import { given } from './text';
 
 // resume: what a pressed row sends (durandal.nvim conjure.lua :28-56), what the answer is
@@ -54,4 +55,13 @@ export function progressWords(message: string, label: string): { text: string; r
 export function runningLabel(row: PauseRow): string {
   const label = row.label.trim();
   return label !== '' ? label : row.choice;
+}
+
+// acted: a key's action, a throw or a rejection told as the footer's notice (never silent)
+export async function acted(act: () => Promise<true | string> | true | string, key: string): Promise<true | string> {
+  try {
+    return await act();
+  } catch (e) {
+    return `${key}: ${errorMessage(e)}`;
+  }
 }

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ConjureLanded, Paused, PausedOffer } from '../../src/protocol';
 import type { PauseRow } from '../../src/pause/model';
-import { classify, progressWords, resumeParams, runningLabel, runningRound, type Held } from '../../src/pause/resume';
+import { acted, classify, progressWords, resumeParams, runningLabel, runningRound, type Held } from '../../src/pause/resume';
 import { conjureNotice } from '../../src/tdd/landing';
 import { fixture } from '../pauseFixtures';
 
@@ -118,4 +118,11 @@ test('progressWords: without the run\'s label and \'round N of M · \'; the roun
 test('runningLabel: the row\'s label trimmed; its choice when the label is blank', () => {
   assert.equal(runningLabel({ label: '  keep round 3 ', detail: '', choice: 'stop', pressable: true }), 'keep round 3');
   assert.equal(runningLabel({ label: '  ', detail: '', choice: 'continue', pressable: true }), 'continue');
+});
+
+test('acted: a throw or a rejection is the footer notice, a result passes through', async () => {
+  assert.equal(await acted(() => true, 'd'), true);
+  assert.equal(await acted(async () => 'nothing to do here', 'd'), 'nothing to do here');
+  assert.equal(await acted(() => { throw new Error('no root'); }, 'd'), 'd: no root');
+  assert.equal(await acted(() => Promise.reject(new Error('cannot open')), 'd'), 'd: cannot open');
 });
