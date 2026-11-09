@@ -375,4 +375,99 @@ describe('the pause window (fake server)', () => {
     assert.ok(a.pause.view());
     await vscode.window.tabGroups.close(tab);
   });
+
+  it('the running view: the row\'s label, the server\'s words without the round prefix, the round', async () => {
+    const a = await running();
+    await conjureAt(3, paused());
+    // the e2e page reports a narrow width (28, 46 cells), where the status line cuts the words:
+    // once its own report has passed, a wide one
+    await new Promise(r => setTimeout(r, 500));
+    await a.pause.receive({ type: 'size', cols: 200 });
+    reply('olifant/conjure', { hold: true, title: 'conjuring', progress: ['round 4 of 9 · asking local (qwen3-coder:30b)…'] });
+    await a.pause.press('c');
+    const v = await until(() => {
+      const x = a.pause.view();
+      return x && x.status && plain(x.status).includes('asking local (qwen3-coder:30b)…') ? x : undefined;
+    }, 'the words in the running view');
+    assert.equal(v.state, 'running');
+    assert.ok(!plain(v.status!).includes('round 4 of 9 ·'), plain(v.status!));
+    assert.ok(plain(v.status!).startsWith('▶ continue'), plain(v.status!));
+    assert.ok(plain(v.title).includes('running'));
+    assert.ok(plain(v.title).includes('round 4'), plain(v.title));
+    assert.equal(v.legend, 'x cancel · q hide (it goes on) · ? help');
+    await a.pause.press('x');
+    await until(() => !a.pause.view(), 'cancelled');
+  });
+
+  it('the opening conjure claims nothing: its words stay the library\'s', async () => {
+    const a = await running();
+    const ed = await open(file(MAIN));
+    ed.selection = new vscode.Selection(3, 0, 3, 0);
+    reply('olifant/conjure', { hold: true, title: 'conjuring', progress: ['round 1 of 9 · asking local…'] });
+    const n = conjures().length;
+    void vscode.commands.executeCommand('durandal.conjure');
+    await until(() => conjures().length > n, 'the conjure sent');
+    await new Promise(r => setTimeout(r, 300));
+    assert.equal(a.pause.view(), undefined);
+    a.tdd.cancel();
+    await until(() => log().some(m => m.method === '$/cancelRequest' && m.params.id === conjures()[n].id), 'cancelled');
+  });
+
+  it('q during the run hides the window; the run goes on; its next pause opens the window again', async () => {
+    const a = await running();
+    await conjureAt(3, paused());
+    const next = paused('wired');
+    next.paused.token = 'conjure-2';
+    reply('olifant/conjure', { delay: 1.5, ...next });
+    const n = resumes().length;
+    await a.pause.press('c');
+    await a.pause.press('q');
+    assert.equal(a.pause.view(), undefined);
+    await until(() => a.pause.stored(uriOf(MAIN)), 'the next pause', 10_000);
+    await until(() => a.pause.view(), 'the window again');
+    assert.equal(resumes().length, n + 1);
+    assert.ok(!log().some(m => m.method === '$/cancelRequest' && m.params.id === conjures().at(-1)!.id));
+  });
+
+  it('q during the run, then a landing: it lands with no window', async () => {
+    const a = await running();
+    await conjureAt(3, paused());
+    reply('olifant/conjure', { delay: 1.5, ...landed() });
+    await a.pause.press('a');
+    await a.pause.press('q');
+    await until(() => vscode.workspace.textDocuments.find(x => x.uri.toString() === uriOf(MAIN))?.lineAt(2).text === 'line_3 = 33', 'the keep landed', 10_000);
+    assert.equal(a.pause.view(), undefined);
+    assert.ok(!a.pause.stored(uriOf(MAIN)));
+  });
+
+  it('a narrow panel: narrow texts, Tab flips, a wide one shows both (spec §4.3)', async () => {
+    const a = await running();
+    await conjureAt(3, paused());
+    // the page reports its own size once it loads; let that pass first
+    await new Promise(r => setTimeout(r, 500));
+    await a.pause.receive({ type: 'size', cols: 90 });
+    let v = a.pause.view()!;
+    assert.ok(v.narrow);
+    assert.ok(v.legend.startsWith('Tab diff'), v.legend);
+    assert.ok(plain(v.diff.title).endsWith(' · Tab back'), plain(v.diff.title));
+    await a.pause.press('Tab');
+    assert.ok(a.pause.view()!.flipped);
+    await a.pause.receive({ type: 'size', cols: 160 });
+    v = a.pause.view()!;
+    assert.ok(!v.narrow);
+    await a.pause.press('Tab');
+    assert.equal(a.pause.notices().at(-1), 'Tab: both panes are shown');
+  });
+
+  it('a server restart drops every pause and closes the window, silently', async () => {
+    const a = await running();
+    await conjureAt(3, paused());
+    const from = a.shown.length;
+    await vscode.commands.executeCommand('durandal.restartServer');
+    await until(() => a.server.state() === 'running', 'running again', 60_000);
+    assert.ok(!a.pause.stored(uriOf(MAIN)));
+    assert.equal(a.pause.view(), undefined);
+    assert.equal(a.pause.reminders(uriOf(MAIN)), 0);
+    assert.deepEqual(a.shown.slice(from).filter(s => s.text.includes('pause')), []);
+  });
 });

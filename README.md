@@ -88,8 +88,36 @@ The full output is in the results document, which opens beside the editor when s
 Ctrl/Cmd-click a `✗` line to go to it; `t` or `shift+t` there runs the last run again, and
 `s` works in the untitled test file a jump opens. A green run of a module's tests mutates its marked units
 again and says which survivors it killed. Runs, conjures and mutates show a Cancel button. A
-conjure that pauses (a decision model with a ladder) offers Continue and Stop; the steering
-window comes in a later release. There is no Test Explorer: olifant lists no tests.
+conjure that pauses opens the pause window (below). There is no Test Explorer: olifant lists no
+tests.
+
+## The pause window
+
+A conjure that pauses (a project with a decision model and a ladder) opens a tab beside the
+file. The left side says why it stopped, lists the rounds (the wire as entry 0, accepted steps
+between them) and the tests involved, and offers what can be done next, each on a key. The right
+side shows the diff the selected entry would land. One letter or a click answers; the tab then
+shows the run, and the next pause or the landing.
+
+| Key | What it does |
+|---|---|
+| `c` / `h` | Continue: more rounds with this model; `h` asks a sentence for the model first. |
+| `C` | Climb to the stronger model. |
+| `w` `W`, `t` `T`, `p` `P` | Wire a port, fix a test, add the method a port lacks (the first / the second). |
+| `a` | Accept the diff on the right: keep that round (red), keep the wire alone, or accept a proposal. |
+| `r` | Reject the proposal. |
+| `s` | Stop: nothing lands. |
+| `[` `]`, `0`-`9` | Previous / next entry, or jump to one; the diff follows. |
+| `j` `k`, PageUp PageDown | Scroll the diff. |
+| `Tab` | In a narrow tab, move between the situation and the diff. |
+| `d` | The details as a markdown document beside the tab. |
+| `x` | Cancel a run (nothing lands). |
+| `q`, `Esc` | Close the tab; the pause stays. |
+| `?` | The keys; any key closes them. |
+
+Closing the tab keeps the pause: `Cmd+Alt+D C` (`Ctrl+Alt+D C`) inside the unit reopens it, and a
+note at the end of the unit's last line says so. Editing the file drops the pause, as the server
+does; a conjure elsewhere in the file forgets it. A pause lives ten minutes on the server.
 
 ## Settings
 

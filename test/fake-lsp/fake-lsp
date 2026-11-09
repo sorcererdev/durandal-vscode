@@ -11,7 +11,8 @@
 # `test/crash` notification, as a crashed server would. Other requests get
 # the canned answer in $FAKE_LSP_REPLIES/<method>.json (or null; an answer
 # {"lsp_error": "…"} is sent as a RequestFailed error; {"hold": true, "progress":
-# [words…]} reports that progress and answers only a $/cancelRequest, as cancelled);
+# [words…]} announces its progress (window/workDoneProgress/create), reports it and answers
+# only a $/cancelRequest, as cancelled, ending the progress);
 # {"notify": [{method, params}], …} sends those notifications first ("$uri" the
 # request's document), then the rest as the answer; one with "request": true is sent as a
 # server request (id "srv-N"; "$version" the document's last version, "$stale" one before).
@@ -92,10 +93,11 @@ while True:
         reply = os.path.join(os.environ.get("FAKE_LSP_REPLIES", "/nonexistent"), "codeAction_resolve.json")
         send({"jsonrpc": "2.0", "id": msg["id"], "result": json.load(open(reply)) if os.path.exists(reply) else None})
     elif method == "$/cancelRequest":
-        # a held request the client gave up on: cancelled, as olifant lsp answers it
+        # a held request the client gave up on: its progress ends, and it is cancelled, as olifant lsp answers it
         rid = msg["params"]["id"]
         if rid in held:
             held.remove(rid)
+            send({"jsonrpc": "2.0", "method": "$/progress", "params": {"token": "olifant-hold-%s" % rid, "value": {"kind": "end"}}})
             send({"jsonrpc": "2.0", "id": rid, "error": {"code": -32800, "message": "cancelled"}})
     elif "id" in msg:
         # a canned answer per method, from $FAKE_LSP_REPLIES/<method with / as _>.json
@@ -105,8 +107,10 @@ while True:
             # a slow answer (a model fill): the rest of it, after the pause
             time.sleep(result.pop("delay"))
         if isinstance(result, dict) and result.get("hold"):
-            # work that goes on: its progress (titled as the answer says), and no answer until cancelled
+            # work that goes on: announced (window/workDoneProgress/create, as olifant lsp's
+            # library does), its progress titled as the answer says, and no answer until cancelled
             token = "olifant-hold-%s" % msg["id"]
+            send({"jsonrpc": "2.0", "id": "create-%s" % msg["id"], "method": "window/workDoneProgress/create", "params": {"token": token}})
             send({"jsonrpc": "2.0", "method": "$/progress", "params": {"token": token, "value": {"kind": "begin", "title": result.get("title", "conjuring")}}})
             for words in result.get("progress", []):
                 send({"jsonrpc": "2.0", "method": "$/progress", "params": {"token": token, "value": {"kind": "report", "message": words}}})

@@ -1,7 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { conjureLegend, conjureView, entries, layout } from '../../src/pause/model';
+import { width } from '../../src/pause/text';
+import { plain } from '../../src/pause/viewModel';
 import type { View } from '../../src/pause/viewModel';
 import { esc, html, lineHtml } from '../../webview/render';
+import { fixture } from '../pauseFixtures';
 
 // a hand-made view: two entries (the second selected, two lines long), a keyed row, a keyless
 // unpressable row, a keep row; a diff with a `<` in it
@@ -135,4 +141,39 @@ test('no inline style anywhere (the CSP allows none)', () => {
     const out = html(v, 'a notice');
     assert.ok(!/style=/i.test(out) && !/<style/i.test(out), out);
   }
+});
+
+// the page's chrome in cells (webview/pause.css): main's 1ch padding on each side, the 2ch gap,
+// the diff pane's 2ch padding and its 1px border (at most a cell)
+const CHROME = 1 + 1 + 2 + 2 + 1;
+// compiled to out/test/unit: the repository is three folders up
+const css = readFileSync(join(__dirname, '..', '..', '..', 'webview', 'pause.css'), 'utf8');
+// a rule's body: the block after `\n<selector> {` (the selectors are written one per rule)
+const rule = (selector: string): string => css.split(`\n${selector} {`)[1]?.split('}')[0] ?? '';
+
+test('the wide page fits its chrome: the left pane, the chrome and the diff title fit the cols the page reports', () => {
+  for (const name of ['plain', 'wired', 'steps', 'check'] as const) {
+    for (let cols = 110; cols <= 200; cols++) {
+      const p = fixture(name);
+      for (let selected = 0; selected < entries(p).length; selected++) {
+        const v = conjureView(p, { cols, selected, flipped: false, help: false, chord: 'Cmd+Alt+D C' });
+        const left = Math.max(...[v.title, ...v.lines, ...v.rows.flatMap(r => r.lines)].map(l => width(plain(l))));
+        assert.ok(left <= v.width, `${name} at ${cols}: a left line of ${left} cells in a ${v.width}-cell pane`);
+        const used = v.width + CHROME + width(plain(v.diff.title));
+        assert.ok(used <= cols, `${name} at ${cols}, entry ${selected}: ${used} cells`);
+      }
+    }
+  }
+});
+
+test('the footer wraps in the left column and never widens it: the wide legend is longer than the pane', () => {
+  // the premise: the model leaves the wide legend whole but for its tail ("the page wraps it")
+  const legend = conjureLegend({ narrow: false, proposal: false, running: false, wire: true });
+  const short = legend.slice(0, legend.indexOf(' · q close') + ' · q close'.length);
+  assert.ok(width(short) > layout(200).text, `${width(short)} cells`);
+  // a max-content column sizes to its widest item: the footer gives it no width, then fills it
+  const foot = rule('#foot');
+  assert.match(foot, /(?:^|\s)width: 0;/);
+  assert.match(foot, /(?:^|\s)min-width: 100%;/);
+  assert.match(foot, /(?:^|\s)white-space: normal;/);
 });

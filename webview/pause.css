@@ -41,7 +41,16 @@ main {
 
 #sit { grid-area: sit; overflow: auto; }
 #off { grid-area: off; padding-top: 0.5em; }
-#foot { grid-area: foot; padding-top: 0.5em; color: var(--vscode-descriptionForeground); }
+/* the legend is longer than the left pane (the model leaves it whole): it wraps there and never
+   widens the max-content column, which would narrow the diff below its laid-out width */
+#foot {
+  grid-area: foot;
+  padding-top: 0.5em;
+  color: var(--vscode-descriptionForeground);
+  white-space: normal;
+  width: 0;
+  min-width: 100%;
+}
 #foot.notice { color: var(--vscode-editorWarning-foreground); }
 #diff {
   grid-area: diff;

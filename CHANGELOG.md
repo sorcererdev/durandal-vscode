@@ -2,9 +2,12 @@
 
 ## Unreleased
 
+- The pause window: a paused conjure opens a tab beside the file with the situation, the rounds,
+  the offers on their keys and the diff they would land; resumes run in it with the server's
+  words, `d` opens the details as markdown, and the pause survives the tab (milestone 5a).
 - The TDD loop: test here, file and all with a results document and diagnostics, jump, stub,
-  conjure (a pause offers Continue / Stop), mutate with the survivors picker and waive, and the
-  silent re-mutate after a green run (milestone 4).
+  conjure, mutate with the survivors picker and waive, and the silent re-mutate after a green
+  run (milestone 4).
 - Follow-ups, ghost blocks and recognitions pushed or answered by the server: an end-of-line ⚡,
   Tab to review and apply with the model, Esc to dismiss, recognitions' choose flow and feedback,
   and the ⚡ menu's recognition (milestone 3b).

@@ -161,6 +161,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     flights.cancelAll('stopped');
     ctl.stopped();
   };
+  hooks.progress = (token, v) => ctl.progress(token, v);
 
   // health: the binary, the server, the projects, and olifant doctor for the active file's project
   const health = async (): Promise<string[]> => {

@@ -6,6 +6,7 @@ import {
 } from 'vscode-languageclient/node';
 import { applyServerEdit } from './applyEdit';
 import { checkBinary, Gate, ServerState, STOPPED } from './health';
+import type { ProgressValue } from './pause/progress';
 import { DoctorResult, InlineItem, Olifant, SERVER_COMMANDS, Suggestion } from './protocol';
 import { realRoot } from './root';
 import { initOptions, settingsFrom } from './settings';
@@ -35,6 +36,9 @@ export interface ClientHooks {
   };
   // olifant/suggestion: what follows the last edit, pushed (M3 spec §3.3)
   suggestion?(s: Suggestion): void;
+  // the server's work-done progress, every begin, report and end the library shows (M5 spec
+  // §3.6): the pause window claims a resume's
+  progress?(token: string | number, v: ProgressValue): void;
   // the server stopped (a stop, a restart, or its client closed): nothing it said stands
   stopped?(): void;
 }
@@ -201,6 +205,11 @@ export class Server {
           if (r && !r.command && item.command) r.command = item.command;
           if (r && hooks.suggest) hooks.suggest.resolved(item, r);
           return r;
+        },
+        // seen, then shown by the library as before (its status-bar progress)
+        handleWorkDoneProgress: (token, params, next) => {
+          hooks.progress?.(token, params);
+          next(token, params);
         },
       },
       errorHandler: {

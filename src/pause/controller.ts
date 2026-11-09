@@ -10,8 +10,9 @@ import type { VirtualDocs } from '../virtualDocs';
 import { conjureDetails } from './details';
 import { conjureView, defaultSelected, entries, layout, noRow, PauseRow, rows, Running } from './model';
 import type { PausePanel } from './panel';
+import { Claim, ProgressClaims, ProgressValue } from './progress';
 import type { Reminders } from './reminder';
-import { resumeParams, runningLabel, runningRound } from './resume';
+import { progressWords, resumeParams, runningLabel, runningRound } from './resume';
 import { held, Pause, PauseStore } from './store';
 import type { FromPage, View } from './viewModel';
 
@@ -28,7 +29,7 @@ export interface ControllerDeps {
 // until the answer comes; hooks are its identity (Conjure hands them back with its answer)
 interface Run {
   uri: string; pause: Pause; row: PauseRow; started: number; timer: NodeJS.Timeout; hooks: ResumeHooks;
-  flight?: Flight<vscode.CancellationToken>; message?: string; round?: number;
+  flight?: Flight<vscode.CancellationToken>; message?: string; round?: number; claim?: Claim;
 }
 
 const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
@@ -44,6 +45,7 @@ export class PauseController implements PauseSink {
   private help = false;
   private flipped = false;
   private run: Run | undefined;
+  private readonly claims = new ProgressClaims();
   private readonly said: string[] = [];
 
   constructor(private readonly d: ControllerDeps) {
@@ -141,8 +143,14 @@ export class PauseController implements PauseSink {
   source(): SourceKind | undefined { return this.d.panel.isOpen() && this.shownUri ? 'conjure' : undefined; }
   notices(): string[] { return [...this.said]; }
 
+  // progress: the server's work-done progress (hooks.progress); a resume's words feed its run
+  progress(token: string | number, v: ProgressValue): void {
+    this.claims.hear(token, v);
+  }
+
   // stopped: the server stopped; nothing it said stands
   stopped(): void {
+    this.claims.clear();
     this.endRun();
     this.store.dropAll();
     this.hide();
@@ -209,8 +217,12 @@ export class PauseController implements PauseSink {
     if (why) void this.d.say('info', why);
   }
 
+  // every path that ends a run comes here (its answer, its end, a stop, dispose): its claim goes with it
   private endRun(): void {
-    if (this.run) clearInterval(this.run.timer);
+    if (this.run) {
+      clearInterval(this.run.timer);
+      this.run.claim?.release();
+    }
     this.run = undefined;
   }
 
@@ -268,6 +280,15 @@ export class PauseController implements PauseSink {
     // the running view ticks only while it is the one shown
     const timer = setInterval(() => { if (this.shownUri === p.uri) this.paint(); }, 1000);
     this.run = { uri: p.uri, pause: p, row, started: Date.now(), timer, hooks };
+    const run = this.run;
+    // this run's words; drawn, as the timer's tick, only while its file is the one shown
+    run.claim = this.claims.claim('conjuring', m => {
+      if (this.run !== run) return;
+      const w = progressWords(m, runningLabel(row));
+      run.message = w.text;
+      if (w.round !== undefined) run.round = w.round;
+      if (this.shownUri === run.uri) this.paint();
+    });
     this.help = false;
     this.paint('row');
     void this.d.conjure.resume(params, hooks);
