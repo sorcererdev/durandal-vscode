@@ -16,15 +16,17 @@ export interface ConjureDeps {
 
 // PauseSink: where a pause goes (the pause controller, M5 spec §3)
 export interface PauseSink {
-  // a pause answered, to an opening conjure or a resume (params: the request, its position the original)
-  shown(params: ConjureParams, p: Paused): void;
-  // a resume ended without a pause (a landing, an error, a cancel): the running view closes
-  ended(): void;
+  // a pause answered, to an opening conjure or a resume (params: the request, its position the
+  // original; hooks: the resume's, undefined for an opening conjure)
+  shown(params: ConjureParams, p: Paused, hooks?: ResumeHooks): void;
+  // a resume ended without a pause (a landing, an error, a cancel): hooks name which one
+  ended(hooks: ResumeHooks): void;
   // a conjure is about to go from line of uri: true when it reopened the held pause instead
   atRun(uri: string, line: number, selection: boolean): boolean;
 }
 
-// ResumeHooks: a resume's flight, for the window's x
+// ResumeHooks: a resume's flight, for the window's x; the object is the resume's identity, handed
+// back to the sink with its answer
 export interface ResumeHooks { started(f: Flight<vscode.CancellationToken>): void }
 
 // Conjure: a body (or the selected lines) filled until its tests pass (durandal.nvim conjure.lua,
@@ -68,7 +70,7 @@ export class Conjure {
   private async ask(params: ConjureParams, hooks?: ResumeHooks): Promise<void> {
     if (!this.d.server.client()) {
       void this.d.say('error', NOT_RUNNING);
-      if (hooks) this.sink?.ended();
+      if (hooks) this.sink?.ended(hooks);
       return;
     }
     const f = this.d.flights.start('conjure');
@@ -81,12 +83,12 @@ export class Conjure {
       o = await withCancel('Durandal: conjuring…', f, send);
     }
     if (o.kind === 'cancelled') {
-      if (hooks) this.sink?.ended();
+      if (hooks) this.sink?.ended(hooks);
       if (o.why === 'user' || o.why === 'server') void this.d.say('info', 'conjure cancelled · nothing landed');
       return;
     }
     if (o.kind === 'error') {
-      if (hooks) this.sink?.ended();
+      if (hooks) this.sink?.ended(hooks);
       void this.d.say('error', o.message);
       return;
     }
@@ -94,10 +96,10 @@ export class Conjure {
     // ConjureLanded is open (an index signature), so `in` does not narrow: read it through the cast.
     const p = (o.value as { paused?: unknown }).paused;
     if (p && typeof p === 'object') {
-      this.sink?.shown(params, p as Paused);
+      this.sink?.shown(params, p as Paused, hooks);
       return;
     }
-    if (hooks) this.sink?.ended();
+    if (hooks) this.sink?.ended(hooks);
     await this.land(params, o.value as ConjureLanded);
   }
 

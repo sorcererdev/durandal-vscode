@@ -3,7 +3,7 @@ import type { ConjureParams, Paused } from '../protocol';
 import { findRoot } from '../root';
 import { NOT_RUNNING, Say, Server } from '../server';
 import { chordLabel } from '../settings';
-import type { Conjure, PauseSink } from '../tdd/conjure';
+import type { Conjure, PauseSink, ResumeHooks } from '../tdd/conjure';
 import type { Flight } from '../tdd/flights';
 import type { Ui } from '../uiTypes';
 import type { VirtualDocs } from '../virtualDocs';
@@ -24,8 +24,12 @@ export interface ControllerDeps {
   server: Server; say: Say; ui: () => Ui; docs: VirtualDocs; panel: PausePanel; reminders: Reminders; conjure: Conjure; platform: string;
 }
 
-// a run: a resume in the air; pause is the one it took, drawn until the answer comes
-interface Run { uri: string; pause: Pause; row: PauseRow; started: number; timer: NodeJS.Timeout; flight?: Flight<vscode.CancellationToken>; message?: string; round?: number }
+// a run: a resume in the air, one at a time across documents; pause is the one it took, drawn
+// until the answer comes; hooks are its identity (Conjure hands them back with its answer)
+interface Run {
+  uri: string; pause: Pause; row: PauseRow; started: number; timer: NodeJS.Timeout; hooks: ResumeHooks;
+  flight?: Flight<vscode.CancellationToken>; message?: string; round?: number;
+}
 
 const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 const keyName = (k: string) => (k === 'Escape' ? 'Esc' : k);
@@ -63,9 +67,10 @@ export class PauseController implements PauseSink {
 
   // --- the sink (tdd/conjure.ts)
 
-  shown(params: ConjureParams, p: Paused): void {
+  shown(params: ConjureParams, p: Paused, hooks?: ResumeHooks): void {
     const uri = params.textDocument.uri;
-    const after = this.run?.uri === uri;
+    // only this run's own answer ends it; a stale one's pause is held all the same
+    const after = hooks !== undefined && this.run?.hooks === hooks;
     if (after) this.endRun();
     const doc = docOf(uri);
     const h = held(uri, params.position, p, doc?.version ?? 0, doc?.lineCount ?? p.lines.last);
@@ -77,13 +82,22 @@ export class PauseController implements PauseSink {
     this.paint(after ? 'entry' : undefined, true);
   }
 
-  ended(): void {
-    const uri = this.run?.uri;
+  ended(hooks: ResumeHooks): void {
+    // a stale run's end (stopped, then answered) never ends the run going now
+    if (this.run?.hooks !== hooks) return;
+    const uri = this.run.uri;
     this.endRun();
     if (uri !== undefined && this.shownUri === uri) this.hide();
   }
 
   atRun(uri: string, line: number, selection: boolean): boolean {
+    // the file's resume is in the air (its pause taken): the running view again, no second request
+    if (this.run?.uri === uri) {
+      this.shownUri = uri;
+      this.help = false;
+      this.paint(undefined, true);
+      return true;
+    }
     const p = this.store.get(uri);
     if (!p) return false;
     if (!selection && line >= p.first && line <= p.last) {
@@ -186,6 +200,7 @@ export class PauseController implements PauseSink {
   closed(): void {
     this.shownUri = undefined;
     this.help = false;
+    this.flipped = false;
   }
 
   private dropped(p: Pause, why: string | undefined): void {
@@ -223,7 +238,8 @@ export class PauseController implements PauseSink {
   }
 
   private rowKey(k: string): true | string | Promise<true | string> {
-    if (this.run && this.run.uri === this.shownUri) return 'a run is going on · x cancels it';
+    // one run at a time, whichever file it is in
+    if (this.run) return 'a run is going on · x cancels it';
     const p = this.shownUri ? this.store.get(this.shownUri) : undefined;
     if (!p) return 'nothing to do here';
     const rs = this.rowsOf(p);
@@ -242,14 +258,19 @@ export class PauseController implements PauseSink {
       if (!hint) return true;
       // dropped or replaced while the sentence was asked: nothing to send
       if (this.store.get(p.uri) !== p) return true;
+      // a run began while the sentence was asked: one at a time
+      if (this.run) return 'a run is going on · x cancels it';
     }
     const params = resumeParams({ uri: p.uri, position: p.position, token: p.token }, row, hint);
     this.store.take(p.uri);
     this.d.reminders.clear(p.uri);
-    this.run = { uri: p.uri, pause: p, row, started: Date.now(), timer: setInterval(() => this.paint(), 1000) };
+    const hooks: ResumeHooks = { started: f => { if (this.run?.hooks === hooks) this.run.flight = f; } };
+    // the running view ticks only while it is the one shown
+    const timer = setInterval(() => { if (this.shownUri === p.uri) this.paint(); }, 1000);
+    this.run = { uri: p.uri, pause: p, row, started: Date.now(), timer, hooks };
     this.help = false;
     this.paint('row');
-    void this.d.conjure.resume(params, { started: f => { if (this.run?.uri === p.uri) this.run.flight = f; } });
+    void this.d.conjure.resume(params, hooks);
     return true;
   }
 
@@ -295,7 +316,8 @@ export class PauseController implements PauseSink {
   }
 
   private cancel(): true | string {
-    const f = this.run && this.run.uri === this.shownUri ? this.run.flight : undefined;
+    // the run in the air, whichever file it is in
+    const f = this.run?.flight;
     if (!f) return 'nothing is running';
     f.cancel('user');
     return true;

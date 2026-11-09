@@ -11,6 +11,8 @@ import { api, file, log, open, reply, revert, running, settle, tabsUnder, until,
 // the resumes they send, the keys, the drops. The fake answers each method with one reply, so a
 // flow sets the next reply before the key that sends it.
 const MAIN = 'one/main.py';
+// a second file, for one run at a time across documents
+const OTHER = 'one/other.py';
 const MAIN_TEXT = Array.from({ length: 30 }, (_, i) => `line_${i + 1} = ${i + 1}`).join('\n') + '\n';
 const uriOf = (rel: string) => file(rel).toString();
 const abs = (rel: string) => join(ws(), rel);
@@ -33,10 +35,10 @@ const landed = (o: Record<string, unknown> = {}) => ({
   tests: tests(), rounds: 3, rungs: ['local'], stopped: true, ...o,
 });
 
-// conjureAt: a conjure from line (0-based) of main.py, answered with reply; waits for the panel
-async function conjureAt(line: number, answer: unknown): Promise<void> {
+// conjureAt: a conjure from line (0-based) of main.py (or rel), answered with reply; waits for the panel
+async function conjureAt(line: number, answer: unknown, rel = MAIN): Promise<void> {
   const a = await api();
-  const ed = await open(file(MAIN));
+  const ed = await open(file(rel));
   ed.selection = new vscode.Selection(line, 0, line, 0);
   reply('olifant/conjure', answer);
   const n = conjures().length;
@@ -44,7 +46,7 @@ async function conjureAt(line: number, answer: unknown): Promise<void> {
   await until(() => conjures().length > n, 'the conjure sent');
   await until(() => a.pause.view(), 'the pause window');
   // the previous run's running view can still be up: wait for this pause to be held
-  await until(() => a.pause.stored(uriOf(MAIN)), 'the pause held');
+  await until(() => a.pause.stored(uriOf(rel)), 'the pause held');
 }
 
 // pressed: a key, then the resume it sent
@@ -60,11 +62,13 @@ describe('the pause window (fake server)', () => {
   before(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllGroups');
     await settle(MAIN, MAIN_TEXT);
+    await settle(OTHER, MAIN_TEXT);
   });
 
   after(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     await settle(MAIN, 'x = 1\n');
+    await settle(OTHER, null);
   });
 
   afterEach(async () => {
@@ -72,15 +76,22 @@ describe('the pause window (fake server)', () => {
     a.setUi(undefined);
     if (a.pause.view()) await a.pause.press('q');
     // q keeps the pause; an edit drops it, else the next test's conjure reopens it
-    if (a.pause.stored(uriOf(MAIN))) {
-      const ed = await open(file(MAIN));
+    for (const rel of [MAIN, OTHER]) {
+      if (!a.pause.stored(uriOf(rel))) continue;
+      const ed = await open(file(rel));
       await ed.edit(b => b.insert(new vscode.Position(0, 0), '#'));
-      await until(() => !a.pause.stored(uriOf(MAIN)), 'the held pause dropped');
+      await until(() => !a.pause.stored(uriOf(rel)), 'the held pause dropped');
     }
     reply('olifant/conjure', null);
-    const d = vscode.workspace.textDocuments.find(x => x.uri.toString() === uriOf(MAIN));
-    if (d?.isDirty) await revert(d);
-    await settle(MAIN, MAIN_TEXT);
+    for (const rel of [MAIN, OTHER]) {
+      const d = vscode.workspace.textDocuments.find(x => x.uri.toString() === uriOf(rel));
+      if (d?.isDirty) await revert(d);
+      await settle(rel, MAIN_TEXT);
+    }
+    // other.py's editor narrows the panel: closed, so the next test lays out at full width
+    const others = vscode.window.tabGroups.all.flatMap(g => g.tabs)
+      .filter(t => t.input instanceof vscode.TabInputText && t.input.uri.toString() === uriOf(OTHER));
+    if (others.length > 0) await vscode.window.tabGroups.close(others);
   });
 
   it('a paused answer opens the window beside the file, holds the pause, places one reminder', async () => {
@@ -264,19 +275,76 @@ describe('the pause window (fake server)', () => {
     await conjureAt(3, paused());
     reply('olifant/conjure', { hold: true, title: 'conjuring', progress: ['round 4 of 9 · asking local…'] });
     const n = resumes().length;
-    await a.pause.press('c');
-    await a.pause.press('c');
+    // both presses together, as a double tap
+    await Promise.all([a.pause.press('c'), a.pause.press('c')]);
     await until(() => resumes().length > n, 'the resume');
     assert.equal(a.pause.view()!.state, 'running');
     assert.ok(a.pause.notices().includes('c: a run is going on · x cancels it'));
     await new Promise(r => setTimeout(r, 300));
     assert.equal(resumes().length, n + 1);
     const id = conjures().at(-1)!.id;
+    // hidden, a conjure in the unit's file brings the running view back and sends nothing
+    await a.pause.press('q');
+    assert.equal(a.pause.view(), undefined);
+    const c = conjures().length;
+    const ed = await open(file(MAIN));
+    ed.selection = new vscode.Selection(4, 0, 4, 0);
+    await vscode.commands.executeCommand('durandal.conjure');
+    await until(() => a.pause.view(), 'the running view again');
+    assert.equal(a.pause.view()!.state, 'running');
+    assert.equal(conjures().length, c);
     await a.pause.press('x');
     await until(() => a.shown.slice(from).some(s => s.text === 'conjure cancelled · nothing landed'), 'the cancel said');
     assert.ok(log().some(m => m.method === '$/cancelRequest' && m.params.id === id));
     assert.equal(a.pause.view(), undefined);
     assert.ok(!a.pause.stored(uriOf(MAIN)));
+  });
+
+  it('one run at a time: a pause in another file waits for it; x cancels the run wherever it is', async () => {
+    const a = await running();
+    const from = a.shown.length;
+    await conjureAt(3, paused());
+    reply('olifant/conjure', { hold: true, title: 'conjuring', progress: ['round 4 of 9 · asking local…'] });
+    const n = resumes().length;
+    await a.pause.press('c');
+    await until(() => resumes().length > n, 'the resume in main.py');
+    const id = conjures().at(-1)!.id;
+    await a.pause.press('q');
+    // the run in main.py goes on; a conjure in other.py pauses
+    const other = paused();
+    other.paused.token = 'conjure-7';
+    other.paused.file = abs(OTHER);
+    await conjureAt(3, other, OTHER);
+    assert.ok(a.pause.stored(uriOf(OTHER)));
+    await a.pause.press('c');
+    assert.equal(a.pause.notices().at(-1), 'c: a run is going on · x cancels it');
+    await new Promise(r => setTimeout(r, 300));
+    assert.equal(resumes().length, n + 1);
+    // x from other.py's window cancels main.py's run; other.py's pause, reminder and window stay
+    await a.pause.press('x');
+    await until(() => a.shown.slice(from).some(s => s.text === 'conjure cancelled · nothing landed'), 'the cancel said');
+    assert.ok(log().some(m => m.method === '$/cancelRequest' && m.params.id === id));
+    assert.ok(a.pause.stored(uriOf(OTHER)));
+    assert.equal(a.pause.reminders(uriOf(OTHER)), 1);
+    assert.equal(a.pause.view()!.state, 'paused');
+    reply('olifant/conjure', landed({ file: abs(OTHER), edits: null, summary: 'nothing landed' }));
+    assert.deepEqual(await pressed('s'), { token: 'conjure-7', choice: 'stop', land: false });
+  });
+
+  it('an edit while the hint is asked drops the pause; the sentence then sends nothing', async () => {
+    const a = await running();
+    const ui = new FakeUi();
+    a.setUi(ui);
+    await conjureAt(3, paused());
+    const n = resumes().length;
+    void a.pause.press('h');
+    await until(() => ui.texts.length === 1, 'the hint asked');
+    const ed = await open(file(MAIN));
+    await ed.edit(b => b.insert(new vscode.Position(0, 0), '# '));
+    await until(() => !a.pause.stored(uriOf(MAIN)), 'the pause dropped');
+    ui.texts[0].finish('use the repository');
+    await new Promise(r => setTimeout(r, 300));
+    assert.equal(resumes().length, n);
   });
 
   it('a run that pauses again redraws the window in place', async () => {
