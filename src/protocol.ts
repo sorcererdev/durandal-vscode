@@ -110,15 +110,56 @@ export interface TestsRunResult {
 export interface TestsFileResult { file: string; kind: 'test' | 'module'; exists: boolean }
 export interface StubParams extends At { survivor?: Survivor }
 export interface StubResult { file: string; line: number; name: string; edits: WorkspaceEdit }
-export interface ConjureResume { token: string; choice: string; arg?: unknown; land?: boolean; hint?: string }
+// a resume's choice: exactly what resumeOf accepts (Lsp.hs :1077)
+export type ResumeChoice = 'continue' | 'climb' | 'stop' | 'reconjure' | 'accept' | 'reject' | 'wire' | 'port';
+export interface ConjureResume { token: string; choice: ResumeChoice; arg?: string; land?: boolean; hint?: string }
 export interface ConjureParams extends At { selection?: { start: number; end: number }; resume?: ConjureResume }
-// landed: edits null when nothing changed; tests the after-run (scope "file")
+// landed: edits null when nothing changed; tests the after-run (scope "file"); stopped always sent
 export interface ConjureLanded extends Open {
   file: string; unit: string; edits: WorkspaceEdit | null; summary: string; green: boolean;
-  tests: TestsRunResult; rounds: number; rungs: string[]; stopped?: boolean;
+  tests: TestsRunResult; rounds: number; rungs: string[]; stopped: boolean;
 }
-// paused: only what M4's warning reads; the full shape is M5's
-export interface ConjurePaused { paused: Open & { token: string; diagnosis: string } }
+// The pause (ConjureNext.hs pausedJson :865-955). lines 1-based inclusive; file absolute; a
+// round's, wire's or step's files root-relative. A thin answer may carry only token, lines and
+// offers; nullable fields arrive as null. Read every field through given() (src/pause/text.ts).
+export interface PausedFile { file: string; diff: string }
+export interface PausedFailed {
+  test: string; message: string; summary?: string | null; at?: number | string | null; assertion?: string | null;
+  got?: string | null; expected?: string | null; output?: string | null;
+}
+export interface PausedDecide { choice: string; confidence: number; probabilities: Record<string, number> }
+export interface PausedRound {
+  round: number; rung: string; attempt?: string | null; line: string; verdict: 'green' | 'red';
+  failing: string[]; failed: PausedFailed[]; passed: string[]; check?: string | null;
+  decide?: PausedDecide | null; diff: string | null; files: PausedFile[];
+}
+// flipped: the round the test's status changed in (0 = before round 1)
+export interface PausedTest {
+  test: string; source?: string | null; status: 'failing' | 'passing'; flipped?: number | null; assertion?: string | null; note?: string | null;
+}
+export interface PausedWired { param: string; port: string; test?: string | null; files: PausedFile[] }
+// an offer: choice `proposal` is an entry, not a resume verb; land and hint only on stop / continue
+export interface PausedOffer { choice: string; arg?: string | null; label: string; detail: string; land?: boolean | null; hint?: boolean | null }
+export interface PausedStep { after: number; kind?: 'wire' | 'test' | 'hint' | 'port' | null; text: string; files: PausedFile[]; test?: string | null }
+export interface PausedProblem { file: string; line?: number | null; message: string }
+export type PausedFailure =
+  | { round: number; kind: 'check'; tool: string; problems: PausedProblem[] }
+  | { round: number; kind: 'tests'; tests: string[] };
+export interface PausedProposal {
+  file: string; test: string; before?: string | null; after?: string | null; diff: string; refused?: string | null;
+  step?: string | null; kind?: 'test' | 'port' | null; files?: string[] | null;
+}
+export interface PausedTitle { unit?: string | null; round?: number | null; of?: number | null; rung?: string | null; model?: string | null; seconds?: number | null }
+export interface Paused {
+  token: string; lines: { first: number; last: number }; offers: PausedOffer[];
+  file?: string; round?: number; rung?: string; summary?: string; why?: string; title?: PausedTitle;
+  diagnosis?: string[]; trigger?: string; rounds?: PausedRound[]; tests?: PausedTest[];
+  unit?: { header: string; ports: string[] }; landing?: { diff: string }; wired?: PausedWired[];
+  expires?: number; outcome?: string | null; steps?: PausedStep[]; failure?: PausedFailure | null;
+  checker?: string | null; snippet?: { file: string; line: number; ghost: unknown; body: string } | null;
+  proposal?: PausedProposal | null;
+}
+export interface ConjurePaused { paused: Paused }
 export type ConjureResult = ConjureLanded | ConjurePaused;
 export interface MutateSurvivor extends Survivor { dim: boolean }
 export interface MutateResult {
@@ -129,7 +170,8 @@ export interface WaiveParams extends Doc { survivor: Survivor; reason: string }
 export interface WaiveResult { waived: true }
 
 // --- plans (milestones 5 and 6)
-export interface ErrandParams extends Row { resume?: unknown; text?: string }
+// plans/do: `resume` is a review id (reopen), text what the do should change
+export interface ErrandParams extends Row { resume?: string; text?: string }
 export interface ErrandResult extends Open { id?: string; facts?: unknown; blocks?: unknown[]; review?: string }
 export interface ReconcileParams extends Doc { forced: boolean }
 export interface AnchorResult extends Open { file?: string; line?: number; unit?: string; fingerprint?: string }
@@ -137,7 +179,37 @@ export interface StepResult extends Open { edits?: WorkspaceEdit; facts?: unknow
 export type ErrandOneParams = Doc & ({ id: string } | { row: number });
 export interface ErrandsParams extends Doc { row: number }
 export interface ReviewParams extends Doc { id: string }
-export interface ReviewChooseParams extends Doc { id: string; choice: string; [more: string]: unknown }
+// --- reviews (milestone 5): Review.hs :565-619, ReviewReadings.hs :249-338, Lsp.hs :694-737, :2040-2236.
+// row fields are 0-based plan lines.
+export interface ReviewEntryRef { id: string; kind: string; row: number | null }
+export interface ReviewListItem { id: string; kind: 'do' | 'reconcile'; row?: number | null; step?: string; status?: string; entries?: ReviewEntryRef[] }
+export interface ReviewsResult { reviews: ReviewListItem[] }
+// an offer: key is the letter (a reading's place offers carry digits and the open step's row)
+export interface ReviewOffer { choice: string; key: string; label: string; detail: string; step?: number | null }
+export interface DetailsSection { title: string; text: string; lang?: string | null }
+export interface DoTitle { verb?: string; step?: number | null; unit?: string | null; badge?: string | null; model?: string | null; seconds?: number | null; cost?: number | null }
+export interface DoReview {
+  id: string; kind: 'do' | 'errand'; plan?: string; row?: number | null; title: DoTitle; summary: string; step?: string;
+  said: string[]; tests?: { ran: boolean; passed: number; failed: number; list: { test: string; status: string }[] } | null;
+  denials?: unknown[]; denied?: string | string[] | null;
+  landing: { diff: string; files: { file: string; status: 'modified' | 'added' | 'deleted'; diff: string }[]; edit?: WorkspaceEdit | null };
+  offers: ReviewOffer[]; details: DetailsSection[];
+}
+export interface ReadingEntry {
+  id: string; kind: string; row: number | null; step?: number | null; unit?: { path: string; unit: string } | null;
+  summary: string; offers: ReviewOffer[]; landing: { edit: WorkspaceEdit | null; diff: string; facts?: number };
+}
+export interface ReconcileReview {
+  id: 'reconcile'; kind: 'reconcile'; plan?: string; title: { verb?: string; count?: number }; summary: string;
+  entries: ReadingEntry[]; details: DetailsSection[];
+}
+export type Review = DoReview | ReconcileReview;
+// facts: plan lines the client writes (nvim plans.apply_facts); Task 7 pins the shapes the server sends
+export type Fact = { row: number; text: string } | { after: number; lines: string[] } | { from: number; to: number; lines: string[] };
+export interface ChooseResult {
+  done: boolean; said?: string; edit?: WorkspaceEdit | null; facts?: Fact[]; files?: string[]; review?: Review | null; reopen?: { id: string } | null;
+}
+export interface ReviewChooseParams extends Doc { id: string; choice: string; entry?: string; step?: number }
 export interface ReviewReady { id: string; kind: string; textDocument: TextDocumentIdentifier }
 export interface OutcomeParams extends Doc { id: string; block: number; outcome: 'accepted' | 'rejected' }
 
@@ -173,9 +245,9 @@ export const Olifant = {
   plansTest: req<Row, StepResult>('olifant/plans/test'),
   plansErrand: req<ErrandOneParams, Open>('olifant/plans/errand'),
   plansErrands: req<ErrandsParams, { errands: unknown[] }>('olifant/plans/errands'),
-  plansReviews: req<Doc, { reviews: unknown[] }>('olifant/plans/reviews'),
-  plansReview: req<ReviewParams, Open>('olifant/plans/review'),
-  plansReviewChoose: req<ReviewChooseParams, Open>('olifant/plans/review/choose'),
+  plansReviews: req<Doc, ReviewsResult>('olifant/plans/reviews'),
+  plansReview: req<ReviewParams, Review>('olifant/plans/review'),
+  plansReviewChoose: req<ReviewChooseParams, ChooseResult>('olifant/plans/review/choose'),
   recognitionFeedback: note<RecognitionFeedbackParams>('olifant/recognitionFeedback'),
   plansOutcome: note<OutcomeParams>('olifant/plans/outcome'),
   suggestion: note<Suggestion>('olifant/suggestion'),

@@ -1,0 +1,165 @@
+{
+  "paused": {
+    "round": 1,
+    "rounds": [
+      {
+        "check": "src/bistro/booking/commands/cancel_booking.py: Type of \"booking\" is unknown; src/bistro/booking/commands/cancel_booking.py: Type of \"find_by_id\" is unknown; src/bistro/booking/commands/cancel_booking.py: Cannot access attribute \"find_by_id\" for class \"BookingRepository\"\n  Attribute \"find_by_id\" is unknown",
+        "verdict": "red",
+        "files": [
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking.py\n+++ b/src/bistro/booking/commands/cancel_booking.py\n@@ -3,6 +3,7 @@\n from dataclasses import dataclass\n \n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n @dataclass(frozen=True)\n@@ -21,8 +22,13 @@\n \n \n class CancelBooking:\n-    def __init__(self) -> None:\n+    def __init__(self, bookings: BookingRepository) -> None:\n         \"\"\"Takes the ports it uses; main.py passes their adapters.\"\"\"\n+        self.bookings = bookings\n \n     def handle(self, input: CancelBookingInput) -> CancelBookingOutput:\n+        booking = self.bookings.find_by_id(input.id)\n+        if booking is None:\n+            return NotFound(\"Booking not found\")\n+        # In a real implementation, we would cancel the booking here\n         return Ok(None)\n",
+            "file": "src/bistro/booking/commands/cancel_booking.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking__test.py\n+++ b/src/bistro/booking/commands/cancel_booking__test.py\n@@ -6,10 +6,16 @@\n     NotFound,\n )\n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.in_memory_booking_repository import InMemoryBookingRepository\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n-def command() -> CancelBooking:\n-    return CancelBooking()\n+def command(\n+    bookings: BookingRepository | None = None,\n+) -> CancelBooking:\n+    return CancelBooking(\n+        bookings=bookings or InMemoryBookingRepository(),\n+    )\n \n \n def test_cancel_booking_succeeds() -> None:\n",
+            "file": "src/bistro/booking/commands/cancel_booking__test.py"
+          }
+        ],
+        "attempt": "booking = self.bookings.find_by_id(input.id)\nif booking is None:\n    return NotFound(\"Booking not found\")\n# In a real implementation, we would cancel the booking here\nreturn Ok(None)",
+        "failing": [],
+        "line": "booking = self.bookings.find_by_id(input.id)",
+        "passed": [],
+        "failed": [],
+        "diff": "--- a/src/bistro/booking/commands/cancel_booking.py\n+++ b/src/bistro/booking/commands/cancel_booking.py\n@@ -3,6 +3,7 @@\n from dataclasses import dataclass\n \n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n @dataclass(frozen=True)\n@@ -21,8 +22,13 @@\n \n \n class CancelBooking:\n-    def __init__(self) -> None:\n+    def __init__(self, bookings: BookingRepository) -> None:\n         \"\"\"Takes the ports it uses; main.py passes their adapters.\"\"\"\n+        self.bookings = bookings\n \n     def handle(self, input: CancelBookingInput) -> CancelBookingOutput:\n+        booking = self.bookings.find_by_id(input.id)\n+        if booking is None:\n+            return NotFound(\"Booking not found\")\n+        # In a real implementation, we would cancel the booking here\n         return Ok(None)\n",
+        "round": 1,
+        "rung": "local"
+      }
+    ],
+    "title": {
+      "round": 1,
+      "unit": "CancelBooking.handle",
+      "of": 6,
+      "rung": "local",
+      "seconds": 9,
+      "model": "qwen3-coder:30b"
+    },
+    "token": "conjure-1",
+    "diagnosis": [
+      "BookingRepository has no find_by_id: pyright refuses round 1's body before the tests run (cancel_booking.py:30).",
+      "No body can pass not_found: it builds repository = Mock() and never hands it to command(), so handle never sees it. CancelBooking takes bookings: BookingRepository since the wire; the test should pass its fake as command(bookings=…)."
+    ],
+    "failure": {
+      "round": 1,
+      "problems": [
+        {
+          "message": "Cannot access attribute \"find_by_id\" for class \"BookingRepository\"",
+          "file": "src/bistro/booking/commands/cancel_booking.py",
+          "line": 30
+        },
+        {
+          "message": "Type of \"booking\" is unknown",
+          "file": "src/bistro/booking/commands/cancel_booking.py",
+          "line": 30
+        },
+        {
+          "message": "Type of \"find_by_id\" is unknown",
+          "file": "src/bistro/booking/commands/cancel_booking.py",
+          "line": 30
+        }
+      ],
+      "tool": "pyright",
+      "kind": "check"
+    },
+    "rung": "local",
+    "lines": {
+      "last": 28,
+      "first": 28
+    },
+    "trigger": "a port lacks a method: BookingRepository.find_by_id",
+    "landing": {
+      "diff": "--- a/src/bistro/booking/commands/cancel_booking.py\n+++ b/src/bistro/booking/commands/cancel_booking.py\n@@ -3,6 +3,7 @@\n from dataclasses import dataclass\n \n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n @dataclass(frozen=True)\n@@ -21,8 +22,13 @@\n \n \n class CancelBooking:\n-    def __init__(self) -> None:\n+    def __init__(self, bookings: BookingRepository) -> None:\n         \"\"\"Takes the ports it uses; main.py passes their adapters.\"\"\"\n+        self.bookings = bookings\n \n     def handle(self, input: CancelBookingInput) -> CancelBookingOutput:\n+        booking = self.bookings.find_by_id(input.id)\n+        if booking is None:\n+            return NotFound(\"Booking not found\")\n+        # In a real implementation, we would cancel the booking here\n         return Ok(None)\n"
+    },
+    "tests": [
+      {
+        "source": "def test_cancel_booking_not_found() -> None:\n    repository = Mock()\n    repository.find_by_id = lambda id: None\n    cancel_booking = command()\n    result = cancel_booking.handle(CancelBookingInput(id=\"1\"))\n    assert isinstance(result, NotFound)",
+        "note": "builds repository = Mock() and never hands it to command(); CancelBooking takes bookings: BookingRepository since the wire",
+        "status": "failing",
+        "assertion": "assert isinstance(result, NotFound)",
+        "test": "src/bistro/booking/commands/cancel_booking__test.py::test_cancel_booking_not_found"
+      }
+    ],
+    "checker": "pyright",
+    "expires": 600,
+    "unit": {
+      "header": "class CancelBooking:\n    def __init__(self, bookings: BookingRepository) -> None:",
+      "ports": [
+        "bookings: BookingRepository"
+      ]
+    },
+    "steps": [
+      {
+        "text": "wire bookings: BookingRepository",
+        "kind": "wire",
+        "after": 0,
+        "files": [
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking.py\n+++ b/src/bistro/booking/commands/cancel_booking.py\n@@ -3,6 +3,7 @@\n from dataclasses import dataclass\n \n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n @dataclass(frozen=True)\n@@ -21,8 +22,9 @@\n \n \n class CancelBooking:\n-    def __init__(self) -> None:\n+    def __init__(self, bookings: BookingRepository) -> None:\n         \"\"\"Takes the ports it uses; main.py passes their adapters.\"\"\"\n+        self.bookings = bookings\n \n     def handle(self, input: CancelBookingInput) -> CancelBookingOutput:\n         return Ok(None)\n",
+            "file": "src/bistro/booking/commands/cancel_booking.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking__test.py\n+++ b/src/bistro/booking/commands/cancel_booking__test.py\n@@ -6,10 +6,16 @@\n     NotFound,\n )\n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.in_memory_booking_repository import InMemoryBookingRepository\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n-def command() -> CancelBooking:\n-    return CancelBooking()\n+def command(\n+    bookings: BookingRepository | None = None,\n+) -> CancelBooking:\n+    return CancelBooking(\n+        bookings=bookings or InMemoryBookingRepository(),\n+    )\n \n \n def test_cancel_booking_succeeds() -> None:\n",
+            "file": "src/bistro/booking/commands/cancel_booking__test.py"
+          }
+        ]
+      }
+    ],
+    "summary": "red: src/bistro/booking/commands/cancel_booking.py: Type of \"booking\" is unknown; src/bistro/booking/commands/cancel_booking.py: Type of \"find_by_id\" is unknown; src/bistro/booking/commands/cancel_booking.py: Cannot access attribute \"find_by_id\" for class \"BookingRepository\"",
+    "why": "BookingRepository has no find_by_id: pyright refuses round 1's body before the tests run (cancel_booking.py:30).",
+    "file": "/demo/src/bistro/booking/commands/cancel_booking.py",
+    "wired": [
+      {
+        "files": [
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking.py\n+++ b/src/bistro/booking/commands/cancel_booking.py\n@@ -3,6 +3,7 @@\n from dataclasses import dataclass\n \n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n @dataclass(frozen=True)\n@@ -21,8 +22,9 @@\n \n \n class CancelBooking:\n-    def __init__(self) -> None:\n+    def __init__(self, bookings: BookingRepository) -> None:\n         \"\"\"Takes the ports it uses; main.py passes their adapters.\"\"\"\n+        self.bookings = bookings\n \n     def handle(self, input: CancelBookingInput) -> CancelBookingOutput:\n         return Ok(None)\n",
+            "file": "src/bistro/booking/commands/cancel_booking.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking__test.py\n+++ b/src/bistro/booking/commands/cancel_booking__test.py\n@@ -6,10 +6,16 @@\n     NotFound,\n )\n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.in_memory_booking_repository import InMemoryBookingRepository\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n-def command() -> CancelBooking:\n-    return CancelBooking()\n+def command(\n+    bookings: BookingRepository | None = None,\n+) -> CancelBooking:\n+    return CancelBooking(\n+        bookings=bookings or InMemoryBookingRepository(),\n+    )\n \n \n def test_cancel_booking_succeeds() -> None:\n",
+            "file": "src/bistro/booking/commands/cancel_booking__test.py"
+          }
+        ],
+        "param": "bookings",
+        "test": "src/bistro/booking/commands/cancel_booking__test.py::test_cancel_booking_not_found",
+        "port": "BookingRepository"
+      }
+    ],
+    "offers": [
+      {
+        "label": "continue",
+        "detail": "6 more rounds with local, from round 2",
+        "choice": "continue"
+      },
+      {
+        "label": "continue with a hint…",
+        "detail": "your sentence goes to local with round 2",
+        "choice": "continue",
+        "hint": true
+      },
+      {
+        "label": "add find_by_id to BookingRepository",
+        "detail": "find_by_id(self, id: str) -> Booking | None in the port and its adapters, then round 2",
+        "choice": "port",
+        "arg": "BookingRepository.find_by_id"
+      },
+      {
+        "label": "fix the test: not_found",
+        "detail": "hand repository to command(bookings=repository); you see the diff",
+        "choice": "reconjure",
+        "arg": "src/bistro/booking/commands/cancel_booking__test.py::test_cancel_booking_not_found"
+      },
+      {
+        "label": "stop",
+        "detail": "nothing lands, not the wire either; your text stands",
+        "choice": "stop",
+        "land": false
+      },
+      {
+        "label": "keep round 1",
+        "detail": "lands the diff on the right, red (saved; u undoes it)",
+        "choice": "stop",
+        "arg": "1",
+        "land": true
+      }
+    ]
+  }
+}

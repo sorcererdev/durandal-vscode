@@ -1,0 +1,292 @@
+{
+  "paused": {
+    "round": 3,
+    "rounds": [
+      {
+        "check": "src/bistro/booking/commands/cancel_booking.py: Type of \"booking\" is unknown; src/bistro/booking/commands/cancel_booking.py: Type of \"find_by_id\" is unknown; src/bistro/booking/commands/cancel_booking.py: Cannot access attribute \"find_by_id\" for class \"BookingRepository\"\n  Attribute \"find_by_id\" is unknown",
+        "verdict": "red",
+        "files": [
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking.py\n+++ b/src/bistro/booking/commands/cancel_booking.py\n@@ -3,6 +3,7 @@\n from dataclasses import dataclass\n \n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n @dataclass(frozen=True)\n@@ -21,8 +22,13 @@\n \n \n class CancelBooking:\n-    def __init__(self) -> None:\n+    def __init__(self, bookings: BookingRepository) -> None:\n         \"\"\"Takes the ports it uses; main.py passes their adapters.\"\"\"\n+        self.bookings = bookings\n \n     def handle(self, input: CancelBookingInput) -> CancelBookingOutput:\n+        booking = self.bookings.find_by_id(input.id)\n+        if booking is None:\n+            return NotFound(\"Booking not found\")\n+        # In a real implementation, we would cancel the booking here\n         return Ok(None)\n",
+            "file": "src/bistro/booking/commands/cancel_booking.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking__test.py\n+++ b/src/bistro/booking/commands/cancel_booking__test.py\n@@ -6,10 +6,16 @@\n     NotFound,\n )\n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.in_memory_booking_repository import InMemoryBookingRepository\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n-def command() -> CancelBooking:\n-    return CancelBooking()\n+def command(\n+    bookings: BookingRepository | None = None,\n+) -> CancelBooking:\n+    return CancelBooking(\n+        bookings=bookings or InMemoryBookingRepository(),\n+    )\n \n \n def test_cancel_booking_succeeds() -> None:\n@@ -21,6 +27,6 @@\n def test_cancel_booking_not_found() -> None:\n     repository = Mock()\n     repository.find_by_id = lambda id: None\n-    cancel_booking = command()\n+    cancel_booking = command(bookings=repository)\n     result = cancel_booking.handle(CancelBookingInput(id=\"1\"))\n     assert isinstance(result, NotFound)\n",
+            "file": "src/bistro/booking/commands/cancel_booking__test.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/ports/booking_repository/booking_repository.py\n+++ b/src/bistro/booking/ports/booking_repository/booking_repository.py\n@@ -28,3 +28,5 @@\n     def bookings_on(self, day: date) -> list[Booking]: ...\n \n     def save(self, booking: Booking) -> None: ...\n+\n+    def find_by_id(self, id: str) -> Booking | None: ...\n",
+            "file": "src/bistro/booking/ports/booking_repository/booking_repository.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/ports/booking_repository/booking_repository__test.py\n+++ b/src/bistro/booking/ports/booking_repository/booking_repository__test.py\n@@ -38,3 +38,7 @@\n     assert repository.booking_at(\"t1\", SEVEN) == booking\n     assert repository.booking_at(\"t2\", SEVEN) is None\n     assert repository.bookings_on(SEVEN.day) == [booking]\n+\n+\n+def test_find_by_id(repository: BookingRepository) -> None:\n+    assert False, \"BookingRepository.find_by_id: write its contract\"\n",
+            "file": "src/bistro/booking/ports/booking_repository/booking_repository__test.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/ports/booking_repository/in_memory_booking_repository.py\n+++ b/src/bistro/booking/ports/booking_repository/in_memory_booking_repository.py\n@@ -27,3 +27,6 @@\n \n     def save(self, booking: Booking) -> None:\n         self._bookings.append(booking)\n+\n+    def find_by_id(self, id: str) -> Booking | None:\n+        return next((b for b in self._bookings if b.id == id), None)\n",
+            "file": "src/bistro/booking/ports/booking_repository/in_memory_booking_repository.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/ports/booking_repository/sqlite_booking_repository.py\n+++ b/src/bistro/booking/ports/booking_repository/sqlite_booking_repository.py\n@@ -55,3 +55,7 @@\n             Booking(id=i, table_id=t, slot=Slot(day=date.fromisoformat(d), start=time.fromisoformat(s)), party=p, guest=g)\n             for i, t, d, s, p, g in rows\n         ]\n+\n+    def find_by_id(self, id: str) -> Booking | None:\n+        rows = self._select(\"where id = ?\", (id,))\n+        return rows[0] if rows else None\n",
+            "file": "src/bistro/booking/ports/booking_repository/sqlite_booking_repository.py"
+          }
+        ],
+        "attempt": "booking = self.bookings.find_by_id(input.id)\nif booking is None:\n    return NotFound(\"Booking not found\")\n# In a real implementation, we would cancel the booking here\nreturn Ok(None)",
+        "failing": [],
+        "line": "booking = self.bookings.find_by_id(input.id)",
+        "passed": [],
+        "failed": [],
+        "diff": "--- a/src/bistro/booking/commands/cancel_booking.py\n+++ b/src/bistro/booking/commands/cancel_booking.py\n@@ -3,6 +3,7 @@\n from dataclasses import dataclass\n \n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n @dataclass(frozen=True)\n@@ -21,8 +22,13 @@\n \n \n class CancelBooking:\n-    def __init__(self) -> None:\n+    def __init__(self, bookings: BookingRepository) -> None:\n         \"\"\"Takes the ports it uses; main.py passes their adapters.\"\"\"\n+        self.bookings = bookings\n \n     def handle(self, input: CancelBookingInput) -> CancelBookingOutput:\n+        booking = self.bookings.find_by_id(input.id)\n+        if booking is None:\n+            return NotFound(\"Booking not found\")\n+        # In a real implementation, we would cancel the booking here\n         return Ok(None)\n",
+        "round": 1,
+        "rung": "local"
+      },
+      {
+        "check": "src/bistro/booking/commands/cancel_booking.py: Type of \"booking\" is unknown; src/bistro/booking/commands/cancel_booking.py: Type of \"find_by_id\" is unknown; src/bistro/booking/commands/cancel_booking.py: Cannot access attribute \"find_by_id\" for class \"BookingRepository\"\n  Attribute \"find_by_id\" is unknown",
+        "verdict": "red",
+        "files": [
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking.py\n+++ b/src/bistro/booking/commands/cancel_booking.py\n@@ -3,6 +3,7 @@\n from dataclasses import dataclass\n \n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n @dataclass(frozen=True)\n@@ -21,8 +22,13 @@\n \n \n class CancelBooking:\n-    def __init__(self) -> None:\n+    def __init__(self, bookings: BookingRepository) -> None:\n         \"\"\"Takes the ports it uses; main.py passes their adapters.\"\"\"\n+        self.bookings = bookings\n \n     def handle(self, input: CancelBookingInput) -> CancelBookingOutput:\n+        booking = self.bookings.find_by_id(input.id)\n+        if booking is None:\n+            return NotFound(\"Booking not found\")\n+        # In a real implementation, we would cancel the booking here\n         return Ok(None)\n",
+            "file": "src/bistro/booking/commands/cancel_booking.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking__test.py\n+++ b/src/bistro/booking/commands/cancel_booking__test.py\n@@ -6,10 +6,16 @@\n     NotFound,\n )\n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.in_memory_booking_repository import InMemoryBookingRepository\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n-def command() -> CancelBooking:\n-    return CancelBooking()\n+def command(\n+    bookings: BookingRepository | None = None,\n+) -> CancelBooking:\n+    return CancelBooking(\n+        bookings=bookings or InMemoryBookingRepository(),\n+    )\n \n \n def test_cancel_booking_succeeds() -> None:\n@@ -21,6 +27,6 @@\n def test_cancel_booking_not_found() -> None:\n     repository = Mock()\n     repository.find_by_id = lambda id: None\n-    cancel_booking = command()\n+    cancel_booking = command(bookings=repository)\n     result = cancel_booking.handle(CancelBookingInput(id=\"1\"))\n     assert isinstance(result, NotFound)\n",
+            "file": "src/bistro/booking/commands/cancel_booking__test.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/ports/booking_repository/booking_repository.py\n+++ b/src/bistro/booking/ports/booking_repository/booking_repository.py\n@@ -28,3 +28,5 @@\n     def bookings_on(self, day: date) -> list[Booking]: ...\n \n     def save(self, booking: Booking) -> None: ...\n+\n+    def find_by_id(self, id: str) -> Booking | None: ...\n",
+            "file": "src/bistro/booking/ports/booking_repository/booking_repository.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/ports/booking_repository/booking_repository__test.py\n+++ b/src/bistro/booking/ports/booking_repository/booking_repository__test.py\n@@ -38,3 +38,7 @@\n     assert repository.booking_at(\"t1\", SEVEN) == booking\n     assert repository.booking_at(\"t2\", SEVEN) is None\n     assert repository.bookings_on(SEVEN.day) == [booking]\n+\n+\n+def test_find_by_id(repository: BookingRepository) -> None:\n+    assert False, \"BookingRepository.find_by_id: write its contract\"\n",
+            "file": "src/bistro/booking/ports/booking_repository/booking_repository__test.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/ports/booking_repository/in_memory_booking_repository.py\n+++ b/src/bistro/booking/ports/booking_repository/in_memory_booking_repository.py\n@@ -27,3 +27,6 @@\n \n     def save(self, booking: Booking) -> None:\n         self._bookings.append(booking)\n+\n+    def find_by_id(self, id: str) -> Booking | None:\n+        return next((b for b in self._bookings if b.id == id), None)\n",
+            "file": "src/bistro/booking/ports/booking_repository/in_memory_booking_repository.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/ports/booking_repository/sqlite_booking_repository.py\n+++ b/src/bistro/booking/ports/booking_repository/sqlite_booking_repository.py\n@@ -55,3 +55,7 @@\n             Booking(id=i, table_id=t, slot=Slot(day=date.fromisoformat(d), start=time.fromisoformat(s)), party=p, guest=g)\n             for i, t, d, s, p, g in rows\n         ]\n+\n+    def find_by_id(self, id: str) -> Booking | None:\n+        rows = self._select(\"where id = ?\", (id,))\n+        return rows[0] if rows else None\n",
+            "file": "src/bistro/booking/ports/booking_repository/sqlite_booking_repository.py"
+          }
+        ],
+        "attempt": "booking = self.bookings.find_by_id(input.id)\nif booking is None:\n    return NotFound(\"Booking not found\")\n# In a real implementation, we would cancel the booking here\nreturn Ok(None)",
+        "failing": [],
+        "line": "booking = self.bookings.find_by_id(input.id)",
+        "passed": [],
+        "failed": [],
+        "diff": "--- a/src/bistro/booking/commands/cancel_booking.py\n+++ b/src/bistro/booking/commands/cancel_booking.py\n@@ -3,6 +3,7 @@\n from dataclasses import dataclass\n \n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n @dataclass(frozen=True)\n@@ -21,8 +22,13 @@\n \n \n class CancelBooking:\n-    def __init__(self) -> None:\n+    def __init__(self, bookings: BookingRepository) -> None:\n         \"\"\"Takes the ports it uses; main.py passes their adapters.\"\"\"\n+        self.bookings = bookings\n \n     def handle(self, input: CancelBookingInput) -> CancelBookingOutput:\n+        booking = self.bookings.find_by_id(input.id)\n+        if booking is None:\n+            return NotFound(\"Booking not found\")\n+        # In a real implementation, we would cancel the booking here\n         return Ok(None)\n",
+        "round": 2,
+        "rung": "local"
+      },
+      {
+        "round": 3,
+        "verdict": "red",
+        "files": [
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking.py\n+++ b/src/bistro/booking/commands/cancel_booking.py\n@@ -3,6 +3,7 @@\n from dataclasses import dataclass\n \n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n @dataclass(frozen=True)\n@@ -21,8 +22,12 @@\n \n \n class CancelBooking:\n-    def __init__(self) -> None:\n+    def __init__(self, bookings: BookingRepository) -> None:\n         \"\"\"Takes the ports it uses; main.py passes their adapters.\"\"\"\n+        self.bookings = bookings\n \n     def handle(self, input: CancelBookingInput) -> CancelBookingOutput:\n+        booking = self.bookings.find_by_id(input.id)\n+        if booking is None:\n+            return NotFound(\"Booking not found\")\n         return Ok(None)\n",
+            "file": "src/bistro/booking/commands/cancel_booking.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking__test.py\n+++ b/src/bistro/booking/commands/cancel_booking__test.py\n@@ -6,10 +6,16 @@\n     NotFound,\n )\n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.in_memory_booking_repository import InMemoryBookingRepository\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n-def command() -> CancelBooking:\n-    return CancelBooking()\n+def command(\n+    bookings: BookingRepository | None = None,\n+) -> CancelBooking:\n+    return CancelBooking(\n+        bookings=bookings or InMemoryBookingRepository(),\n+    )\n \n \n def test_cancel_booking_succeeds() -> None:\n@@ -21,6 +27,6 @@\n def test_cancel_booking_not_found() -> None:\n     repository = Mock()\n     repository.find_by_id = lambda id: None\n-    cancel_booking = command()\n+    cancel_booking = command(bookings=repository)\n     result = cancel_booking.handle(CancelBookingInput(id=\"1\"))\n     assert isinstance(result, NotFound)\n",
+            "file": "src/bistro/booking/commands/cancel_booking__test.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/ports/booking_repository/booking_repository.py\n+++ b/src/bistro/booking/ports/booking_repository/booking_repository.py\n@@ -28,3 +28,5 @@\n     def bookings_on(self, day: date) -> list[Booking]: ...\n \n     def save(self, booking: Booking) -> None: ...\n+\n+    def find_by_id(self, id: str) -> Booking | None: ...\n",
+            "file": "src/bistro/booking/ports/booking_repository/booking_repository.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/ports/booking_repository/booking_repository__test.py\n+++ b/src/bistro/booking/ports/booking_repository/booking_repository__test.py\n@@ -38,3 +38,7 @@\n     assert repository.booking_at(\"t1\", SEVEN) == booking\n     assert repository.booking_at(\"t2\", SEVEN) is None\n     assert repository.bookings_on(SEVEN.day) == [booking]\n+\n+\n+def test_find_by_id(repository: BookingRepository) -> None:\n+    assert False, \"BookingRepository.find_by_id: write its contract\"\n",
+            "file": "src/bistro/booking/ports/booking_repository/booking_repository__test.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/ports/booking_repository/in_memory_booking_repository.py\n+++ b/src/bistro/booking/ports/booking_repository/in_memory_booking_repository.py\n@@ -27,3 +27,6 @@\n \n     def save(self, booking: Booking) -> None:\n         self._bookings.append(booking)\n+\n+    def find_by_id(self, id: str) -> Booking | None:\n+        return next((b for b in self._bookings if b.id == id), None)\n",
+            "file": "src/bistro/booking/ports/booking_repository/in_memory_booking_repository.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/ports/booking_repository/sqlite_booking_repository.py\n+++ b/src/bistro/booking/ports/booking_repository/sqlite_booking_repository.py\n@@ -55,3 +55,7 @@\n             Booking(id=i, table_id=t, slot=Slot(day=date.fromisoformat(d), start=time.fromisoformat(s)), party=p, guest=g)\n             for i, t, d, s, p, g in rows\n         ]\n+\n+    def find_by_id(self, id: str) -> Booking | None:\n+        rows = self._select(\"where id = ?\", (id,))\n+        return rows[0] if rows else None\n",
+            "file": "src/bistro/booking/ports/booking_repository/sqlite_booking_repository.py"
+          }
+        ],
+        "attempt": "booking = self.bookings.find_by_id(input.id)\nif booking is None:\n    return NotFound(\"Booking not found\")\nreturn Ok(None)",
+        "failing": [
+          "succeeds"
+        ],
+        "line": "booking = self.bookings.find_by_id(input.id)",
+        "failed": [
+          {
+            "at": 24,
+            "output": "src/bistro/booking/commands/cancel_booking__test.py:24: in test_cancel_booking_succeeds\n    assert result == Ok(None)\nE   AssertionError: assert NotFound(reason='Booking not found') == Ok(value=None)\nE    +  where Ok(value=None) = Ok(None)\n",
+            "test": "src/bistro/booking/commands/cancel_booking__test.py::test_cancel_booking_succeeds",
+            "summary": "assert NotFound(reason='Booking not found') == Ok(value=None)",
+            "message": "AssertionError: assert NotFound(reason='Booking not found') == Ok(value=None)\n+  where Ok(value=None) = Ok(None)",
+            "assertion": "assert result == Ok(None)",
+            "expected": "Ok(value=None)",
+            "got": "NotFound(reason='Booking not found')"
+          }
+        ],
+        "diff": "--- a/src/bistro/booking/commands/cancel_booking.py\n+++ b/src/bistro/booking/commands/cancel_booking.py\n@@ -3,6 +3,7 @@\n from dataclasses import dataclass\n \n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n @dataclass(frozen=True)\n@@ -21,8 +22,12 @@\n \n \n class CancelBooking:\n-    def __init__(self) -> None:\n+    def __init__(self, bookings: BookingRepository) -> None:\n         \"\"\"Takes the ports it uses; main.py passes their adapters.\"\"\"\n+        self.bookings = bookings\n \n     def handle(self, input: CancelBookingInput) -> CancelBookingOutput:\n+        booking = self.bookings.find_by_id(input.id)\n+        if booking is None:\n+            return NotFound(\"Booking not found\")\n         return Ok(None)\n",
+        "passed": [
+          "src/bistro/booking/commands/cancel_booking__test.py::test_cancel_booking_not_found"
+        ],
+        "rung": "local"
+      }
+    ],
+    "title": {
+      "round": 3,
+      "unit": "CancelBooking.handle",
+      "of": 6,
+      "rung": "local",
+      "seconds": 3,
+      "model": "qwen3-coder:30b"
+    },
+    "token": "conjure-3",
+    "diagnosis": [
+      "Every body so far passes one test and fails the other.",
+      "Both tests call handle(CancelBookingInput(id=\"1\")) and expect different results."
+    ],
+    "failure": {
+      "round": 3,
+      "kind": "tests",
+      "tests": [
+        "src/bistro/booking/commands/cancel_booking__test.py::test_cancel_booking_succeeds"
+      ]
+    },
+    "rung": "local",
+    "lines": {
+      "last": 28,
+      "first": 28
+    },
+    "trigger": "trade",
+    "landing": {
+      "diff": "--- a/src/bistro/booking/commands/cancel_booking.py\n+++ b/src/bistro/booking/commands/cancel_booking.py\n@@ -3,6 +3,7 @@\n from dataclasses import dataclass\n \n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n @dataclass(frozen=True)\n@@ -21,8 +22,12 @@\n \n \n class CancelBooking:\n-    def __init__(self) -> None:\n+    def __init__(self, bookings: BookingRepository) -> None:\n         \"\"\"Takes the ports it uses; main.py passes their adapters.\"\"\"\n+        self.bookings = bookings\n \n     def handle(self, input: CancelBookingInput) -> CancelBookingOutput:\n+        booking = self.bookings.find_by_id(input.id)\n+        if booking is None:\n+            return NotFound(\"Booking not found\")\n         return Ok(None)\n"
+    },
+    "tests": [
+      {
+        "source": "def test_cancel_booking_succeeds() -> None:\n    cancel_booking = command()\n    result = cancel_booking.handle(CancelBookingInput(id=\"1\"))\n    assert result == Ok(None)",
+        "test": "src/bistro/booking/commands/cancel_booking__test.py::test_cancel_booking_succeeds",
+        "assertion": "assert result == Ok(None)",
+        "flipped": 0,
+        "status": "failing"
+      },
+      {
+        "source": "def test_cancel_booking_not_found() -> None:\n    repository = Mock()\n    repository.find_by_id = lambda id: None\n    cancel_booking = command(bookings=repository)\n    result = cancel_booking.handle(CancelBookingInput(id=\"1\"))\n    assert isinstance(result, NotFound)",
+        "test": "src/bistro/booking/commands/cancel_booking__test.py::test_cancel_booking_not_found",
+        "assertion": "assert isinstance(result, NotFound)",
+        "flipped": 0,
+        "status": "passing"
+      }
+    ],
+    "checker": "pyright",
+    "expires": 600,
+    "unit": {
+      "header": "class CancelBooking:\n    def __init__(self, bookings: BookingRepository) -> None:",
+      "ports": [
+        "bookings: BookingRepository"
+      ]
+    },
+    "steps": [
+      {
+        "text": "wire bookings: BookingRepository",
+        "kind": "wire",
+        "after": 0,
+        "files": [
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking.py\n+++ b/src/bistro/booking/commands/cancel_booking.py\n@@ -3,6 +3,7 @@\n from dataclasses import dataclass\n \n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n @dataclass(frozen=True)\n@@ -21,8 +22,9 @@\n \n \n class CancelBooking:\n-    def __init__(self) -> None:\n+    def __init__(self, bookings: BookingRepository) -> None:\n         \"\"\"Takes the ports it uses; main.py passes their adapters.\"\"\"\n+        self.bookings = bookings\n \n     def handle(self, input: CancelBookingInput) -> CancelBookingOutput:\n         return Ok(None)\n",
+            "file": "src/bistro/booking/commands/cancel_booking.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking__test.py\n+++ b/src/bistro/booking/commands/cancel_booking__test.py\n@@ -6,10 +6,16 @@\n     NotFound,\n )\n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.in_memory_booking_repository import InMemoryBookingRepository\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n-def command() -> CancelBooking:\n-    return CancelBooking()\n+def command(\n+    bookings: BookingRepository | None = None,\n+) -> CancelBooking:\n+    return CancelBooking(\n+        bookings=bookings or InMemoryBookingRepository(),\n+    )\n \n \n def test_cancel_booking_succeeds() -> None:\n",
+            "file": "src/bistro/booking/commands/cancel_booking__test.py"
+          }
+        ]
+      },
+      {
+        "text": "test fixed: not_found (command(bookings=repository))",
+        "test": "src/bistro/booking/commands/cancel_booking__test.py::test_cancel_booking_not_found",
+        "files": [
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking__test.py\n+++ b/src/bistro/booking/commands/cancel_booking__test.py\n@@ -27,6 +27,6 @@\n def test_cancel_booking_not_found() -> None:\n     repository = Mock()\n     repository.find_by_id = lambda id: None\n-    cancel_booking = command()\n+    cancel_booking = command(bookings=repository)\n     result = cancel_booking.handle(CancelBookingInput(id=\"1\"))\n     assert isinstance(result, NotFound)\n",
+            "file": "src/bistro/booking/commands/cancel_booking__test.py"
+          }
+        ],
+        "kind": "test",
+        "after": 1
+      },
+      {
+        "text": "port method: BookingRepository.find_by_id(id: str) -> Booking | None",
+        "kind": "port",
+        "after": 2,
+        "files": [
+          {
+            "diff": "--- a/src/bistro/booking/ports/booking_repository/booking_repository.py\n+++ b/src/bistro/booking/ports/booking_repository/booking_repository.py\n@@ -28,3 +28,5 @@\n     def bookings_on(self, day: date) -> list[Booking]: ...\n \n     def save(self, booking: Booking) -> None: ...\n+\n+    def find_by_id(self, id: str) -> Booking | None: ...\n",
+            "file": "src/bistro/booking/ports/booking_repository/booking_repository.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/ports/booking_repository/booking_repository__test.py\n+++ b/src/bistro/booking/ports/booking_repository/booking_repository__test.py\n@@ -38,3 +38,7 @@\n     assert repository.booking_at(\"t1\", SEVEN) == booking\n     assert repository.booking_at(\"t2\", SEVEN) is None\n     assert repository.bookings_on(SEVEN.day) == [booking]\n+\n+\n+def test_find_by_id(repository: BookingRepository) -> None:\n+    assert False, \"BookingRepository.find_by_id: write its contract\"\n",
+            "file": "src/bistro/booking/ports/booking_repository/booking_repository__test.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/ports/booking_repository/in_memory_booking_repository.py\n+++ b/src/bistro/booking/ports/booking_repository/in_memory_booking_repository.py\n@@ -27,3 +27,6 @@\n \n     def save(self, booking: Booking) -> None:\n         self._bookings.append(booking)\n+\n+    def find_by_id(self, id: str) -> Booking | None:\n+        return next((b for b in self._bookings if b.id == id), None)\n",
+            "file": "src/bistro/booking/ports/booking_repository/in_memory_booking_repository.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/ports/booking_repository/sqlite_booking_repository.py\n+++ b/src/bistro/booking/ports/booking_repository/sqlite_booking_repository.py\n@@ -55,3 +55,7 @@\n             Booking(id=i, table_id=t, slot=Slot(day=date.fromisoformat(d), start=time.fromisoformat(s)), party=p, guest=g)\n             for i, t, d, s, p, g in rows\n         ]\n+\n+    def find_by_id(self, id: str) -> Booking | None:\n+        rows = self._select(\"where id = ?\", (id,))\n+        return rows[0] if rows else None\n",
+            "file": "src/bistro/booking/ports/booking_repository/sqlite_booking_repository.py"
+          }
+        ]
+      }
+    ],
+    "summary": "red: test_cancel_booking_succeeds · assert NotFound(reason='Booking not found') == Ok(value=None)",
+    "why": "Every body so far passes one test and fails the other.",
+    "file": "/demo/src/bistro/booking/commands/cancel_booking.py",
+    "wired": [
+      {
+        "files": [
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking.py\n+++ b/src/bistro/booking/commands/cancel_booking.py\n@@ -3,6 +3,7 @@\n from dataclasses import dataclass\n \n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n @dataclass(frozen=True)\n@@ -21,8 +22,9 @@\n \n \n class CancelBooking:\n-    def __init__(self) -> None:\n+    def __init__(self, bookings: BookingRepository) -> None:\n         \"\"\"Takes the ports it uses; main.py passes their adapters.\"\"\"\n+        self.bookings = bookings\n \n     def handle(self, input: CancelBookingInput) -> CancelBookingOutput:\n         return Ok(None)\n",
+            "file": "src/bistro/booking/commands/cancel_booking.py"
+          },
+          {
+            "diff": "--- a/src/bistro/booking/commands/cancel_booking__test.py\n+++ b/src/bistro/booking/commands/cancel_booking__test.py\n@@ -6,10 +6,16 @@\n     NotFound,\n )\n from bistro.shared.result import Ok\n+from bistro.booking.ports.booking_repository.in_memory_booking_repository import InMemoryBookingRepository\n+from bistro.booking.ports.booking_repository.booking_repository import BookingRepository\n \n \n-def command() -> CancelBooking:\n-    return CancelBooking()\n+def command(\n+    bookings: BookingRepository | None = None,\n+) -> CancelBooking:\n+    return CancelBooking(\n+        bookings=bookings or InMemoryBookingRepository(),\n+    )\n \n \n def test_cancel_booking_succeeds() -> None:\n",
+            "file": "src/bistro/booking/commands/cancel_booking__test.py"
+          }
+        ],
+        "param": "bookings",
+        "test": "src/bistro/booking/commands/cancel_booking__test.py::test_cancel_booking_not_found",
+        "port": "BookingRepository"
+      }
+    ],
+    "offers": [
+      {
+        "label": "continue",
+        "detail": "6 more rounds with local, from round 4",
+        "choice": "continue"
+      },
+      {
+        "label": "continue with a hint…",
+        "detail": "your sentence goes to local with round 4",
+        "choice": "continue",
+        "hint": true
+      },
+      {
+        "label": "fix the test: succeeds",
+        "detail": "re-conjure it from its name and the unit; you see its diff, then the rounds go on over it",
+        "choice": "reconjure",
+        "arg": "src/bistro/booking/commands/cancel_booking__test.py::test_cancel_booking_succeeds"
+      },
+      {
+        "label": "stop",
+        "detail": "nothing lands, not the wire either; your text stands",
+        "choice": "stop",
+        "land": false
+      },
+      {
+        "label": "keep round 3",
+        "detail": "lands the diff on the right, red (saved; u undoes it)",
+        "choice": "stop",
+        "arg": "3",
+        "land": true
+      }
+    ]
+  }
+}
