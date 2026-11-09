@@ -10,7 +10,6 @@ export const NOT_YET: Record<string, { title: string; milestone: number }> = {
   'durandal.plan.files': { title: 'Plan: Files', milestone: 6 },
   'durandal.plan.reconcile': { title: 'Plan: Reconcile', milestone: 6 },
   'durandal.plan.excerpt': { title: 'Plan: Excerpt', milestone: 6 },
-  'durandal.plan.review': { title: 'Plan: Review', milestone: 5 },
   'durandal.plan.toggle': { title: 'Plan: Toggle Reading', milestone: 6 },
 };
 
@@ -27,6 +26,7 @@ export const BUILT: Record<string, { title: string; enablement?: string }> = {
   'durandal.test.all': { title: 'Run All Tests' },
   'durandal.stub': { title: 'Stub a Test' },
   'durandal.conjure': { title: 'Conjure' },
+  'durandal.plan.review': { title: 'Plan: Review' },
   'durandal.mutate': { title: 'Mutate' },
   'durandal.jump': { title: 'Jump to Test or Module' },
   'durandal.ghosts.toggle': { title: 'Toggle Ghost Text' },
@@ -56,9 +56,8 @@ export const SUGGEST_KEYS: { command: string; key: string; when: string }[] = [
 // never fails with "command not found", not contributed (they need the server's arguments).
 // Keyed by protocol.ts CLIENT_COMMANDS' values, so a command added there must be given a
 // title and milestone here (the Record type fails to compile otherwise).
-// showActions is built (actions/command.ts); the rest are later milestones'.
-const SERVER_NAMED_INFO: Record<Exclude<keyof typeof CLIENT_COMMANDS, 'showActions'>, { title: string; milestone: number }> = {
-  planReview: { title: 'Plan Review', milestone: 5 },
+// showActions is built (actions/command.ts), planReview too (pause/review.ts); the rest are later milestones'.
+const SERVER_NAMED_INFO: Record<Exclude<keyof typeof CLIENT_COMMANDS, 'showActions' | 'planReview'>, { title: string; milestone: number }> = {
   planExcerpt: { title: 'Plan Excerpt', milestone: 6 },
   planErrand: { title: 'Plan Delegations', milestone: 6 },
 };

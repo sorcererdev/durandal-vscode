@@ -119,6 +119,14 @@ Closing the tab keeps the pause: `Cmd+Alt+D C` (`Ctrl+Alt+D C`) inside the unit 
 note at the end of the unit's last line says so. Editing the file drops the pause, as the server
 does; a conjure elsewhere in the file forgets it. A pause lives ten minutes on the server.
 
+The same tab reviews a plan's do, a past do, and a reconcile's readings. A do's review opens by
+itself when the do ends; the plan's lenses and `Cmd+Alt+D P R` (`Ctrl+Alt+D P R`) on a plan open
+any review waiting there. A do review: `a` keeps the change, `r` reverts it, `t` runs the step's
+tests, `p` allows the tools the do was refused, `o` reopens its thread with what to change,
+`[` `]` move between its files. A reconcile: `a` applies the selected reading, `r` leaves it, a
+digit places a unit under that open step, `n` makes it a new step, `i` ignores it. `q` closes the
+tab; the review stays on the server, under its lens.
+
 ## Settings
 
 - `durandal.path`: the binary.

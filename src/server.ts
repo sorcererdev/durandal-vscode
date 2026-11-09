@@ -7,7 +7,7 @@ import {
 import { applyServerEdit } from './applyEdit';
 import { checkBinary, Gate, ServerState, STOPPED } from './health';
 import type { ProgressValue } from './pause/progress';
-import { DoctorResult, InlineItem, Olifant, SERVER_COMMANDS, Suggestion } from './protocol';
+import { DoctorResult, InlineItem, Olifant, ReviewReady, SERVER_COMMANDS, Suggestion } from './protocol';
 import { realRoot } from './root';
 import { initOptions, settingsFrom } from './settings';
 
@@ -39,6 +39,8 @@ export interface ClientHooks {
   // the server's work-done progress, every begin, report and end the library shows (M5 spec
   // §3.6): the pause window claims a resume's
   progress?(token: string | number, v: ProgressValue): void;
+  // olifant/plans/review/ready: a do's review is waiting (sent before the do's own answer)
+  reviewReady?(p: ReviewReady): void;
   // the server stopped (a stop, a restart, or its client closed): nothing it said stands
   stopped?(): void;
 }
@@ -235,6 +237,7 @@ export class Server {
     const lc = new OlifantClient('durandal', 'Durandal (olifant lsp)', serverOptions, clientOptions);
     made.lc = lc;
     lc.onNotification(Olifant.suggestion.method, (p: Suggestion) => hooks.suggestion?.(p));
+    lc.onNotification(Olifant.plansReviewReady.method, (p: ReviewReady) => hooks.reviewReady?.(p));
     this.lc = lc;
     try {
       await lc.start();

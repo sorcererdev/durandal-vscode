@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import pkg from '../../package.json';
 import { BUILT, FORM_KEYS, KEYS, NOT_YET, PREFIX, SERVER_NAMED, SUGGEST_KEYS, TDD_WHEN } from '../../src/commandTable';
@@ -111,4 +111,29 @@ test('the webview: a second bundle and the stylesheet, both packaged; lint check
   // out/test/unit → the repository root
   const ignore = readFileSync(join(__dirname, '..', '..', '..', '.vscodeignore'), 'utf8').split('\n').map(l => l.trim());
   for (const f of ['!dist/extension.js', '!dist/webview.js', '!dist/pause.css']) assert.ok(ignore.includes(f), `.vscodeignore lacks ${f}`);
+});
+
+test('M5: Plan: Review is built; the lens command is registered by its own handler', () => {
+  assert.equal(BUILT['durandal.plan.review'].title, 'Plan: Review');
+  assert.ok(!('durandal.plan.review' in NOT_YET));
+  assert.ok(!('olifant.plans.review' in SERVER_NAMED));
+  assert.deepEqual(KEYS.find(k => k.command === 'durandal.plan.review'), { command: 'durandal.plan.review', keys: 'p r', when: 'durandal.isPlan' });
+});
+
+// the context keys the extension sets (spec §8); pauseOpen is informational, nothing binds it
+const KNOWN_KEYS = ['inProject', 'isPlan', 'pauseOpen', 'formOpen', 'ghostVisible', 'ghostKind', 'ghostBand'];
+
+test('M5: the when keys: each one the manifest reads is known and set; isPlan and pauseOpen among them (spec §8)', () => {
+  const clauses = [
+    ...pkg.contributes.keybindings.map(k => (k as { when?: string }).when ?? ''),
+    ...pkg.contributes.commands.map(c => (c as { enablement?: string }).enablement ?? ''),
+  ];
+  const read = new Set(clauses.flatMap(c => [...c.matchAll(/durandal\.([A-Za-z]+)/g)].map(m => m[1])));
+  for (const k of read) assert.ok(KNOWN_KEYS.includes(k), `durandal.${k} is read but not known`);
+  for (const k of ['isPlan', 'pauseOpen']) assert.ok(KNOWN_KEYS.includes(k), k);
+  // out/test/unit → the repository's src: every known key is set by a setContext there
+  const src = join(__dirname, '..', '..', '..', 'src');
+  const files = (readdirSync(src, { recursive: true }) as string[]).filter(f => f.endsWith('.ts'));
+  const text = files.map(f => readFileSync(join(src, f), 'utf8')).join('\n');
+  for (const k of KNOWN_KEYS) assert.ok(text.includes(`'setContext', 'durandal.${k}'`), `durandal.${k} is never set`);
 });

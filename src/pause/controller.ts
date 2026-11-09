@@ -1,5 +1,9 @@
 import * as vscode from 'vscode';
-import type { ConjureParams, Paused } from '../protocol';
+import { applyServerEdit } from '../applyEdit';
+import { errorMessage } from '../errors';
+import { factEdits } from '../plans/facts';
+import { Olifant } from '../protocol';
+import type { ChooseResult, ConjureParams, ErrandResult, Fact, Paused, Review } from '../protocol';
 import { findRoot } from '../root';
 import { NOT_RUNNING, Say, Server } from '../server';
 import { chordLabel } from '../settings';
@@ -7,12 +11,13 @@ import type { Conjure, PauseSink, ResumeHooks } from '../tdd/conjure';
 import type { Flight } from '../tdd/flights';
 import type { Ui } from '../uiTypes';
 import type { VirtualDocs } from '../virtualDocs';
-import { conjureDetails } from './details';
+import { conjureDetails, reviewDetails } from './details';
 import { conjureView, defaultSelected, entries, layout, noRow, PauseRow, rows, Running } from './model';
 import type { PausePanel } from './panel';
 import { Claim, ProgressClaims, ProgressValue } from './progress';
 import type { Reminders } from './reminder';
 import { acted, progressWords, resumeParams, runningLabel, runningRound } from './resume';
+import { entryIndex, notOffered, reviewRows, reviewTitle, reviewView } from './reviewModel';
 import { held, Pause, PauseStore } from './store';
 import type { FromPage, View } from './viewModel';
 
@@ -32,6 +37,13 @@ interface Run {
   flight?: Flight<vscode.CancellationToken>; message?: string; round?: number; claim?: Claim;
 }
 
+// a review shown: its plan, the payload, the selected file or reading, the choice in the air
+interface RevState { planUri: string; review: Review; selected: number; busy?: string }
+
+const BUSY = 'the last answer is still on its way';
+// the files of a do, the readings of a reconcile
+const countOf = (r: Review) => (r.kind === 'reconcile' ? r.entries.length : r.landing.files.length);
+
 const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 const keyName = (k: string) => (k === 'Escape' ? 'Esc' : k);
 const docOf = (uri: string) => vscode.workspace.textDocuments.find(d => d.uri.toString() === uri);
@@ -40,7 +52,9 @@ const docOf = (uri: string) => vscode.workspace.textDocuments.find(d => d.uri.to
 // pressed; the controller decides, re-lays out the model and sends it back.
 export class PauseController implements PauseSink {
   readonly store: PauseStore;
+  // the source shown: a conjure's file, or a review (spec §5.4); at most one of the two is set
   private shownUri: string | undefined;
+  private rev: RevState | undefined;
   private cols = 120;
   private help = false;
   private flipped = false;
@@ -79,6 +93,7 @@ export class PauseController implements PauseSink {
     this.store.set(h);
     this.d.reminders.show(uri, h.last, `conjure paused · ${chordLabel(this.d.platform, 'C')} reopens`);
     void this.d.say('info', p.why ? `conjure paused · ${p.why}` : 'conjure paused');
+    this.rev = undefined;
     this.shownUri = uri;
     this.help = false;
     this.paint(after ? 'entry' : undefined, true);
@@ -95,6 +110,7 @@ export class PauseController implements PauseSink {
   atRun(uri: string, line: number, selection: boolean): boolean {
     // the file's resume is in the air (its pause taken): the running view again, no second request
     if (this.run?.uri === uri) {
+      this.rev = undefined;
       this.shownUri = uri;
       this.help = false;
       this.paint(undefined, true);
@@ -103,6 +119,7 @@ export class PauseController implements PauseSink {
     const p = this.store.get(uri);
     if (!p) return false;
     if (!selection && line >= p.first && line <= p.last) {
+      this.rev = undefined;
       this.shownUri = uri;
       this.help = false;
       this.paint(undefined, true);
@@ -110,6 +127,26 @@ export class PauseController implements PauseSink {
     }
     this.store.drop(uri, 'the earlier pause is forgotten');
     return false;
+  }
+
+  // showReview: a review in the window (spec §5); entry selects a reading. The same review shown
+  // again keeps its selection (and, while its answer is on its way, its state); a pause shown
+  // before stays stored with its reminder (§5.4).
+  showReview(planUri: string, review: Review, entry?: string): void {
+    const r = this.rev;
+    const same = r !== undefined && r.planUri === planUri && r.review.id === review.id && r.review.kind === review.kind;
+    if (same && r.busy) {
+      r.review = review;
+      r.selected = Math.min(r.selected, Math.max(countOf(review) - 1, 0));
+      this.paint(undefined, true);
+      return;
+    }
+    const selected = entry !== undefined ? entryIndex(review, entry)
+      : same ? Math.min(r.selected, Math.max(countOf(review) - 1, 0)) : 0;
+    this.shownUri = undefined;
+    this.help = false;
+    this.rev = { planUri, review, selected };
+    this.paint(undefined, true);
   }
 
   // --- the page
@@ -124,7 +161,7 @@ export class PauseController implements PauseSink {
       const r = this.view()?.rows[m.row];
       if (r?.key) await this.press(r.key);
     } else if (m.type === 'select') {
-      await this.answer('select', this.select(m.entry));
+      await this.answer('select', this.rev ? this.selectReview(this.rev, m.entry) : this.select(m.entry));
     }
   }
 
@@ -140,7 +177,11 @@ export class PauseController implements PauseSink {
   }
 
   view(): View | undefined { return this.d.panel.isOpen() ? this.d.panel.last() : undefined; }
-  source(): SourceKind | undefined { return this.d.panel.isOpen() && this.shownUri ? 'conjure' : undefined; }
+  source(): SourceKind | undefined {
+    if (!this.d.panel.isOpen()) return undefined;
+    if (this.rev) return this.rev.review.kind;
+    return this.shownUri ? 'conjure' : undefined;
+  }
   notices(): string[] { return [...this.said]; }
 
   // progress: the server's work-done progress (hooks.progress); a resume's words feed its run
@@ -180,6 +221,13 @@ export class PauseController implements PauseSink {
   }
 
   private paint(flash?: 'row' | 'entry', focus = false): void {
+    const r = this.rev;
+    if (r) {
+      const view = reviewView(r.review, { cols: this.cols, selected: r.selected, flipped: this.flipped, help: this.help, busy: r.busy });
+      const beside = vscode.window.visibleTextEditors.find(e => e.document.uri.toString() === r.planUri)?.viewColumn;
+      this.d.panel.show(view, { beside, flash, focus });
+      return;
+    }
     const c = this.current();
     if (!c) return;
     const view = conjureView(c.pause.paused, {
@@ -199,14 +247,16 @@ export class PauseController implements PauseSink {
 
   private hide(): void {
     this.shownUri = undefined;
+    this.rev = undefined;
     this.help = false;
     this.flipped = false;
     this.d.panel.close();
   }
 
-  // the panel's tab was closed: the source stays (pause stored, run going)
+  // the panel's tab was closed: the source stays (pause stored, run going, review on the server)
   closed(): void {
     this.shownUri = undefined;
+    this.rev = undefined;
     this.help = false;
     this.flipped = false;
   }
@@ -229,6 +279,7 @@ export class PauseController implements PauseSink {
   // --- the keys (pause.lua M.keys :1095-1126)
 
   private table(): KeyAct[] {
+    if (this.rev) return this.reviewTable(this.rev);
     return [
       { keys: ['c', 'h', 'C', 'w', 'W', 't', 'T', 'p', 'P', 's', 'a', 'r'], act: k => this.rowKey(k) },
       { keys: ['['], act: () => this.step(-1) },
@@ -353,6 +404,203 @@ export class PauseController implements PauseSink {
     const root = unit.scheme === 'file' ? await findRoot(unit.fsPath) : undefined;
     const text = conjureDetails(c.pause.paused, { root, lang: doc?.languageId ?? '' });
     const uri = this.d.docs.set(`details/${c.pause.token}.md`, text);
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri), { viewColumn: vscode.ViewColumn.Beside, preview: false });
+    return true;
+  }
+
+  // --- the review source (review.lua keys :217-293, readings :383-430)
+
+  private reviewTable(r: RevState): KeyAct[] {
+    const shared: KeyAct[] = [
+      { keys: ['['], act: () => this.stepReview(r, -1) },
+      { keys: [']'], act: () => this.stepReview(r, 1) },
+      // the page scrolls the diff pane itself; reported so every key is accounted for
+      { keys: ['j', 'k', 'PageUp', 'PageDown'], act: () => true },
+      { keys: ['Tab'], act: () => this.flip() },
+      { keys: ['d'], act: () => this.reviewDetailsOpen(r) },
+      { keys: ['q', 'Escape'], act: () => { this.hide(); return true; } },
+      { keys: ['?'], act: () => { this.help = !this.help; this.paint(); return true; } },
+    ];
+    if (r.review.kind === 'errand') return [{ keys: ['o'], act: () => this.reopen(r) }, ...shared];
+    if (r.review.kind === 'do') {
+      const offer = (k: string, choice: string): KeyAct => ({ keys: [k], act: () => this.offer(r, k, choice) });
+      return [offer('a', 'keep'), offer('r', 'revert'), offer('t', 'test'), offer('p', 'allow'), { keys: ['o'], act: () => this.reopen(r) }, ...shared];
+    }
+    return [{ keys: ['a', 'r', 'n', 'i', '1', '2', '3', '4', '5', '6', '7', '8', '9'], act: k => this.byKey(r, k) }, ...shared];
+  }
+
+  // offer: a do's fixed key answers with its choice when the review offers it
+  private offer(r: RevState, key: string, choice: string): Promise<true | string> | string {
+    if (r.busy) return BUSY;
+    if (r.review.kind === 'reconcile' || !r.review.offers.some(o => o.choice === choice)) return notOffered(r.review, key);
+    return this.choose(r, choice, {});
+  }
+
+  // byKey: a reading's offer by its key (digits place under the open step the offer names)
+  private byKey(r: RevState, key: string): Promise<true | string> | string {
+    if (r.busy) return BUSY;
+    const row = reviewRows(r.review, r.selected).find(x => x.key === key);
+    if (!row) return notOffered(r.review, key);
+    const extra: { entry?: string; step?: number } = {};
+    if (row.entry !== undefined) extra.entry = row.entry;
+    if (row.step !== undefined) extra.step = row.step;
+    return this.choose(r, row.choice, extra);
+  }
+
+  private async choose(r: RevState, choice: string, extra: { entry?: string; step?: number }): Promise<true | string> {
+    if (!this.d.server.client()) return NOT_RUNNING;
+    r.busy = choice;
+    this.paint();
+    let res: ChooseResult;
+    try {
+      res = await this.d.server.request(Olifant.plansReviewChoose, { textDocument: { uri: r.planUri }, id: r.review.id, choice, ...extra });
+    } catch (err) {
+      r.busy = undefined;
+      // the window moved on (closed, or another source): the error as a notification
+      if (this.rev !== r) {
+        void this.d.say('error', errorMessage(err));
+        return true;
+      }
+      this.paint();
+      return errorMessage(err);
+    }
+    r.busy = undefined;
+    return this.answered(r, choice, res);
+  }
+
+  // answered: the edit as one undo step, the facts on the plan, then done (close and say) or the
+  // new review in place with what it said (review.lua answered :168-200). files: VS Code reloads
+  // unmodified files from disk itself.
+  private async answered(r: RevState, choice: string, res: ChooseResult): Promise<true | string> {
+    const failed = await this.landReview(r.planUri, res.edit, res.facts);
+    const kind = r.review.kind === 'reconcile' ? 'reconcile' : 'do';
+    if (failed) {
+      if (this.rev !== r) {
+        void this.d.say('error', failed);
+        return true;
+      }
+      if (res.review) r.review = res.review;
+      this.paint();
+      return failed;
+    }
+    if (res.done) {
+      if (this.rev === r) this.hide();
+      void this.d.say('info', `${kind}: ${res.said ?? choice}`);
+      return true;
+    }
+    if (this.rev === r) {
+      if (res.review) {
+        r.review = res.review;
+        r.selected = Math.min(r.selected, Math.max(countOf(r.review) - 1, 0));
+      }
+      this.paint();
+    }
+    return res.said ?? 'done';
+  }
+
+  // landReview: a choose's edit (versioned: refused whole if the plan moved) and its facts; the
+  // reason when VS Code or the version check refused
+  private async landReview(planUri: string, edit: ChooseResult['edit'], facts: Fact[] | undefined): Promise<string | undefined> {
+    if (edit) {
+      const lc = this.d.server.client();
+      if (!lc) return NOT_RUNNING;
+      const done = await applyServerEdit(lc, { label: 'review', edit }, () => undefined, () => undefined);
+      if (!done.applied) return done.failureReason ?? 'VS Code did not apply the edit';
+    }
+    if (facts && facts.length > 0) {
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(planUri));
+      // lineAt, not split('\n'): a CRLF plan's lines without their '\r'
+      const lines = Array.from({ length: doc.lineCount }, (_, i) => doc.lineAt(i).text);
+      const edits = factEdits(lines, facts);
+      if (edits.length > 0) {
+        const we = new vscode.WorkspaceEdit();
+        const uri = doc.uri;
+        for (const e of edits) {
+          if (e.end < doc.lineCount) {
+            we.replace(uri, new vscode.Range(e.start, 0, e.end, 0), e.lines.map(l => l + '\n').join(''));
+          } else {
+            // the edit reaches past the last line: replace to the end, no trailing newline added
+            const end = doc.lineAt(doc.lineCount - 1).range.end;
+            const start = e.start < doc.lineCount ? new vscode.Position(e.start, 0) : end;
+            we.replace(uri, new vscode.Range(start, end), (e.start >= doc.lineCount ? '\n' : '') + e.lines.join('\n'));
+          }
+        }
+        if (!await vscode.workspace.applyEdit(we)) return 'VS Code did not apply the plan facts';
+      }
+    }
+    return undefined;
+  }
+
+  private selectReview(r: RevState, i: number): true | string {
+    if (i < 0 || i >= countOf(r.review)) return 'nothing to do here';
+    r.selected = i;
+    this.paint('entry');
+    return true;
+  }
+
+  private stepReview(r: RevState, d: number): true | string {
+    const reading = r.review.kind === 'reconcile';
+    const count = countOf(r.review);
+    if (count === 0) return reading ? 'nothing to review' : 'no file changed';
+    const to = Math.min(Math.max(r.selected + d, 0), count - 1);
+    if (to === r.selected) return d < 0 ? (reading ? 'the first reading' : 'the first file') : (reading ? 'the last reading' : 'the last file');
+    r.selected = to;
+    this.paint('entry');
+    return true;
+  }
+
+  // reopen (o): what the do should change, then a live do is kept and its thread resumed; an
+  // errand's thread is resumed at once (spec §5.3). The do's own handling is M6's: one line here.
+  private async reopen(r: RevState): Promise<true | string> {
+    if (r.busy) return BUSY;
+    const review = r.review;
+    if (review.kind === 'reconcile' || !review.offers.some(o => o.choice === 'reopen')) return notOffered(review, 'o');
+    const text = (await this.d.ui().text({ title: 'more', value: '', prompt: 'what the do should change' }).result)?.trim();
+    if (!text) return true;
+    // the window moved on while the sentence was asked: nothing to send
+    if (this.rev !== r) return true;
+    const line = review.row ?? 0;
+    if (review.kind === 'errand') {
+      this.hide();
+      await this.redo(r.planUri, review.id, line, text);
+      return true;
+    }
+    if (!this.d.server.client()) return NOT_RUNNING;
+    r.busy = 'reopen';
+    this.paint();
+    let res: ChooseResult;
+    try {
+      res = await this.d.server.request(Olifant.plansReviewChoose, { textDocument: { uri: r.planUri }, id: review.id, choice: 'reopen' });
+    } catch (err) {
+      r.busy = undefined;
+      if (this.rev !== r) {
+        void this.d.say('error', errorMessage(err));
+        return true;
+      }
+      this.paint();
+      return errorMessage(err);
+    }
+    r.busy = undefined;
+    const said = await this.answered(r, 'reopen', res);
+    if (res.reopen) await this.redo(r.planUri, res.reopen.id, line, text);
+    return said;
+  }
+
+  // redo: plans/do resuming a review's thread; its review arrives through review/ready again
+  private async redo(planUri: string, id: string, line: number, text: string): Promise<void> {
+    try {
+      const a: ErrandResult = await this.d.server.request(Olifant.plansDo, { textDocument: { uri: planUri }, line, resume: id, text });
+      const changed = Array.isArray(a.changed) ? a.changed.length : 0;
+      const review = typeof a.review === 'string' ? ' · to review' : '';
+      void this.d.say('info', `do: ${changed} ${changed === 1 ? 'file' : 'files'} changed${review} · ${Number(a.seconds) || 0} s`);
+    } catch (err) {
+      void this.d.say('error', errorMessage(err));
+    }
+  }
+
+  // the review's server-built details beside the window (spec §6)
+  private async reviewDetailsOpen(r: RevState): Promise<true> {
+    const uri = this.d.docs.set(`details/${r.review.id}.md`, reviewDetails(reviewTitle(r.review), r.review.details));
     await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri), { viewColumn: vscode.ViewColumn.Beside, preview: false });
     return true;
   }

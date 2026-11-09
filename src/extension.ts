@@ -12,7 +12,9 @@ import { Plans } from './land';
 import { PauseController, SourceKind } from './pause/controller';
 import { PausePanel } from './pause/panel';
 import { Reminders } from './pause/reminder';
+import { Reviews } from './pause/review';
 import type { FromPage, View } from './pause/viewModel';
+import { trackIsPlan } from './plans/trackIsPlan';
 import { discover, trackProjects } from './projects';
 import { quickInputUi } from './quickInput';
 import { findRoot } from './root';
@@ -47,6 +49,8 @@ export interface PauseApi {
   stored(uri: string): boolean;
   reminders(uri: string): number;
   notices(): string[];
+  // a review opened as the lens opens it
+  open(uri: string, id: string, entry?: string): Promise<void>;
 }
 
 export interface Api {
@@ -67,6 +71,8 @@ export interface Api {
   tdd: TddApi;
   // the pause window (M5)
   pause: PauseApi;
+  // the active editor shows a plan (durandal.isPlan)
+  isPlan(): boolean;
 }
 
 let server: Server | undefined;
@@ -141,6 +147,11 @@ export function activate(context: vscode.ExtensionContext): Api {
   hold.c = ctl;
   ctl.register(context);
   conjure.setSink(ctl);
+  // the reviews (M5b spec §5): the push after a do, the lens, the chord p r
+  const reviews = new Reviews({ server: s, say, controller: ctl });
+  reviews.register(context);
+  hooks.reviewReady = p => reviews.ready(p);
+  const plansTracked = trackIsPlan(context);
   const pause: PauseApi = {
     view: () => ctl.view(),
     source: () => ctl.source(),
@@ -149,6 +160,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     stored: uri => !!ctl.store.get(uri),
     reminders: uri => reminders.count(uri),
     notices: () => ctl.notices(),
+    open: (uri, id, entry) => reviews.open(uri, id, entry),
   };
   const tdd: TddApi = {
     last: () => tests.last,
@@ -198,7 +210,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     for (const r of await discover()) await s.addRoot(r);
     if (s.roots().length > 0) await s.start();
   })();
-  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest, tdd, pause };
+  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest, tdd, pause, isPlan: plansTracked.isPlan };
 }
 
 export async function deactivate(): Promise<void> {

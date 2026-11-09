@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reviews in the pause window: a do's review opens when the do ends, the plan lens and
+  `Plan: Review` (chord `p r` on a plan) open do, past-do and reconcile reviews; their answers
+  land as one undo step, with the plan's facts (milestone 5b).
 - The pause window: a paused conjure opens a tab beside the file with the situation, the rounds,
   the offers on their keys and the diff they would land; resumes run in it with the server's
   words, `d` opens the details as markdown, and the pause survives the tab (milestone 5a).
