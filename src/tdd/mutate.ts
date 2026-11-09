@@ -51,6 +51,9 @@ export class Mutate {
     void this.d.say('info', String(a.summary));
     if ((a.survivors ?? []).length > 0 && vscode.window.activeTextEditor?.document.uri.toString() === uri.toString()) {
       this.d.survivors.open(uri, a);
+    } else {
+      // an open picker over this unit follows the answer; none left closes it
+      this.d.survivors.refresh(uri, a);
     }
   }
 
@@ -81,7 +84,8 @@ export class Mutate {
     for (;;) {
       const line = nextMarked(this.d.marks.memory.survivors(key), done);
       if (line === undefined) break;
-      const f = this.d.flights.start('remutate');
+      // a newer green run's loop supersedes this one; superseded returns silently
+      const f = this.d.flights.start('remutate', true);
       const o = await settle(f, this.d.server.request(Olifant.mutate,
         { textDocument: { uri: key }, position: { line: line - 1, character: 0 } }, f.token), Olifant.mutate.method);
       if (o.kind === 'cancelled') return;

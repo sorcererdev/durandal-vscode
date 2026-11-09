@@ -23,7 +23,7 @@ const runs = () => log().filter(m => m.method === 'olifant/tests/run');
 const testMarks = (rel: string) => vscode.languages.getDiagnostics(file(rel)).filter(d => d.source === 'olifant' && d.severity === vscode.DiagnosticSeverity.Error);
 const resultsTabs = () => tabsUnder('/' + RESULTS_PATH);
 
-// run executes a TDD command and waits for the notice it says (from the shown list's end)
+// said executes a TDD command and waits for the notice it says (from the shown list's end)
 async function said(command: string, want: (text: string) => boolean): Promise<string> {
   const a = await api();
   const from = a.shown.length;
@@ -421,6 +421,18 @@ describe('the TDD loop (fake server)', () => {
     assert.deepEqual(mutateMarks().map(d => d.range.start.line), [1]);
   });
 
+  it('a hand mutate of the picker\'s unit that kills everything closes the picker', async () => {
+    const ui = await mutateWith(mutated([surv(2, '+', '-')]));
+    const list = await until(() => ui.openList, 'the picker');
+    const lists = ui.lists.length;
+    reply('olifant/mutate', { ...mutated([]), summary: 'no survivors · 4/4 killed' });
+    await said('durandal.mutate', t => t.startsWith('no survivors'));
+    await until(() => list.closed, 'the picker closed');
+    assert.equal(mutateMarks().length, 0);
+    assert.equal(ui.openList, undefined);
+    assert.equal(ui.lists.length, lists);
+  });
+
   it('the picker closes when the active editor changes', async () => {
     const ui = await mutateWith(mutated([surv(2, '+', '-')]));
     const list = await until(() => ui.openList, 'the picker');
@@ -455,6 +467,29 @@ describe('the TDD loop (fake server)', () => {
     // the open picker followed the answer in place; no new one opened
     assert.equal(ui.openList?.items.length, 1);
     assert.equal(ui.lists.length, lists);
+  });
+
+  it('a second green run supersedes the first\'s re-mutate: $/cancelRequest, nothing said for it', async () => {
+    const a = await api();
+    await mutateWith(mutated([surv(2, '+', '-')]));
+    const muts = () => log().filter(m => m.method === 'olifant/mutate');
+    reply('olifant/mutate', { hold: true, title: 'mutating' });
+    reply('olifant/tests/run', green());
+    const n = muts().length;
+    await said('durandal.test.here', t => t.startsWith('all 2 passed'));
+    await until(() => muts().length > n, 'the first re-mutate sent');
+    const first = muts()[n].id;
+    const from = a.shown.length;
+    await said('durandal.test.here', t => t.startsWith('all 2 passed'));
+    await until(() => muts().length > n + 1, 'the second re-mutate sent');
+    await until(() => log().some(m => m.method === '$/cancelRequest' && m.params.id === first), 'the first re-mutate cancelled');
+    const second = muts()[n + 1].id;
+    a.tdd.cancel();
+    await until(() => log().some(m => m.method === '$/cancelRequest' && m.params.id === second), 'the second re-mutate cancelled');
+    await new Promise<void>(r => setTimeout(r, 200));
+    // one notice: the second run's summary; nothing for either re-mutate
+    assert.deepEqual(a.shown.slice(from).map(s => s.text), ['all 2 passed · 0.8 s']);
+    assert.deepEqual(mutateMarks().map(d => d.range.start.line), [1]);
   });
 
   it('a green run from the test file re-mutates its module (olifant/tests/file)', async () => {
