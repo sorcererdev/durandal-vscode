@@ -56,14 +56,17 @@ const shown = (row: number, visible: readonly Span[]) => visible.some(v => v.sta
 
 // collapsedStarts: folds whose start is shown and whose next row is not, and below which
 // something is shown (else the next row may only be below the viewport), or which run to the
-// document's end.
-export function collapsedStarts(folds: readonly Fold[], visible: readonly Span[], lineCount: number): Fold[] {
+// document's end. LAST_ROW_EMPTY: VS Code leaves an empty last row shown alone after a fold out
+// of visibleRanges (an empty range, 1.145.2), so a fold ending one row before it also counts as
+// running to the end: the heuristic widens to folds ending one row earlier.
+export function collapsedStarts(folds: readonly Fold[], visible: readonly Span[], lineCount: number, lastRowEmpty = false): Fold[] {
+  const lastRow = lineCount - 1 - (lastRowEmpty && lineCount > 1 ? 1 : 0);
   const seen = new Set<number>();
   const out: Fold[] = [];
   for (const f of folds) {
     if (f.end <= f.start || seen.has(f.start)) continue;
     if (!shown(f.start, visible) || shown(f.start + 1, visible)) continue;
-    if (!visible.some(v => v.start > f.start) && f.end < lineCount - 1) continue;
+    if (!visible.some(v => v.start > f.start) && f.end < lastRow) continue;
     seen.add(f.start);
     out.push({ start: f.start, end: f.end });
   }
