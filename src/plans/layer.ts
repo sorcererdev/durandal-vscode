@@ -4,6 +4,7 @@ import { PaintInput, PlanDecorations } from './decorate';
 import { conceals } from './glyphs';
 import type { Legend, TokenEdit } from './legend';
 import type { PlanDocs } from './planDocs';
+import { DiagLike, Severity, worstPerLine } from './verdicts';
 import { Fold, Lens, PlanReading, Readings } from './reading';
 import type { PlansOptions } from './settings';
 import type { ReadingHooks } from './taps';
@@ -37,12 +38,19 @@ export class PlanLayer implements ReadingHooks {
   private opts: PlansOptions;
   private readonly drawnBy = new Map<string, Drawn>();
   private readonly deco = new PlanDecorations();
+  // known: the documents the plan check said are plans (the margin draws on these)
+  private readonly known = new Set<string>();
 
   constructor(private readonly d: LayerDeps) {
     this.opts = d.options;
   }
 
-  isPlan(doc: vscode.TextDocument): Promise<boolean> { return this.d.docs.is(doc); }
+  isPlan(doc: vscode.TextDocument): Promise<boolean> {
+    return this.d.docs.is(doc).then(yes => {
+      if (yes) this.known.add(doc.uri.toString());
+      return yes;
+    });
+  }
   tokens(uri: string, version: number, data: ArrayLike<number>, resultId: string | undefined, legend: Legend): void {
     this.readings.tokens(uri, version, data, legend, resultId);
   }
@@ -58,6 +66,9 @@ export class PlanLayer implements ReadingHooks {
       vscode.workspace.onDidCloseTextDocument(doc => this.closed(doc.uri.toString())),
       vscode.window.onDidChangeTextEditorSelection(e => this.repaint(e.textEditor)),
       vscode.window.onDidChangeVisibleTextEditors(() => this.repaintAll()),
+      vscode.languages.onDidChangeDiagnostics(e => {
+        for (const uri of e.uris) if (this.known.has(uri.toString())) this.changed(uri.toString());
+      }),
     );
   }
 
@@ -65,6 +76,13 @@ export class PlanLayer implements ReadingHooks {
   options(o: PlansOptions): void {
     this.opts = o;
     this.d.docs.clear();
+    // the plan check is asked again, with the new folder, of every visible document
+    const docs = new Set(vscode.window.visibleTextEditors.map(e => e.document));
+    void Promise.all([...docs].map(async doc => {
+      const uri = doc.uri.toString();
+      if (await this.d.docs.is(doc)) this.known.add(uri);
+      else this.known.delete(uri);
+    })).then(() => this.repaintAll());
     this.repaintAll();
   }
 
@@ -97,7 +115,7 @@ export class PlanLayer implements ReadingHooks {
     const doc = ed.document;
     const uri = doc.uri.toString();
     const r = this.readings.get(uri);
-    if (!r && !this.drawnBy.has(uri)) return;
+    if (!r && !this.drawnBy.has(uri) && !this.known.has(uri)) return;
     const drawn = this.drawnBy.get(uri) ?? empty();
     const input: PaintInput = {};
     const lineAt = (l: number) => (l < doc.lineCount ? doc.lineAt(l).text : undefined);
@@ -107,6 +125,15 @@ export class PlanLayer implements ReadingHooks {
       input.conceals = c;
       drawn.glyphs = c.map(x => ({ line: x.line, start: x.start, end: x.end, text: x.glyph }));
     }
+    if (this.known.has(uri)) {
+      const margin = worstPerLine(vscode.languages.getDiagnostics(doc.uri).map(diagLike), this.opts.glyphs);
+      input.margin = margin;
+      drawn.verdicts = margin.map(m => ({ line: m.line, kind: m.kind, text: m.text }));
+    } else if (drawn.verdicts.length > 0) {
+      // no longer a plan (closed, or the folder changed): the margin clears
+      input.margin = [];
+      drawn.verdicts = [];
+    }
     this.deco.paint(ed, input);
     this.drawnBy.set(uri, drawn);
   }
@@ -115,7 +142,14 @@ export class PlanLayer implements ReadingHooks {
     this.readings.drop(uri);
     this.d.docs.forget(uri);
     // its editors (a language change keeps them open) show nothing of the plan any more
+    this.known.delete(uri);
     this.changed(uri);
     this.drawnBy.delete(uri);
   }
+}
+
+// diagLike: a VS Code diagnostic as the margin rule reads it (a code may be an object)
+function diagLike(d: vscode.Diagnostic): DiagLike {
+  const code = d.code === undefined ? undefined : typeof d.code === 'object' ? String(d.code.value) : String(d.code);
+  return { line: d.range.start.line, source: d.source, code, severity: d.severity as Severity };
 }
