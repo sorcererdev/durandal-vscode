@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import type { FormRow } from '../../src/generate/form';
 import { Olifant } from '../../src/protocol';
 import { FakeUi } from '../fakeUi';
-import { file, open, running, until, ws } from './helpers';
+import { cleanTold, file, open, running, until, ws } from './helpers';
 
 const BOOKING = 'py/src/bistro/booking/commands/create_booking.py';
 const exists = (rel: string) => existsSync(join(ws(), rel));
@@ -37,10 +37,12 @@ const ready = (ui: FakeUi) => until(() => ui.openForm && !ui.openForm.model.upda
 
 describe('generate against olifant lsp (python-htmx)', () => {
   afterEach(async () => {
-    (await running()).setUi(undefined);
+    const a = await running();
+    a.setUi(undefined);
     const cwd = join(ws(), 'py');
     execFileSync('git', ['checkout', '--', '.'], { cwd });
-    execFileSync('git', ['clean', '-fdq'], { cwd });
+    // the next test's previews must not see this one's files (olifant lists them on a save)
+    await cleanTold(a, cwd);
   });
 
   it('comm → close_table → Ctrl+Enter: the command and its test written', async () => {

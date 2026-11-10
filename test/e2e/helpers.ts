@@ -1,5 +1,7 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { DidChangeWatchedFilesNotification, FileChangeType } from 'vscode-languageserver-protocol';
 import * as vscode from 'vscode';
 import type { Api } from '../../src/extension';
 import { tabsUnder } from '../../src/virtualDocs';
@@ -29,6 +31,20 @@ export async function until<T>(f: () => Promise<T> | T, what: string, ms = 20_00
 }
 
 export const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+// cleanTold runs `git clean -fdq` in cwd and tells the server what it removed, as the language
+// client would (workspace/didChangeWatchedFiles, deleted). olifant lists a project's files once
+// per change it hears of and keeps the listing (a save lists them again); VS Code's watcher can
+// report a delete made behind its back a minute late, and a request sent before then is
+// answered from a listing that still holds the removed files.
+export async function cleanTold(a: Api, cwd: string): Promise<void> {
+  const removed = execFileSync('git', ['clean', '-nd'], { cwd, encoding: 'utf8' })
+    .split('\n').map(l => /^Would remove (.+?)\/?$/.exec(l)?.[1]).filter((p): p is string => !!p);
+  execFileSync('git', ['clean', '-fdq'], { cwd });
+  if (removed.length === 0) return;
+  await a.server.notify(DidChangeWatchedFilesNotification.type,
+    { changes: removed.map(p => ({ uri: vscode.Uri.file(join(cwd, p)).toString(), type: FileChangeType.Deleted })) });
+}
 
 export async function running(): Promise<Api> {
   const a = await api();
