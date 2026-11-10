@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import type { ApplyWorkspaceEditParams, ApplyWorkspaceEditResult, LanguageClient } from 'vscode-languageclient/node';
 import { appliedMessage, editedUris, stripAnnotations, versionConflict } from './edits';
 import { errorMessage } from './errors';
+import { readPlansOptions } from './plans/options';
 import { isPlanFile } from './root';
 
 // key compares a server's uri with VS Code's spelling of it (encoding differs: %3A, [, ]).
@@ -56,7 +57,7 @@ async function applyNow(
   // kept: files the edit left unsaved because they had unsaved edits before
   const kept: string[] = [];
   for (const uri of targets) {
-    if (uri.scheme !== 'file' || await isPlanFile(uri.fsPath)) continue;
+    if (uri.scheme !== 'file' || await isPlanFile(uri.fsPath, readPlansOptions().dir)) continue;
     if (dirtyBefore.has(uri.toString())) {
       kept.push(basename(uri.fsPath));
       continue;

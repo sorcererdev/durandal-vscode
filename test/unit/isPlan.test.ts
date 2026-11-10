@@ -29,3 +29,10 @@ test('Windows separators are the same rule', () => {
   assert.equal(isPlanPath('C:\\w\\one\\plans\\x.md', 'C:\\w\\one', 'markdown'), true);
   assert.equal(isPlanPath('C:\\w\\one\\src\\x.md', 'C:\\w\\one', 'markdown'), false);
 });
+
+test('the plans folder is a setting: another name, or a nested path', () => {
+  assert.equal(isPlanPath('/w/one/docs/x.md', '/w/one', 'markdown', 'docs'), true);
+  assert.equal(isPlanPath('/w/one/plans/x.md', '/w/one', 'markdown', 'docs'), false);
+  assert.equal(isPlanPath('/w/one/docs/plans/x.md', '/w/one', 'markdown', 'docs/plans'), true);
+  assert.equal(isPlanPath('/w/one/docs/x.md', '/w/one', 'markdown', 'docs/plans'), false);
+});
