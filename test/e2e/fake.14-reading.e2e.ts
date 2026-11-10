@@ -105,6 +105,9 @@ describe('the plans reading layer (fake server)', () => {
     await until(() => docOf(PLAN)?.languageId === 'plaintext', 'the plan reopened as plain text');
     await sleep(500);
     assert.equal(a.planView.reading(uriOf(PLAN)), undefined);
+    // later tests read a markdown plan
+    await vscode.languages.setTextDocumentLanguage(docOf(PLAN)!, 'markdown');
+    await until(() => docOf(PLAN)?.languageId === 'markdown', 'the plan markdown again');
   });
 
   it('durandal.isPlan follows a language change and the plans folder setting (spec §3.1)', async () => {
