@@ -24,14 +24,15 @@ export interface PlanViewApi {
   entered(uri: string): boolean;
 }
 
-export interface LayerDeps { docs: PlanDocs; options: PlansOptions; say: Say }
+// warn: a failure the layer catches, written to the output channel as a warning
+export interface LayerDeps { docs: PlanDocs; options: PlansOptions; say: Say; warn: (m: string) => void }
 
 const empty = (): Drawn => ({ glyphs: [], verdicts: [], conclusions: [] });
 
 // PlanLayer owns the plans reading layer (M6 spec §3): the readings the taps fill, the events
 // that repaint, what each document shows: a reading's change, a selection, the visible editors
-// and the options repaint, from the reading alone (no request). The glyphs are Task 5's; later
-// tasks add the verdict margin (Task 6), folds and conclusions (Task 7), the Enter rule and the
+// and the options repaint, from the reading alone (no request). It draws the glyphs and the
+// verdict margin; later tasks add folds and conclusions (Task 7), the Enter rule and the
 // excerpt guard (Task 8).
 export class PlanLayer implements ReadingHooks {
   readonly readings = new Readings(uri => this.changed(uri));
@@ -40,6 +41,8 @@ export class PlanLayer implements ReadingHooks {
   private readonly deco = new PlanDecorations();
   // known: the documents the plan check said are plans (the margin draws on these)
   private readonly known = new Set<string>();
+  // recheck: the latest options() re-check; an older one that resolves later is dropped
+  private recheck = 0;
 
   constructor(private readonly d: LayerDeps) {
     this.opts = d.options;
@@ -47,7 +50,7 @@ export class PlanLayer implements ReadingHooks {
 
   isPlan(doc: vscode.TextDocument): Promise<boolean> {
     return this.d.docs.is(doc).then(yes => {
-      if (yes) this.known.add(doc.uri.toString());
+      this.know(doc, yes);
       return yes;
     });
   }
@@ -78,12 +81,22 @@ export class PlanLayer implements ReadingHooks {
     this.d.docs.clear();
     // the plan check is asked again, with the new folder, of every visible document
     const docs = new Set(vscode.window.visibleTextEditors.map(e => e.document));
-    void Promise.all([...docs].map(async doc => {
-      const uri = doc.uri.toString();
-      if (await this.d.docs.is(doc)) this.known.add(uri);
-      else this.known.delete(uri);
-    })).then(() => this.repaintAll());
+    const gen = ++this.recheck;
+    void Promise.all([...docs].map(async doc => ({ doc, yes: await this.d.docs.is(doc) })))
+      .then(answers => {
+        if (gen !== this.recheck) return;
+        for (const { doc, yes } of answers) this.know(doc, yes);
+        this.repaintAll();
+      })
+      .catch((err: unknown) => this.d.warn(`plans: the plan check after a settings change failed: ${err instanceof Error ? err.message : String(err)}`));
     this.repaintAll();
+  }
+
+  // know: the plan check's answer for DOC; a document that closed meanwhile stays forgotten
+  private know(doc: vscode.TextDocument, yes: boolean): void {
+    const uri = doc.uri.toString();
+    if (yes && !doc.isClosed) this.known.add(uri);
+    else this.known.delete(uri);
   }
 
   // the server stopped: nothing it said stands (spec §5.7), and nothing it said stays drawn
