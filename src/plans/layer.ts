@@ -6,7 +6,7 @@ import { collapsedStarts, foldLabel } from './foldText';
 import { conceals } from './glyphs';
 import type { Legend, TokenEdit } from './legend';
 import type { PlanDocs } from './planDocs';
-import { DiagLike, Severity, worstPerLine } from './verdicts';
+import { DiagLike, Mark, Severity, worstPerLine } from './verdicts';
 import { Fold, Lens, liveExcerpts, PlanReading, Readings, typedInto } from './reading';
 import type { PlansOptions } from './settings';
 import type { ReadingHooks } from './taps';
@@ -24,6 +24,8 @@ export interface PlanViewApi {
   // hidden: the ranges conceal hides in the editors of URI as last set, whatever the layer forgot
   hidden(uri: string): number;
   entered(uri: string): boolean;
+  // margins: how many times the margin was set on an editor of URI (it is set only when it changes)
+  margins(uri: string): number;
 }
 
 // warn: a failure the layer catches, written to the output channel as a warning
@@ -55,6 +57,18 @@ export class PlanLayer implements ReadingHooks {
   private recheck = 0;
   // warned: per document, the live excerpts the guard has warned for
   private readonly warned = new Map<string, Set<string>>();
+  // The margin is set on an editor only when it changes (the diagnostics, the options, the plan
+  // check), never on a mere repaint: VS Code moves the decorations it holds with the text, while
+  // getDiagnostics keeps the rows the server sent until it sends more. marginGen: per document,
+  // the change it last had (from one counter, so a number is never reused); marginAll: the last
+  // options change; marginAt: per editor, the change its margin was set at.
+  private marginSeq = 0;
+  private marginAll = 0;
+  private readonly marginGen = new Map<string, number>();
+  private readonly marginAt = new WeakMap<vscode.TextEditor, number>();
+  private readonly marginCount = new Map<string, number>();
+  // marginSeen: per document, the marks the margin was last set from
+  private readonly marginSeen = new Map<string, string>();
   private readonly entry = new FoldEntry({ reading: uri => this.readings.get(uri), foldDone: () => this.opts.foldDone, isPlan: doc => this.isPlan(doc) });
 
   constructor(private readonly d: LayerDeps) {
@@ -86,7 +100,15 @@ export class PlanLayer implements ReadingHooks {
       vscode.window.onDidChangeTextEditorVisibleRanges(e => this.repaint(e.textEditor)),
       vscode.window.onDidChangeActiveTextEditor(ed => { if (ed) void this.entry.enter(ed); }),
       vscode.languages.onDidChangeDiagnostics(e => {
-        for (const uri of e.uris) if (this.known.has(uri.toString())) this.changed(uri.toString());
+        for (const uri of e.uris) {
+          const u = uri.toString();
+          if (!this.known.has(u)) continue;
+          // another source's change (markdown's link check writes on every edit) leaves the
+          // margin as set: only a change in what it would draw sets it again
+          if (JSON.stringify(this.marks(uri)) === this.marginSeen.get(u)) continue;
+          this.marginChanged(u);
+          this.changed(u);
+        }
       }),
     );
     const active = vscode.window.activeTextEditor;
@@ -96,6 +118,7 @@ export class PlanLayer implements ReadingHooks {
   // the plans settings changed: the plan check is asked again, and every editor shows the new options
   options(o: PlansOptions): void {
     this.opts = o;
+    this.marginAll = ++this.marginSeq;
     this.d.docs.clear();
     // the plan check is asked again, with the new folder, of every visible document
     const docs = new Set(vscode.window.visibleTextEditors.map(e => e.document));
@@ -113,8 +136,17 @@ export class PlanLayer implements ReadingHooks {
   // know: the plan check's answer for DOC; a document that closed meanwhile stays forgotten
   private know(doc: vscode.TextDocument, yes: boolean): void {
     const uri = doc.uri.toString();
-    if (yes && !doc.isClosed) this.known.add(uri);
-    else this.known.delete(uri);
+    if (yes && !doc.isClosed) {
+      if (!this.known.has(uri)) this.marginChanged(uri);
+      this.known.add(uri);
+    } else this.known.delete(uri);
+  }
+
+  private marginChanged(uri: string): void { this.marginGen.set(uri, ++this.marginSeq); }
+
+  // marks: the verdict margin of URI from its diagnostics as VS Code holds them now
+  private marks(uri: vscode.Uri): Mark[] {
+    return worstPerLine(vscode.languages.getDiagnostics(uri).map(diagLike), this.opts.glyphs);
   }
 
   // the server stopped: nothing it said stands (spec §5.7), and nothing it said stays drawn
@@ -130,6 +162,7 @@ export class PlanLayer implements ReadingHooks {
       drawn: uri => this.drawnBy.get(uri) ?? empty(),
       hidden: uri => this.deco.hidden(uri),
       entered: uri => this.entry.entered(uri),
+      margins: uri => this.marginCount.get(uri) ?? 0,
     };
   }
 
@@ -176,15 +209,22 @@ export class PlanLayer implements ReadingHooks {
       input.conceals = c;
       drawn.glyphs = c.map(x => ({ line: x.line, start: x.start, end: x.end, text: x.glyph }));
     }
+    const gen = Math.max(this.marginGen.get(uri) ?? 0, this.marginAll);
     if (this.known.has(uri)) {
-      const margin = worstPerLine(vscode.languages.getDiagnostics(doc.uri).map(diagLike), this.opts.glyphs);
-      input.margin = margin;
-      drawn.verdicts = margin.map(m => ({ line: m.line, kind: m.kind, text: m.text }));
-    } else if (drawn.verdicts.length > 0) {
+      if (this.marginAt.get(ed) !== gen) {
+        const margin = this.marks(doc.uri);
+        input.margin = margin;
+        this.marginSeen.set(uri, JSON.stringify(margin));
+        drawn.verdicts = margin.map(m => ({ line: m.line, kind: m.kind, text: m.text }));
+        this.marginAt.set(ed, gen);
+      }
+    } else if (this.marginAt.has(ed) || drawn.verdicts.length > 0) {
       // no longer a plan (closed, or the folder changed): the margin clears
       input.margin = [];
       drawn.verdicts = [];
+      this.marginAt.delete(ed);
     }
+    if (input.margin) this.marginCount.set(uri, (this.marginCount.get(uri) ?? 0) + 1);
     const t = r?.tokens;
     const f = r?.folds;
     if (!f || !t) {
@@ -211,6 +251,9 @@ export class PlanLayer implements ReadingHooks {
     this.warned.delete(uri);
     this.changed(uri);
     this.drawnBy.delete(uri);
+    this.marginGen.delete(uri);
+    this.marginCount.delete(uri);
+    this.marginSeen.delete(uri);
   }
 }
 

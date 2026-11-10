@@ -240,6 +240,29 @@ describe('the plans reading layer (fake server)', () => {
     await repull(uriOf(PLAN));
     await until(() => margin().length === 0 || undefined, 'no marks once the diagnostics go');
   });
+  it('the margin is set when the diagnostics change, not on a repaint: an edit above a mark does not snap it back (Review fix)', async () => {
+    const a = await running();
+    reply('textDocument/diagnostic', { kind: 'full', items: [diag(6, 'claim-wrong', 2)] });
+    const ed = await fresh();
+    await repull(uriOf(PLAN));
+    const uri = uriOf(PLAN);
+    await until(() => a.planView.drawn(uri).verdicts.length === 1 || undefined, 'the mark');
+    const sets = a.planView.margins(uri);
+    // a line above the mark: VS Code moves the decoration it holds to row 7; getDiagnostics
+    // still says row 6 until the server sends more, so a repaint must not set the margin again
+    await ed.edit(b => b.insert(new vscode.Position(1, 0), 'x\n'));
+    ed.selection = new vscode.Selection(0, 0, 0, 0);
+    ed.selection = new vscode.Selection(2, 0, 2, 0);
+    await until(() => a.planView.reading(uri)?.tokens?.version === ed.document.version, 'fresh tokens');
+    await sleep(300);
+    assert.equal(a.planView.margins(uri), sets, 'the margin not set again from the old rows');
+    // the server's next diagnostics set it again
+    reply('textDocument/diagnostic', { kind: 'full', items: [diag(7, 'claim-wrong', 2)] });
+    await repull(uri);
+    await until(() => a.planView.drawn(uri).verdicts[0]?.line === 7 || undefined, 'the mark at the new row');
+    assert.ok(a.planView.margins(uri) > sets);
+  });
+
   // Each test that needs a first entry uses a plan file of its own: a document stays open in VS
   // Code for a while after its last tab closes, and an entered document does not close its
   // folds again.
@@ -352,28 +375,36 @@ describe('the plans reading layer (fake server)', () => {
     const before = l.visibleRanges.map(r => [r.start.line, r.end.line]);
     const r = await newPlan(right, PLAN_TEXT);
     const ur = r.document.uri.toString();
-    await until(() => a.planView.entered(ur), `${right} entered`);
+    const rows = () => JSON.stringify(l.visibleRanges.map(x => [x.start.line, x.end.line]));
+    const was = JSON.stringify(before);
+    // entered, or its first fold landed in the left editor (which leaves it not entered)
+    await until(() => a.planView.entered(ur) || rows() !== was || undefined, `${right} entered or its fold landed elsewhere`);
     await sleep(1_500);
     const after = l.visibleRanges.map(x => [x.start.line, x.end.line]);
     // whether the fold went to the other group: the right plan's rows tell
     const misdirected = visibleRow(r, 4);
+    const entered = a.planView.entered(ur);
     await vscode.commands.executeCommand('workbench.action.closeAllGroups');
-    return { before, after, misdirected };
+    return { before, after, misdirected, entered };
   }
 
+  // Both tests observe a focus quirk of the test window, not a property of the extension: where
+  // focus and active agree (another platform, another VS Code), they skip rather than fail.
   it('a fold that lands in another editor never folds its collapsed regions\' parents (Review fix)', async function () {
     this.timeout(60_000);
     const { before, after, misdirected } = await besideAPlan('f8.md', 'f9.md', false);
-    assert.ok(misdirected, 'the test window did not reproduce focus and active differing');
+    if (!misdirected) this.skip();
     assert.deepEqual(after, before, 'the other plan untouched');
   });
 
-  it('a fold that lands in another editor stops at once: no fold beyond the targets\' own (Review fix)', async function () {
+  it('a fold that lands in another editor stops at once, the plan not entered: no fold beyond the targets\' own (Review fix, spec §3.6)', async function () {
     this.timeout(60_000);
-    const { after, misdirected } = await besideAPlan('f10.md', 'f11.md', true);
-    assert.ok(misdirected, 'the test window did not reproduce focus and active differing');
+    const { after, misdirected, entered } = await besideAPlan('f10.md', 'f11.md', true);
+    if (!misdirected) this.skip();
     // one fold of the regions at rows 3 and 5 at most; the heading's region (0-7) stays open
     assert.ok(after.some(([s, e]) => s <= 2 && 2 <= e), `row 2 shown: ${JSON.stringify(after)}`);
+    // the fold went elsewhere: not entered, so the next activation folds it (spec §3.6 fallback)
+    assert.equal(entered, false, 'the plan whose fold landed elsewhere is not entered');
   });
 
   it('Enter continues an open step, a done step as a plain item; not in another markdown file (spec §3.5)', async () => {

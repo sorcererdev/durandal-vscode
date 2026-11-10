@@ -26,7 +26,8 @@ const rowsOf = (e: vscode.TextEditor) => e.visibleRanges.map(r => `${r.start.lin
 // changes another visible editor stops the tries at once. Folds that form later start open
 // (VS Code's default). Leaving the editor before the first fold, or no folds in 8 s, leaves
 // the document not entered: the next activation, or the next folds, try again. A document is
-// entered once its first fold is asked for (or it has nothing to fold).
+// entered once its first fold is asked for and did not land in another editor (or it has
+// nothing to fold); a fold that landed elsewhere leaves it not entered.
 export class FoldEntry {
   private readonly done = new Set<string>();
   private readonly busy = new Set<string>();
@@ -65,12 +66,14 @@ export class FoldEntry {
         // levels 1: the region at each row folds, or stays as it is; never its parent
         await vscode.commands.executeCommand('editor.fold', { levels: 1, selectionLines: targets });
         if (doc.isClosed) return;
-        this.done.add(uri);
         const after = rowsOf(editor);
         await sleep(100);
+        if (doc.isClosed) return;
         // no progress here and a change in another editor: the fold went to the focused editor,
-        // which is not this one; folding again would only change that one more
+        // which is not this one; folding again would only change that one more. The document
+        // stays not entered: the next activation tries again (spec §3.6 fallback)
         if (after === before && rowsOf(editor) === before && others.some(([e, r]) => rowsOf(e) !== r)) return;
+        this.done.add(uri);
         targets = stillOpen(targets, editor.visibleRanges.map(r => ({ start: r.start.line, end: r.end.line })));
       }
     } finally {
