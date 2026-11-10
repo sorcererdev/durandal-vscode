@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import pkg from '../../package.json';
+import { GLYPH_NAMES } from '../../src/plans/glyphs';
+import { PLAN_TOKEN_MODIFIERS, PLAN_TOKEN_TYPES } from '../../src/protocol';
 import { BUILT, FORM_KEYS, KEYS, NOT_YET, PREFIX, SERVER_NAMED, SUGGEST_KEYS, TDD_WHEN } from '../../src/commandTable';
 
 test('the contributed commands: Health, Restart, the built ones and the not-yet ones, each in the Durandal category', () => {
@@ -54,7 +56,8 @@ test('Esc dismisses the snippet ghost only while it is ours and visible (spec §
 
 test('the settings and the activation', () => {
   assert.deepEqual(Object.keys(pkg.contributes.configuration.properties).sort(),
-    ['durandal.actionLog', 'durandal.debounceMs', 'durandal.fills', 'durandal.ghosts', 'durandal.hints', 'durandal.model', 'durandal.path', 'durandal.trace.server']);
+    ['durandal.actionLog', 'durandal.debounceMs', 'durandal.fills', 'durandal.ghosts', 'durandal.hints', 'durandal.model', 'durandal.path',
+      'durandal.plans.conceal', 'durandal.plans.dir', 'durandal.plans.foldDone', 'durandal.plans.glyphs', 'durandal.trace.server']);
   // after startup too (issue #1): a project file opened in a window with no project folder
   assert.deepEqual(pkg.activationEvents, ['workspaceContains:**/.olifant/config.toml', 'onStartupFinished']);
   const log = (pkg.contributes.configuration.properties as Record<string, { type: string; default: unknown }>)['durandal.actionLog'];
@@ -136,4 +139,42 @@ test('M5: the when keys: each one the manifest reads is known and set; isPlan an
   const files = (readdirSync(src, { recursive: true }) as string[]).filter(f => f.endsWith('.ts'));
   const text = files.map(f => readFileSync(join(src, f), 'utf8')).join('\n');
   for (const k of KNOWN_KEYS) assert.ok(text.includes(`'setContext', 'durandal.${k}'`), `durandal.${k} is never set`);
+});
+
+test('M6a: the plan settings and their defaults (spec §3.1, §0.7)', () => {
+  const props = pkg.contributes.configuration.properties as Record<string, { type: string; default: unknown; properties?: Record<string, { type: string }>; additionalProperties?: boolean }>;
+  assert.deepEqual([props['durandal.plans.dir'].type, props['durandal.plans.dir'].default], ['string', 'plans']);
+  assert.deepEqual([props['durandal.plans.conceal'].type, props['durandal.plans.conceal'].default], ['boolean', false]);
+  assert.deepEqual([props['durandal.plans.foldDone'].type, props['durandal.plans.foldDone'].default], ['boolean', true]);
+  const g = props['durandal.plans.glyphs'];
+  assert.deepEqual([g.type, g.default, g.additionalProperties], ['object', {}, false]);
+  assert.deepEqual(Object.keys(g.properties!), [...GLYPH_NAMES]);
+  assert.ok(Object.values(g.properties!).every(p => p.type === 'string'));
+});
+
+// spec §3.3: superTypes mirror nvim's links, so every theme colours the plan
+const SUPER: Record<string, string> = {
+  planMarker: 'string', planStep: 'string', planStepDone: 'string', planQuestion: 'class', planEvidence: 'comment',
+  planClaim: 'string', planTest: 'string', planAlso: 'comment', planJournal: 'comment', planAnchorPath: 'number',
+  planAnchorUnit: 'variable', planVerdict: 'number', planFingerprint: 'number',
+};
+
+test('M6a: the 13 token types with their superTypes, the 6 modifiers, a scope for each type and stale', () => {
+  const c = pkg.contributes as unknown as {
+    semanticTokenTypes: { id: string; superType: string; description: string }[];
+    semanticTokenModifiers: { id: string; description: string }[];
+    semanticTokenScopes: { language?: string; scopes: Record<string, string[]> }[];
+  };
+  assert.deepEqual(c.semanticTokenTypes.map(t => t.id), [...PLAN_TOKEN_TYPES]);
+  for (const t of c.semanticTokenTypes) {
+    assert.equal(t.superType, SUPER[t.id], t.id);
+    assert.ok(t.description.length > 0, t.id);
+  }
+  assert.deepEqual(c.semanticTokenModifiers.map(m => m.id), [...PLAN_TOKEN_MODIFIERS]);
+  assert.ok(c.semanticTokenModifiers.every(m => m.description.length > 0));
+  assert.equal(c.semanticTokenScopes.length, 1);
+  const scopes = c.semanticTokenScopes[0].scopes;
+  assert.deepEqual(Object.keys(scopes).sort(), [...PLAN_TOKEN_TYPES, '*.stale'].sort());
+  assert.deepEqual(scopes['*.stale'], ['comment']);
+  assert.ok(!Object.keys(scopes).some(k => k.includes('.done')), 'done maps to nothing: the folding does the work');
 });

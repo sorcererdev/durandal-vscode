@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { isPlanPath } from './plans/isPlan';
+import { isPlanPath, PLANS_DIR } from './plans/isPlan';
 
 // hasMarker reports whether dir has an entry named exactly `.olifant` that is a directory (or a
 // symlink to one). It reads the listing instead of stat-ing dir/.olifant: on a case-insensitive
@@ -55,8 +55,8 @@ export function rootOfConfig(configPath: string): string {
   return dirname(dirname(configPath));
 }
 
-// isPlanFile: a markdown file under its project's plans/ folder, at any depth (the one plan
+// isPlanFile: a markdown file under its project's plans folder (durandal.plans.dir), at any depth (the one plan
 // rule, isPlanPath; a file's language is not known here, so only a .md name counts).
-export async function isPlanFile(path: string): Promise<boolean> {
-  return isPlanPath(resolve(path), await findRoot(path), '');
+export async function isPlanFile(path: string, dir: string = PLANS_DIR): Promise<boolean> {
+  return isPlanPath(resolve(path), await findRoot(path), '', dir);
 }

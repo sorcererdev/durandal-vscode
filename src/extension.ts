@@ -14,6 +14,8 @@ import { PausePanel } from './pause/panel';
 import { Reminders } from './pause/reminder';
 import { Reviews } from './pause/review';
 import type { FromPage, View } from './pause/viewModel';
+import { onPlansOptions, readPlansOptions } from './plans/options';
+import { PlanDocs } from './plans/planDocs';
 import { trackIsPlan } from './plans/trackIsPlan';
 import { discover, trackProjects } from './projects';
 import { quickInputUi } from './quickInput';
@@ -151,7 +153,15 @@ export function activate(context: vscode.ExtensionContext): Api {
   const reviews = new Reviews({ server: s, say, controller: ctl });
   reviews.register(context);
   hooks.reviewReady = p => reviews.ready(p);
-  const plansTracked = trackIsPlan(context);
+  // plans (M6): durandal.plans.*, the one plan check, durandal.isPlan
+  let plansOptions = readPlansOptions();
+  const planDocs = new PlanDocs(() => plansOptions.dir);
+  const plansTracked = trackIsPlan(context, planDocs);
+  onPlansOptions(context, o => {
+    plansOptions = o;
+    plansTracked.refresh();
+  });
+  context.subscriptions.push(vscode.workspace.onDidCloseTextDocument(d => planDocs.forget(d.uri.toString())));
   const pause: PauseApi = {
     view: () => ctl.view(),
     source: () => ctl.source(),
