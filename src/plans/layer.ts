@@ -7,7 +7,7 @@ import { conceals } from './glyphs';
 import type { Legend, TokenEdit } from './legend';
 import type { PlanDocs } from './planDocs';
 import { DiagLike, Severity, worstPerLine } from './verdicts';
-import { Fold, Lens, PlanReading, Readings } from './reading';
+import { Fold, Lens, liveExcerpts, PlanReading, Readings, typedInto } from './reading';
 import type { PlansOptions } from './settings';
 import type { ReadingHooks } from './taps';
 
@@ -29,13 +29,16 @@ export interface PlanViewApi {
 // warn: a failure the layer catches, written to the output channel as a warning
 export interface LayerDeps { docs: PlanDocs; options: PlansOptions; say: Say; warn: (m: string) => void }
 
+// the excerpt guard's words (nvim plans.lua typed)
+export const TYPED_IN_EXCERPT = 'excerpt: live and read-only, the next reconcile replaces what you type here';
+
 const empty = (): Drawn => ({ glyphs: [], verdicts: [], conclusions: [] });
 
 // PlanLayer owns the plans reading layer (M6 spec §3): the readings the taps fill, the events
 // that repaint, what each document shows: a reading's change, a selection, the visible editors
 // and the options repaint, from the reading alone (no request). It draws the glyphs, the
-// verdict margin and the collapsed folds' conclusions, and closes a plan's folds on entry; a
-// later task adds the Enter rule and the excerpt guard (Task 8).
+// verdict margin and the collapsed folds' conclusions, closes a plan's folds on entry, and
+// warns once per live excerpt typed into (the Enter rule lives in enterRule.ts).
 export class PlanLayer implements ReadingHooks {
   readonly readings = new Readings((uri, part) => {
     this.changed(uri);
@@ -50,6 +53,8 @@ export class PlanLayer implements ReadingHooks {
   private readonly known = new Set<string>();
   // recheck: the latest options() re-check; an older one that resolves later is dropped
   private recheck = 0;
+  // warned: per document, the live excerpts the guard has warned for
+  private readonly warned = new Map<string, Set<string>>();
   private readonly entry = new FoldEntry({ reading: uri => this.readings.get(uri), foldDone: () => this.opts.foldDone, isPlan: doc => this.isPlan(doc) });
 
   constructor(private readonly d: LayerDeps) {
@@ -75,6 +80,7 @@ export class PlanLayer implements ReadingHooks {
     context.subscriptions.push(
       this.deco,
       vscode.workspace.onDidCloseTextDocument(doc => this.closed(doc.uri.toString())),
+      vscode.workspace.onDidChangeTextDocument(e => this.typed(e)),
       vscode.window.onDidChangeTextEditorSelection(e => this.repaint(e.textEditor)),
       vscode.window.onDidChangeVisibleTextEditors(() => this.repaintAll()),
       vscode.window.onDidChangeTextEditorVisibleRanges(e => this.repaint(e.textEditor)),
@@ -114,6 +120,7 @@ export class PlanLayer implements ReadingHooks {
   // the server stopped: nothing it said stands (spec §5.7), and nothing it said stays drawn
   stopped(): void {
     this.readings.clear();
+    this.warned.clear();
     this.repaintAll();
   }
 
@@ -124,6 +131,25 @@ export class PlanLayer implements ReadingHooks {
       hidden: uri => this.deco.hidden(uri),
       entered: uri => this.entry.entered(uri),
     };
+  }
+
+  // typed: a change inside a live excerpt warns once per excerpt per document (spec §3.7). The
+  // lenses must be the ones the document had just before this change.
+  private typed(e: vscode.TextDocumentChangeEvent): void {
+    const uri = e.document.uri.toString();
+    const l = this.readings.get(uri)?.lenses;
+    if (!l || l.version !== e.document.version - 1 || e.contentChanges.length === 0) return;
+    const keys = typedInto(liveExcerpts(l.items), e.contentChanges.map(c => ({ start: c.range.start.line, end: c.range.end.line })));
+    let w = this.warned.get(uri);
+    for (const k of keys) {
+      if (!w) {
+        w = new Set();
+        this.warned.set(uri, w);
+      }
+      if (w.has(k)) continue;
+      w.add(k);
+      void this.d.say('warn', TYPED_IN_EXCERPT);
+    }
   }
 
   // changed: URI's reading changed; the visible editors showing it repaint
@@ -182,6 +208,7 @@ export class PlanLayer implements ReadingHooks {
     // its editors (a language change keeps them open) show nothing of the plan any more
     this.known.delete(uri);
     this.entry.forget(uri);
+    this.warned.delete(uri);
     this.changed(uri);
     this.drawnBy.delete(uri);
   }

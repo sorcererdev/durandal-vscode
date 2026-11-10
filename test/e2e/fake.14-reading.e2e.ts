@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { Olifant } from '../../src/protocol';
 import { encode } from '../planTokens';
-import { docOf, file, log, open, reply, revert, running, settle, sleep, until, ws } from './helpers';
+import { api, docOf, file, log, open, reply, revert, running, settle, sleep, until, ws } from './helpers';
 
 // The plans reading layer over the fake server (M6 spec §3, §8): detection, the reading model,
 // glyphs, the verdict margin, folds and conclusions, the Enter rule, the excerpt guard.
@@ -79,6 +79,11 @@ const EXCERPT_TEXT = [
   '',
 ].join('\n');
 const EXCERPT_FOLDS = [{ startLine: 3, endLine: 6, kind: 'region' }, { startLine: 7, endLine: 8, kind: 'region' }];
+const excerptLens = (open: number, close: number, live: boolean) => ({
+  range: { start: { line: open, character: 0 }, end: { line: open, character: 0 } },
+  command: { title: live ? 'live · from src/a.py · read-only' : 'frozen at tick', command: 'olifant.plans.excerpt', arguments: ['$uri', open, close, live, '@src/a.py:F'] },
+});
+const TYPED = 'excerpt: live and read-only, the next reconcile replaces what you type here';
 
 // a new plan file, its text written, opened
 async function newPlan(name: string, text: string): Promise<vscode.TextEditor> {
@@ -369,5 +374,54 @@ describe('the plans reading layer (fake server)', () => {
     assert.ok(misdirected, 'the test window did not reproduce focus and active differing');
     // one fold of the regions at rows 3 and 5 at most; the heading's region (0-7) stays open
     assert.ok(after.some(([s, e]) => s <= 2 && 2 <= e), `row 2 shown: ${JSON.stringify(after)}`);
+  });
+
+  it('Enter continues an open step, a done step as a plain item; not in another markdown file (spec §3.5)', async () => {
+    const ed = await newPlan('e1.md', '- [ ] a step\n- [x] done\n');
+    await until(async () => (await api()).isPlan(), 'a plan');
+    ed.selection = new vscode.Selection(0, 12, 0, 12);
+    await vscode.commands.executeCommand('type', { text: '\n' });
+    assert.equal(ed.document.lineAt(1).text, '- [ ] ');
+    // VS Code skips Enter rules on a line not yet retokenized after an edit (isCheapToTokenize):
+    // a person's next Enter comes after background tokenization has caught up
+    await sleep(300);
+    ed.selection = new vscode.Selection(2, 10, 2, 10);
+    await vscode.commands.executeCommand('type', { text: '\n' });
+    assert.equal(ed.document.lineAt(3).text, '- ');
+    await revert(ed.document);
+    writeFileSync(join(ws(), 'one/notes.md'), '- [ ] not a plan\n');
+    const notes = await open(file('one/notes.md'));
+    await until(async () => !(await api()).isPlan() || undefined, 'not a plan');
+    notes.selection = new vscode.Selection(0, 16, 0, 16);
+    await vscode.commands.executeCommand('type', { text: '\n' });
+    assert.equal(notes.document.lineAt(1).text, '');
+    await revert(notes.document);
+    await settle('one/notes.md', null);
+  });
+
+  it('typing inside a live excerpt warns once per excerpt; a frozen one never (spec §3.7)', async () => {
+    const a = await running();
+    reply('textDocument/foldingRange', []);
+    reply('textDocument/codeLens', [excerptLens(3, 6, true)]);
+    const ed = await newPlan('x1.md', EXCERPT_TEXT);
+    const uri = ed.document.uri.toString();
+    await until(() => a.planView.reading(uri)?.lenses?.version === ed.document.version, 'the lenses at the version');
+    const from = a.shown.length;
+    await ed.edit(b => b.insert(new vscode.Position(4, 2), '#'));
+    await until(() => a.shown.slice(from).some(s => s.text === TYPED), 'the warning');
+    await until(() => a.planView.reading(uri)?.lenses?.version === ed.document.version, 'the lenses again');
+    await ed.edit(b => b.insert(new vscode.Position(5, 2), '#'));
+    await ed.edit(b => b.insert(new vscode.Position(2, 0), 'x'));
+    await sleep(500);
+    assert.deepEqual(a.shown.slice(from).filter(s => s.text === TYPED).map(s => s.level), ['warn']);
+    await revert(ed.document);
+    reply('textDocument/codeLens', [excerptLens(3, 6, false)]);
+    const frozen = await newPlan('x2.md', EXCERPT_TEXT);
+    await until(() => a.planView.reading(frozen.document.uri.toString())?.lenses?.version === frozen.document.version, 'the frozen lens');
+    const from2 = a.shown.length;
+    await frozen.edit(b => b.insert(new vscode.Position(4, 2), '#'));
+    await sleep(500);
+    assert.ok(!a.shown.slice(from2).some(s => s.text === TYPED));
+    await revert(frozen.document);
   });
 });

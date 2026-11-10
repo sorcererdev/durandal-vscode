@@ -14,6 +14,7 @@ import { PausePanel } from './pause/panel';
 import { Reminders } from './pause/reminder';
 import { Reviews } from './pause/review';
 import type { FromPage, View } from './pause/viewModel';
+import { EnterRule } from './plans/enterRule';
 import { PlanLayer, PlanViewApi } from './plans/layer';
 import { onPlansOptions, readPlansOptions } from './plans/options';
 import { PlanDocs } from './plans/planDocs';
@@ -162,7 +163,10 @@ export function activate(context: vscode.ExtensionContext): Api {
   const layer = new PlanLayer({ docs: planDocs, options: plansOptions, say, warn: m => output.warn(m) });
   layer.register(context);
   hooks.reading = layer;
-  const plansTracked = trackIsPlan(context, planDocs);
+  // the Enter rule follows durandal.isPlan (spec §3.5)
+  const enterRule = new EnterRule();
+  context.subscriptions.push(enterRule);
+  const plansTracked = trackIsPlan(context, planDocs, yes => enterRule.set(yes));
   onPlansOptions(context, o => {
     plansOptions = o;
     layer.options(o);
