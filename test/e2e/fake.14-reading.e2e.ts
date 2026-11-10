@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { Olifant } from '../../src/protocol';
 import { encode } from '../planTokens';
-import { docOf, file, open, reply, revert, running, settle, sleep, until, ws } from './helpers';
+import { docOf, file, log, open, reply, revert, running, settle, sleep, until, ws } from './helpers';
 
 // The plans reading layer over the fake server (M6 spec §3, §8): detection, the reading model,
 // glyphs, the verdict margin, folds and conclusions, the Enter rule, the excerpt guard.
@@ -66,6 +66,27 @@ async function fresh(): Promise<vscode.TextEditor> {
   return ed;
 }
 
+const EXCERPT_TEXT = [
+  '# Excerpts',                          // 0
+  '',                                    // 1
+  '- [ ] show F @src/a.py:F',            // 2
+  '  ```python @src/a.py:F',             // 3
+  '  def F():',                          // 4
+  '      return 1',                      // 5
+  '  ```',                               // 6
+  '- [x] done @src/a.py:F ✓ abc1234',    // 7
+  '  - a child',                         // 8
+  '',
+].join('\n');
+const EXCERPT_FOLDS = [{ startLine: 3, endLine: 6, kind: 'region' }, { startLine: 7, endLine: 8, kind: 'region' }];
+
+// a new plan file, its text written, opened
+async function newPlan(name: string, text: string): Promise<vscode.TextEditor> {
+  writeFileSync(join(ws(), `one/plans/${name}`), text);
+  return open(file(`one/plans/${name}`));
+}
+const visibleRow = (ed: vscode.TextEditor, row: number) => ed.visibleRanges.some(r => r.start.line <= row && row <= r.end.line);
+
 describe('the plans reading layer (fake server)', () => {
   before(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllGroups');
@@ -78,6 +99,7 @@ describe('the plans reading layer (fake server)', () => {
     await vscode.workspace.getConfiguration('editor').update('semanticHighlighting.enabled', undefined, vscode.ConfigurationTarget.Global);
     for (const k of ['dir', 'conceal', 'glyphs', 'foldDone']) await plansConfig().update(k, undefined, vscode.ConfigurationTarget.Global);
     await settle(PLAN, PLAN_DEFAULT);
+    for (const n of ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'x1', 'x2', 'e1']) await settle(`one/plans/${n}.md`, null);
     // the suites after this one get the fake's default answers again
     for (const m of ['textDocument/semanticTokens/full', 'textDocument/foldingRange', 'textDocument/codeLens']) reply(m, null);
   });
@@ -212,5 +234,93 @@ describe('the plans reading layer (fake server)', () => {
     reply('textDocument/diagnostic', { kind: 'full', items: [] });
     await repull(uriOf(PLAN));
     await until(() => margin().length === 0 || undefined, 'no marks once the diagnostics go');
+  });
+  // Each test that needs a first entry uses a plan file of its own: a document stays open in VS
+  // Code for a while after its last tab closes, and an entered document does not close its
+  // folds again.
+  it('done steps and answered questions close on entry; the heading does not; conclusions show (spec §3.6)', async () => {
+    const a = await running();
+    const ed = await newPlan('f1.md', PLAN_TEXT);
+    const uri = ed.document.uri.toString();
+    await until(() => a.planView.entered(uri), 'entered');
+    await until(() => (!visibleRow(ed, 4) && !visibleRow(ed, 6)) || undefined, 'rows 4 and 6 folded');
+    assert.ok(visibleRow(ed, 2) && visibleRow(ed, 3) && visibleRow(ed, 5), 'the heading\'s section and the fold starts stay shown');
+    await until(() => a.planView.drawn(uri).conclusions.length === 2 || undefined, 'two conclusions');
+    assert.deepEqual(a.planView.drawn(uri).conclusions, [{ line: 3, text: '  F ✓ ▸ 1' }, { line: 5, text: ' — A later note. ▸ 2' }]);
+    await vscode.commands.executeCommand('editor.unfoldAll');
+    await until(() => a.planView.drawn(uri).conclusions.length === 0 || undefined, 'no conclusion once open');
+  });
+
+  it('a fold that forms after entry starts open; the entered ones stay closed (spec §3.6)', async () => {
+    const a = await running();
+    const ed = await newPlan('f2.md', PLAN_TEXT);
+    const uri = ed.document.uri.toString();
+    await until(() => a.planView.entered(uri) && !visibleRow(ed, 4), 'entered, row 4 folded');
+    reply('textDocument/foldingRange', [...FOLDS, { startLine: 8, endLine: 9, kind: 'region' }]);
+    await ed.edit(b => b.insert(new vscode.Position(8, 0), '- [x] later\n  - its child\n'));
+    await until(() => a.planView.reading(uri)?.folds?.ranges.some(f => f.start === 8) || undefined, 'the new fold read');
+    await sleep(500);
+    assert.ok(visibleRow(ed, 9), 'the new fold is open');
+    assert.ok(!visibleRow(ed, 4), 'the entered fold is still closed');
+  });
+
+  it('foldDone off closes only the excerpts (spec §3.6)', async () => {
+    const a = await running();
+    await plansConfig().update('foldDone', false, vscode.ConfigurationTarget.Global);
+    reply('textDocument/foldingRange', EXCERPT_FOLDS);
+    reply('textDocument/semanticTokens/full', { data: [] });
+    const ed = await newPlan('f3.md', EXCERPT_TEXT);
+    await until(() => a.planView.entered(ed.document.uri.toString()) && !visibleRow(ed, 4), 'the excerpt folded');
+    await sleep(300);
+    assert.ok(visibleRow(ed, 8), 'the done step stays open');
+  });
+
+  it('no folds: gives up after 8 s, not entered; switching away during the wait leaves it not entered; folds that come later enter it (Review Focus)', async function () {
+    this.timeout(60_000);
+    const a = await running();
+    reply('textDocument/foldingRange', null);
+    const ed = await newPlan('f4.md', PLAN_TEXT);
+    const uri = ed.document.uri.toString();
+    await sleep(9_000);
+    assert.equal(a.planView.entered(uri), false);
+    // the folds answer comes 3 s late: another editor takes focus while the plan waits for it.
+    // The plan stays visible beside it, so its folds still come (a hidden editor's request is
+    // cancelled), and land while the other editor is active.
+    reply('textDocument/foldingRange', { delay: 3, value: FOLDS });
+    const ed5 = await newPlan('f5.md', PLAN_TEXT);
+    const u5 = ed5.document.uri.toString();
+    await until(() => log().some(m => m.method === 'textDocument/foldingRange' && m.params?.textDocument?.uri === u5) || undefined, 'f5\'s folds asked for');
+    const other = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file('one/main.py')), vscode.ViewColumn.Two);
+    await until(() => a.planView.reading(u5)?.folds?.version === ed5.document.version || undefined, 'f5\'s folds read', 10_000);
+    await sleep(500);
+    assert.equal(vscode.window.activeTextEditor, other);
+    assert.equal(a.planView.entered(u5), false);
+    assert.ok(visibleRow(ed5, 4), 'nothing folded in the plan left');
+    // one group again: editor.fold acts on the focused code editor, which in this test window
+    // can stay in the first group while the second is active
+    await vscode.commands.executeCommand('workbench.action.closeAllGroups');
+    reply('textDocument/foldingRange', FOLDS);
+    const back = await open(file('one/plans/f4.md'));
+    await back.edit(b => b.insert(new vscode.Position(1, 0), ' '));
+    await until(() => a.planView.entered(uri), 'entered once folds come');
+    await until(() => !visibleRow(back, 4) || undefined, 'row 4 folded');
+  });
+
+  it('a plan closed and opened again closes its folds again (Review Focus)', async function () {
+    this.timeout(120_000);
+    const a = await running();
+    const ed = await newPlan('f6.md', PLAN_TEXT);
+    const uri = ed.document.uri.toString();
+    await until(() => a.planView.entered(uri) && !visibleRow(ed, 4), 'entered');
+    await vscode.commands.executeCommand('editor.unfoldAll');
+    await until(() => visibleRow(ed, 4) || undefined, 'row 4 open');
+    // VS Code keeps a document open well past its last tab (over 60 s here); a language-mode
+    // change reaches an extension as a close and an open, at once
+    await vscode.languages.setTextDocumentLanguage(ed.document, 'plaintext');
+    await until(() => vscode.workspace.textDocuments.find(d => d.uri.toString() === uri)?.languageId === 'plaintext' || undefined, 'the plan closed and reopened as plain text');
+    assert.equal(a.planView.entered(uri), false);
+    const again = await vscode.languages.setTextDocumentLanguage(vscode.workspace.textDocuments.find(d => d.uri.toString() === uri)!, 'markdown');
+    const shown = await open(again.uri);
+    await until(() => a.planView.entered(uri) && !visibleRow(shown, 4), 'entered again, row 4 folded');
   });
 });

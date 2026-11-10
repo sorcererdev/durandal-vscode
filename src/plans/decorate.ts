@@ -4,7 +4,7 @@ import { colourOf, Mark, MarkColour } from './verdicts';
 
 // PaintInput: what an editor on a plan shows. An absent field leaves that layer as drawn (its
 // reading is stale); an empty one clears it.
-export interface PaintInput { conceals?: Conceal[]; margin?: Mark[] }
+export interface PaintInput { conceals?: Conceal[]; margin?: Mark[]; conclusions?: { line: number; text: string }[] }
 
 const marginType = (colour: string) => vscode.window.createTextEditorDecorationType({
   before: { color: new vscode.ThemeColor(colour), margin: '0 0.6ch 0 0' },
@@ -25,6 +25,10 @@ export class PlanDecorations implements vscode.Disposable {
     passed: marginType('testing.iconPassed'),
     hint: marginType('editorHint.foreground'),
   };
+  // a collapsed fold's conclusion at its line's end, in the lens colour (spec §3.6)
+  private readonly conclusion = vscode.window.createTextEditorDecorationType({
+    after: { color: new vscode.ThemeColor('editorCodeLens.foreground') },
+  });
   // hides: per document, the hidden ranges last set on an editor of it (VS Code cannot be asked; the e2e reads it)
   private readonly hides = new Map<string, number>();
 
@@ -49,11 +53,18 @@ export class PlanDecorations implements vscode.Disposable {
         })));
       }
     }
+    if (input.conclusions) {
+      ed.setDecorations(this.conclusion, input.conclusions.filter(c => c.line < ed.document.lineCount).map(c => {
+        const end = ed.document.lineAt(c.line).range.end;
+        return { range: new vscode.Range(end, end), renderOptions: { after: { contentText: c.text } } };
+      }));
+    }
   }
 
   dispose(): void {
     for (const t of Object.values(this.margin)) t.dispose();
     this.hide.dispose();
     this.glyph.dispose();
+    this.conclusion.dispose();
   }
 }

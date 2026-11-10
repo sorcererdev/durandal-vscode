@@ -4,7 +4,7 @@
 # capabilities add codeActionProvider (with resolve), inlayHintProvider, completionProvider
 # (with resolve, triggers "@" ":") and inlineCompletionProvider, so the client registers each
 # feature (olifant lsp has all of them); and a canned answer {"delay": seconds, …} is sent
-# after that pause (the rest as the answer), as a slow model fill would be; the legend's
+# after that pause (the rest as the answer, or its "value"), as a slow model fill would be; the legend's
 # modifiers are olifant 48f38ab's six; a diagnosticProvider (pull), answering an empty full
 # report unless one is canned.
 # A stand-in for `olifant lsp` in tests: speaks just enough LSP (initialize,
@@ -109,8 +109,11 @@ while True:
             # a pull with nothing canned: an empty full report, as olifant lsp answers a clean file
             result = {"kind": "full", "items": []}
         if isinstance(result, dict) and "delay" in result:
-            # a slow answer (a model fill): the rest of it, after the pause
+            # a slow answer (a model fill): the rest of it, after the pause; {"delay", "value"}
+            # answers the value (a list, as folding ranges are)
             time.sleep(result.pop("delay"))
+            if "value" in result:
+                result = result["value"]
         if isinstance(result, dict) and result.get("hold"):
             # work that goes on: announced (window/workDoneProgress/create, as olifant lsp's
             # library does), its progress titled as the answer says, and no answer until cancelled
