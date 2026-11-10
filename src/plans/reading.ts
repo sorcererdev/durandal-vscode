@@ -89,3 +89,9 @@ export function liveExcerpts(lenses: readonly Lens[]): LiveExcerpt[] {
   }
   return out;
 }
+
+// typedInto: the keys of the live excerpts a change lies strictly inside (between the opening
+// and the closing fence rows; the fences themselves are the server's), once each.
+export function typedInto(excerpts: readonly LiveExcerpt[], changes: readonly { start: number; end: number }[]): string[] {
+  return excerpts.filter(x => changes.some(c => c.start > x.open && c.end < x.close)).map(x => x.key);
+}
