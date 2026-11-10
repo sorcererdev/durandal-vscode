@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { FakeUi } from '../fakeUi';
-import { file, open, revert, running, until, ws } from './helpers';
+import { cleanTold, file, open, revert, running, until, ws } from './helpers';
 
 const BOOKING = 'py/src/bistro/booking/commands/create_booking.py';
 const FAILURES = 'py/src/bistro/web/bookings/failures.py';
@@ -15,13 +15,14 @@ const CLOSE = 'py/src/bistro/booking/commands/close_table.py';
 // CI has no model: the arm's body may be a hole; the case and the union member are asserted.
 describe('follow-ups against olifant lsp (python-htmx)', () => {
   afterEach(async () => {
-    (await running()).setUi(undefined);
+    const a = await running();
+    a.setUi(undefined);
     for (const rel of [BOOKING, FAILURES, CLOSE]) {
       const d = vscode.workspace.textDocuments.find(x => x.uri.toString() === file(rel).toString());
       if (d?.isDirty) await revert(d);
     }
     execFileSync('git', ['checkout', '--', '.'], { cwd: join(ws(), 'py') });
-    execFileSync('git', ['clean', '-fdq'], { cwd: join(ws(), 'py') });
+    await cleanTold(a, join(ws(), 'py'));
   });
 
   it('class Cancelled → the failure-arms follow-up → review → apply', async function () {

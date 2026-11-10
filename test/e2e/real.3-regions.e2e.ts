@@ -4,15 +4,15 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { Olifant } from '../../src/protocol';
-import { disk, file, open, running, until, ws } from './helpers';
+import { cleanTold, disk, file, open, running, until, ws } from './helpers';
 
 const RESOURCES = 'py/src/bistro/web/resources.py';
 
 describe('regions on save (olifant lsp)', () => {
-  after(() => {
+  after(async () => {
     const cwd = join(ws(), 'py');
     execFileSync('git', ['checkout', '--', '.'], { cwd });
-    execFileSync('git', ['clean', '-fdq'], { cwd });
+    await cleanTold(await running(), cwd);
   });
 
   it('saving the regions file puts its region back in the same write', async () => {

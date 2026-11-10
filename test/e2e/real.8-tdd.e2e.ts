@@ -4,7 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { FakeUi } from '../fakeUi';
-import { api, file, open, restart, revert, running, until, ws } from './helpers';
+import { api, cleanTold, file, open, restart, revert, running, until, ws } from './helpers';
 
 const DIR = 'py/src/bistro/booking/commands/';
 const MODULE = `${DIR}create_booking.py`;
@@ -51,9 +51,10 @@ describe('the TDD loop against olifant lsp (python-htmx)', () => {
   before(() => vscode.commands.executeCommand('workbench.action.closeAllGroups'));
 
   afterEach(async () => {
-    (await running()).setUi(undefined);
+    const a = await running();
+    a.setUi(undefined);
     execFileSync('git', ['checkout', '--', '.'], { cwd: join(ws(), 'py') });
-    execFileSync('git', ['clean', '-fdq'], { cwd: join(ws(), 'py') });
+    await cleanTold(a, join(ws(), 'py'));
     // every open sandbox document back to the disk (a stub saved the test file; the watcher is slow)
     const py = join(ws(), 'py');
     for (const d of vscode.workspace.textDocuments.filter(x => x.uri.scheme === 'file' && x.uri.fsPath.startsWith(py))) await revert(d);
