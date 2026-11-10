@@ -99,7 +99,7 @@ describe('the plans reading layer (fake server)', () => {
     await vscode.workspace.getConfiguration('editor').update('semanticHighlighting.enabled', undefined, vscode.ConfigurationTarget.Global);
     for (const k of ['dir', 'conceal', 'glyphs', 'foldDone']) await plansConfig().update(k, undefined, vscode.ConfigurationTarget.Global);
     await settle(PLAN, PLAN_DEFAULT);
-    for (const n of ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'x1', 'x2', 'e1']) await settle(`one/plans/${n}.md`, null);
+    for (const n of ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'x1', 'x2', 'e1']) await settle(`one/plans/${n}.md`, null);
     // the suites after this one get the fake's default answers again
     for (const m of ['textDocument/semanticTokens/full', 'textDocument/foldingRange', 'textDocument/codeLens']) reply(m, null);
   });
@@ -322,5 +322,52 @@ describe('the plans reading layer (fake server)', () => {
     const again = await vscode.languages.setTextDocumentLanguage(vscode.workspace.textDocuments.find(d => d.uri.toString() === uri)!, 'markdown');
     const shown = await open(again.uri);
     await until(() => a.planView.entered(uri) && !visibleRow(shown, 4), 'entered again, row 4 folded');
+  });
+  it('folds but nothing to close: entered at once, nothing folded (spec §3.6)', async () => {
+    const a = await running();
+    await plansConfig().update('foldDone', false, vscode.ConfigurationTarget.Global);
+    const ed = await newPlan('f7.md', PLAN_TEXT);
+    await until(() => a.planView.entered(ed.document.uri.toString()), 'entered');
+    await sleep(300);
+    assert.ok(visibleRow(ed, 4) && visibleRow(ed, 6), 'nothing folded');
+  });
+
+  // focus and active differ: in this test window, after a second group is opened from the API,
+  // editor.fold acts on the editor in the first group while the second's is active
+  async function besideAPlan(left: string, right: string, unfoldLeft: boolean) {
+    const a = await running();
+    const l = await newPlan(left, PLAN_TEXT);
+    const ul = l.document.uri.toString();
+    await until(() => a.planView.entered(ul) && !visibleRow(l, 4), `${left} entered`);
+    if (unfoldLeft) {
+      await vscode.commands.executeCommand('editor.unfoldAll');
+      await until(() => visibleRow(l, 4) || undefined, `${left} open`);
+    }
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file('one/main.py')), vscode.ViewColumn.Two);
+    const before = l.visibleRanges.map(r => [r.start.line, r.end.line]);
+    const r = await newPlan(right, PLAN_TEXT);
+    const ur = r.document.uri.toString();
+    await until(() => a.planView.entered(ur), `${right} entered`);
+    await sleep(1_500);
+    const after = l.visibleRanges.map(x => [x.start.line, x.end.line]);
+    // whether the fold went to the other group: the right plan's rows tell
+    const misdirected = visibleRow(r, 4);
+    await vscode.commands.executeCommand('workbench.action.closeAllGroups');
+    return { before, after, misdirected };
+  }
+
+  it('a fold that lands in another editor never folds its collapsed regions\' parents (Review fix)', async function () {
+    this.timeout(60_000);
+    const { before, after, misdirected } = await besideAPlan('f8.md', 'f9.md', false);
+    assert.ok(misdirected, 'the test window did not reproduce focus and active differing');
+    assert.deepEqual(after, before, 'the other plan untouched');
+  });
+
+  it('a fold that lands in another editor stops at once: no fold beyond the targets\' own (Review fix)', async function () {
+    this.timeout(60_000);
+    const { after, misdirected } = await besideAPlan('f10.md', 'f11.md', true);
+    assert.ok(misdirected, 'the test window did not reproduce focus and active differing');
+    // one fold of the regions at rows 3 and 5 at most; the heading's region (0-7) stays open
+    assert.ok(after.some(([s, e]) => s <= 2 && 2 <= e), `row 2 shown: ${JSON.stringify(after)}`);
   });
 });

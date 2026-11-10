@@ -58,6 +58,16 @@ test('collapsedStarts: a start shown and the row after it hidden, with something
   assert.deepEqual(collapsedStarts([{ start: 12, end: 15 }], [{ start: 0, end: 12 }], 16), [{ start: 12, end: 15 }]);
 });
 
+test('collapsedStarts: an empty last row (left out of visibleRanges) widens "to the end" to a fold ending one row before it', () => {
+  // a 9-row plan whose row 8 is empty: folding 5-7 leaves [[0,3],[5,5]]
+  const folds = [{ start: 3, end: 4 }, { start: 5, end: 7 }];
+  const visible = [{ start: 0, end: 3 }, { start: 5, end: 5 }];
+  assert.deepEqual(collapsedStarts(folds, visible, 9), [{ start: 3, end: 4 }]);
+  assert.deepEqual(collapsedStarts(folds, visible, 9, true), [{ start: 3, end: 4 }, { start: 5, end: 7 }]);
+  // two rows before the end is still the viewport's edge
+  assert.deepEqual(collapsedStarts([{ start: 5, end: 6 }], visible, 9, true), []);
+});
+
 test('stillOpen: targets whose row and next row are both shown', () => {
   assert.deepEqual(stillOpen([3, 6, 12], [{ start: 0, end: 3 }, { start: 5, end: 12 }]), [6]);
 });

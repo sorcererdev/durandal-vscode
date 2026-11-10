@@ -167,11 +167,8 @@ export class PlanLayer implements ReadingHooks {
     } else if (f.version === doc.version && t.version === doc.version) {
       // the collapsed folds the viewport shows, each with its conclusion (spec §3.6)
       const visible = ed.visibleRanges.map(v => ({ start: v.start.line, end: v.end.line }));
-      // an empty last row shown alone (after a fold) is an empty range, which visibleRanges
-      // leaves out (1.145.2): a fold up to the row before it runs to the document's end
-      const last = doc.lineCount - 1;
-      const rows = last > 0 && doc.lineAt(last).text === '' ? last : doc.lineCount;
-      const cs = collapsedStarts(f.ranges, visible, rows).map(x => ({ line: x.start, text: foldLabel(t.toks, lineAt, x.start, x.end) }));
+      const lastRowEmpty = doc.lineAt(doc.lineCount - 1).text === '';
+      const cs = collapsedStarts(f.ranges, visible, doc.lineCount, lastRowEmpty).map(x => ({ line: x.start, text: foldLabel(t.toks, lineAt, x.start, x.end) }));
       input.conclusions = cs;
       drawn.conclusions = cs;
     }
