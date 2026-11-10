@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Plans read as in durandal.nvim: theme colours for every plan token, glyphs for markers with
+  `durandal.plans.conceal`, claim verdicts at the start of their line, done work and excerpts
+  closed on entry with their conclusion at the line's end, Enter continuing a step, and a warning
+  when typing inside a live excerpt; olifant pinned at 48f38ab (milestone 6a).
 - Reviews in the pause window: a do's review opens when the do ends, the plan lens and
   `Plan: Review` (chord `p r` on a plan) open do, past-do and reconcile reviews; their answers
   land as one undo step, with the plan's facts (milestone 5b).

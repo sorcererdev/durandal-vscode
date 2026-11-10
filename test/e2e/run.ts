@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { runTests } from '@vscode/test-electron';
@@ -94,6 +94,10 @@ async function real(bin: string, repo: string): Promise<void> {
   try {
     for (const name of ['py', 'py2']) {
       execFileSync('bash', [join(repo, 'scripts/try-pack.sh'), 'python-htmx', join(ws, name)], { stdio: 'ignore' });
+      // olifant 48f38ab checks a plan's claims with the model on open and save: never in the suite.
+      // Committed, so the suites' `git checkout -- .` cleanups keep it.
+      appendFileSync(join(ws, name, '.olifant/config.toml'), '\n[plans]\npass_cost = 0\n');
+      execFileSync('git', ['-C', join(ws, name), '-c', 'user.name=olifant', '-c', 'user.email=olifant@localhost', 'commit', '-qam', 'pass_cost = 0']);
     }
     settings(ws, bin);
     await launch(ws, { DURANDAL_E2E_SUITE: 'real' });

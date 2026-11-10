@@ -127,6 +127,30 @@ tests, `p` allows the tools the do was refused, `o` reopens its thread with what
 digit places a unit under that open step, `n` makes it a new step, `i` ignores it. `q` closes the
 tab; the review stays on the server, under its lens.
 
+## Plans
+
+A plan is a markdown file under the project's `plans/` folder (`durandal.plans.dir`, which must
+match `[plans] dir` in `.olifant/config.toml`). The server reads it and Durandal shows what it
+says:
+
+- **Colours.** Steps, questions, claims, evidence, journal lines, anchors and verdicts are
+  semantic tokens; every theme colours them through their base types, and a stale fingerprint
+  reads as a comment. Themes with semantic highlighting off (`editor.semanticHighlighting.enabled`)
+  show none of it, and no glyphs or fold conclusions either.
+- **Glyphs.** With `durandal.plans.conceal` on, `- [ ]` reads ☐, `- [x]` ☑, `- ?` ?, `- test:` ·,
+  `- also` +, and anchor paths and fingerprints hide, on every line but the cursor's.
+  `durandal.plans.glyphs` changes any of them.
+- **Verdicts.** A claim's check shows at the start of its line: ✗ wrong, ? could not tell,
+  … checking, ○ waiting, ✓ right; other Olifant findings show E, W, I or H. The worst one on a line
+  wins.
+- **Folds.** Done steps, answered questions and code excerpts close when a plan is first shown
+  (`durandal.plans.foldDone` off: excerpts only). A closed fold shows its conclusion, or a done
+  step's unit and verdict, at the end of its line.
+- **Typing.** Enter after an open step starts another; after a done step, a plain item. Typing
+  inside a live excerpt warns once: the next reconcile replaces it.
+- **Claim checks.** Opening or saving a plan can start an olifant claim pass that runs paid model
+  checks; `[plans] pass_cost = 0` in `.olifant/config.toml` turns it off.
+
 ## Settings
 
 - `durandal.path`: the binary.
@@ -136,6 +160,10 @@ tab; the review stays on the server, under its lens.
 - `durandal.hints`: the ⚡ hints.
 - `durandal.ghosts`: ghost text.
 - `durandal.actionLog`: the action log.
+- `durandal.plans.dir`: the plans folder under each project (default `plans`).
+- `durandal.plans.conceal`: plan glyphs (off by default).
+- `durandal.plans.glyphs`: glyph overrides by name.
+- `durandal.plans.foldDone`: close done work on entry, not only excerpts (on by default).
 - `durandal.trace.server`: LSP traffic into the Durandal output channel.
 
 A change to the first four takes effect after `Durandal: Restart Server`.
