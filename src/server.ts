@@ -7,6 +7,7 @@ import {
 import { applyServerEdit } from './applyEdit';
 import { checkBinary, Gate, ServerState, STOPPED } from './health';
 import type { ProgressValue } from './pause/progress';
+import { planTaps, type ReadingHooks } from './plans/taps';
 import { DoctorResult, InlineItem, Olifant, ReviewReady, SERVER_COMMANDS, Suggestion } from './protocol';
 import { realRoot } from './root';
 import { initOptions, settingsFrom } from './settings';
@@ -43,6 +44,8 @@ export interface ClientHooks {
   reviewReady?(p: ReviewReady): void;
   // the server stopped (a stop, a restart, or its client closed): nothing it said stands
   stopped?(): void;
+  // plans (M6 spec §3.2): the server's tokens, folds and lenses of a plan, copied as they pass
+  reading?: ReadingHooks;
 }
 
 // OlifantClient keeps the library's forced notifications out of a start: the extension reports
@@ -156,6 +159,9 @@ export class Server {
       // a failed initialize is reported by the start failure below, not by the library
       initializationFailedHandler: () => false,
       middleware: {
+        // the plan reading layer's taps: answers pass through untouched (M6 spec §3.2)
+        ...planTaps(() => hooks.reading, () => made.lc?.initializeResult?.capabilities.semanticTokensProvider?.legend,
+          m => this.output.warn(m)),
         workspace: {
           // the server's edits take durandal.nvim's path, not the library's (no refactor preview)
           handleApplyEdit: params => made.lc

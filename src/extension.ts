@@ -14,6 +14,7 @@ import { PausePanel } from './pause/panel';
 import { Reminders } from './pause/reminder';
 import { Reviews } from './pause/review';
 import type { FromPage, View } from './pause/viewModel';
+import { PlanLayer, PlanViewApi } from './plans/layer';
 import { onPlansOptions, readPlansOptions } from './plans/options';
 import { PlanDocs } from './plans/planDocs';
 import { trackIsPlan } from './plans/trackIsPlan';
@@ -75,6 +76,8 @@ export interface Api {
   pause: PauseApi;
   // the active editor shows a plan (durandal.isPlan)
   isPlan(): boolean;
+  // the plans reading layer (M6a): a plan's reading, what it shows, whether it was entered
+  planView: PlanViewApi;
 }
 
 let server: Server | undefined;
@@ -153,15 +156,18 @@ export function activate(context: vscode.ExtensionContext): Api {
   const reviews = new Reviews({ server: s, say, controller: ctl });
   reviews.register(context);
   hooks.reviewReady = p => reviews.ready(p);
-  // plans (M6): durandal.plans.*, the one plan check, durandal.isPlan
+  // plans (M6): durandal.plans.*, the one plan check, durandal.isPlan, the reading layer
   let plansOptions = readPlansOptions();
   const planDocs = new PlanDocs(() => plansOptions.dir);
+  const layer = new PlanLayer({ docs: planDocs, options: plansOptions, say });
+  layer.register(context);
+  hooks.reading = layer;
   const plansTracked = trackIsPlan(context, planDocs);
   onPlansOptions(context, o => {
     plansOptions = o;
+    layer.options(o);
     plansTracked.refresh();
   });
-  context.subscriptions.push(vscode.workspace.onDidCloseTextDocument(d => planDocs.forget(d.uri.toString())));
   const pause: PauseApi = {
     view: () => ctl.view(),
     source: () => ctl.source(),
@@ -182,6 +188,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     suggest.controller.stopped();
     flights.cancelAll('stopped');
     ctl.stopped();
+    layer.stopped();
   };
   hooks.progress = (token, v) => ctl.progress(token, v);
 
@@ -220,7 +227,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     for (const r of await discover()) await s.addRoot(r);
     if (s.roots().length > 0) await s.start();
   })();
-  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest, tdd, pause, isPlan: plansTracked.isPlan };
+  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest, tdd, pause, isPlan: plansTracked.isPlan, planView: layer.api() };
 }
 
 export async function deactivate(): Promise<void> {
