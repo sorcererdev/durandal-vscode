@@ -2,6 +2,7 @@ import * as assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
+import { Olifant } from '../../src/protocol';
 import { encode } from '../planTokens';
 import { docOf, file, open, reply, revert, running, settle, sleep, until, ws } from './helpers';
 
@@ -41,6 +42,18 @@ function canned(lenses: unknown[] = []): void {
   reply('textDocument/codeLens', lenses);
 }
 
+// a diagnostic as the server sends it (LSP severities 1 Error .. 4 Hint)
+const diag = (line: number, code: string | undefined, severity: number, source = 'olifant-plan') =>
+  ({ range: { start: { line, character: 4 }, end: { line, character: 10 } }, severity, source, message: 'm', ...(code ? { code } : {}) });
+
+// repull: the server asks the client to pull diagnostics again (workspace/diagnostic/refresh),
+// sent before the answer to a request the test makes
+async function repull(uri: string): Promise<void> {
+  const a = await running();
+  reply('olifant/plans/files', { notify: [{ method: 'workspace/diagnostic/refresh', params: null, request: true }], items: [] });
+  await a.server.request(Olifant.plansFiles, { textDocument: { uri } });
+}
+
 // fresh: the plan open, its reading at the document's version
 async function fresh(): Promise<vscode.TextEditor> {
   const a = await running();
@@ -75,6 +88,7 @@ describe('the plans reading layer (fake server)', () => {
   });
 
   afterEach(async () => {
+    reply('textDocument/diagnostic', null);
     for (const k of ['conceal', 'glyphs', 'foldDone']) await plansConfig().update(k, undefined, vscode.ConfigurationTarget.Global);
     const d = docOf(PLAN);
     if (d?.isDirty) await revert(d);
@@ -180,5 +194,23 @@ describe('the plans reading layer (fake server)', () => {
     await until(() => a.planView.reading(uriOf(PLAN))?.tokens?.version === ed.document.version, 'fresh tokens', 10_000);
     await until(() => JSON.stringify(glyphs()) !== before || undefined, 'redrawn from fresh tokens');
     await plansConfig().update('conceal', false, vscode.ConfigurationTarget.Global);
+  });
+
+  it('the margin: one mark per line, the worst wins, from olifant\'s diagnostics only (spec §3.4)', async () => {
+    const a = await running();
+    reply('textDocument/diagnostic', { kind: 'full', items: [
+      diag(6, 'claim-right', 4), diag(6, 'claim-wrong', 2), diag(7, 'claim-queued', 4),
+      diag(2, undefined, 4, 'olifant'), diag(5, 'claim-wrong', 2, 'cSpell'),
+    ] });
+    await fresh();
+    await repull(uriOf(PLAN));
+    const margin = () => a.planView.drawn(uriOf(PLAN)).verdicts;
+    await until(() => margin().length === 3 || undefined, 'three marks');
+    assert.deepEqual(margin(), [{ line: 2, kind: 'H', text: 'H' }, { line: 6, kind: 'wrong', text: '✗' }, { line: 7, kind: 'queued', text: '○' }]);
+    await plansConfig().update('glyphs', { wrong: 'X' }, vscode.ConfigurationTarget.Global);
+    await until(() => margin().find(m => m.line === 6)?.text === 'X', 'the wrong override');
+    reply('textDocument/diagnostic', { kind: 'full', items: [] });
+    await repull(uriOf(PLAN));
+    await until(() => margin().length === 0 || undefined, 'no marks once the diagnostics go');
   });
 });
