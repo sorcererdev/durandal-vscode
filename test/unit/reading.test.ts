@@ -16,14 +16,18 @@ test('Readings: each part keeps its own version; changed hears the part', () => 
   assert.equal(p.lenses!.version, 4);
 });
 
-test('Readings: token edits apply to the reading whose resultId they name; otherwise the tokens go', () => {
+test('Readings: token edits apply to the reading whose resultId they name; otherwise the tokens stay at their version, open to no edits', () => {
   const r = new Readings();
   r.tokens('u', 1, encode([[0, 0, 2, 'planMarker']]), PLAN_LEGEND, 'r1');
   assert.equal(r.tokenEdits('u', 2, 'r1', [{ start: 5, deleteCount: 0, data: encode([[1, 0, 2, 'planMarker']]) }], PLAN_LEGEND, 'r2'), true);
   assert.deepEqual(r.get('u')!.tokens!.toks.map(t => t.line), [0, 1]);
   assert.equal(r.get('u')!.tokens!.resultId, 'r2');
   assert.equal(r.tokenEdits('u', 3, 'other', [], PLAN_LEGEND, 'r3'), false);
-  assert.equal(r.get('u')!.tokens, undefined);
+  const kept = r.get('u')!.tokens!;
+  assert.deepEqual([kept.version, kept.resultId, kept.toks.map(t => t.line)], [2, undefined, [0, 1]]);
+  assert.equal(r.tokenEdits('u', 4, 'r2', [], PLAN_LEGEND, 'r4'), false);
+  assert.equal(r.get('u')!.tokens!.version, 2);
+  assert.equal(new Readings().tokenEdits('v', 1, 'r1', [], PLAN_LEGEND, 'r2'), false);
 });
 
 test('Readings: drop and clear forget; uris lists what is held', () => {

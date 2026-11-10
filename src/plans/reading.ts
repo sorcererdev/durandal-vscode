@@ -40,13 +40,13 @@ export class Readings {
     this.changed(uri, 'tokens');
   }
 
-  // tokenEdits: an Edits answer applies to the reading it names; false (and the tokens go)
-  // when the reading held is another one.
+  // tokenEdits: an Edits answer applies to the reading it names; false when the reading held is
+  // another one. The tokens held then stay at their own version (what is drawn stays, spec §3.2)
+  // but lose their resultId, so no later edits apply to them; the next full answer replaces them.
   tokenEdits(uri: string, version: number, previousResultId: string, edits: readonly TokenEdit[], legend: Legend, resultId?: string): boolean {
     const r = this.of(uri);
     if (!r.tokens || r.tokens.resultId !== previousResultId) {
-      r.tokens = undefined;
-      this.changed(uri, 'tokens');
+      if (r.tokens) r.tokens = { ...r.tokens, resultId: undefined };
       return false;
     }
     const d = applyEdits(r.tokens.data, edits);

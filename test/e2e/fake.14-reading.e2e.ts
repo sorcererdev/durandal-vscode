@@ -96,13 +96,19 @@ describe('the plans reading layer (fake server)', () => {
     assert.equal(a.planView.reading(uriOf('one/main.py')), undefined);
   });
 
-  it('a stop forgets every reading; a close forgets the plan\'s (spec §3.2)', async () => {
+  it('a stop forgets every reading; a close forgets the plan\'s; neither leaves glyphs drawn (spec §3.2)', async () => {
     const a = await running();
-    await fresh();
+    await plansConfig().update('conceal', true, vscode.ConfigurationTarget.Global);
+    const hidden = () => a.planView.hidden(uriOf(PLAN));
+    (await fresh()).selection = new vscode.Selection(0, 0, 0, 0);
+    await until(() => hidden() > 0, 'the glyphs drawn');
     await a.server.stop();
     assert.equal(a.planView.reading(uriOf(PLAN)), undefined);
+    assert.equal(hidden(), 0, 'a stop clears the glyphs');
     await a.server.start();
     const ed = await fresh();
+    ed.selection = new vscode.Selection(0, 0, 0, 0);
+    await until(() => hidden() > 0, 'the glyphs drawn again');
     // VS Code keeps a document open well past its last tab (over 60 s here); a language-mode
     // change reaches an extension as a close and an open, at once. The server then answers
     // nothing: a reading left after the close would still show.
@@ -111,6 +117,8 @@ describe('the plans reading layer (fake server)', () => {
     await until(() => docOf(PLAN)?.languageId === 'plaintext', 'the plan reopened as plain text');
     await sleep(500);
     assert.equal(a.planView.reading(uriOf(PLAN)), undefined);
+    assert.equal(hidden(), 0, 'a close clears the glyphs of an editor left open');
+    assert.deepEqual(a.planView.drawn(uriOf(PLAN)).glyphs, []);
     // later tests read a markdown plan
     await vscode.languages.setTextDocumentLanguage(docOf(PLAN)!, 'markdown');
     await until(() => docOf(PLAN)?.languageId === 'markdown', 'the plan markdown again');

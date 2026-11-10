@@ -18,6 +18,8 @@ export interface Drawn {
 export interface PlanViewApi {
   reading(uri: string): PlanReading | undefined;
   drawn(uri: string): Drawn;
+  // hidden: the ranges conceal hides in the editors of URI as last set, whatever the layer forgot
+  hidden(uri: string): number;
   entered(uri: string): boolean;
 }
 
@@ -76,6 +78,7 @@ export class PlanLayer implements ReadingHooks {
     return {
       reading: uri => this.readings.get(uri),
       drawn: uri => this.drawnBy.get(uri) ?? empty(),
+      hidden: uri => this.deco.hidden(uri),
       entered: () => false,
     };
   }
@@ -111,6 +114,8 @@ export class PlanLayer implements ReadingHooks {
   private closed(uri: string): void {
     this.readings.drop(uri);
     this.d.docs.forget(uri);
+    // its editors (a language change keeps them open) show nothing of the plan any more
+    this.changed(uri);
     this.drawnBy.delete(uri);
   }
 }
