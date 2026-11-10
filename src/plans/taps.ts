@@ -18,10 +18,11 @@ export interface ReadingHooks {
 export type PlanTaps = Pick<Middleware, 'provideDocumentSemanticTokens' | 'provideDocumentSemanticTokensEdits' | 'provideFoldingRanges' | 'provideCodeLenses'>;
 
 export function planTaps(hooks: () => ReadingHooks | undefined, legend: () => Legend | undefined, warn: (m: string) => void): PlanTaps {
+  // record: an answer that lands after its document closed is dropped (the layer forgot it)
   const record = (doc: vscode.TextDocument, what: string, f: (h: ReadingHooks) => void) => {
     const h = hooks();
     if (!h) return;
-    h.isPlan(doc).then(yes => { if (yes) f(h); })
+    h.isPlan(doc).then(yes => { if (yes && !doc.isClosed) f(h); })
       .catch((err: unknown) => warn(`plans: reading the ${what} of ${doc.uri.toString()} failed: ${err instanceof Error ? err.message : String(err)}`));
   };
   return {
