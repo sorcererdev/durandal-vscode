@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import type { Say } from '../server';
 import { PaintInput, PlanDecorations } from './decorate';
+import { FoldEntry } from './folds';
+import { collapsedStarts, foldLabel } from './foldText';
 import { conceals } from './glyphs';
 import type { Legend, TokenEdit } from './legend';
 import type { PlanDocs } from './planDocs';
@@ -31,11 +33,16 @@ const empty = (): Drawn => ({ glyphs: [], verdicts: [], conclusions: [] });
 
 // PlanLayer owns the plans reading layer (M6 spec §3): the readings the taps fill, the events
 // that repaint, what each document shows: a reading's change, a selection, the visible editors
-// and the options repaint, from the reading alone (no request). It draws the glyphs and the
-// verdict margin; later tasks add folds and conclusions (Task 7), the Enter rule and the
-// excerpt guard (Task 8).
+// and the options repaint, from the reading alone (no request). It draws the glyphs, the
+// verdict margin and the collapsed folds' conclusions, and closes a plan's folds on entry; a
+// later task adds the Enter rule and the excerpt guard (Task 8).
 export class PlanLayer implements ReadingHooks {
-  readonly readings = new Readings(uri => this.changed(uri));
+  readonly readings = new Readings((uri, part) => {
+    this.changed(uri);
+    // folds that come after a give-up, or after the server attached, enter the active plan
+    const active = vscode.window.activeTextEditor;
+    if (part === 'folds' && active?.document.uri.toString() === uri) void this.entry.enter(active);
+  });
   private opts: PlansOptions;
   private readonly drawnBy = new Map<string, Drawn>();
   private readonly deco = new PlanDecorations();
@@ -43,6 +50,7 @@ export class PlanLayer implements ReadingHooks {
   private readonly known = new Set<string>();
   // recheck: the latest options() re-check; an older one that resolves later is dropped
   private recheck = 0;
+  private readonly entry = new FoldEntry({ reading: uri => this.readings.get(uri), foldDone: () => this.opts.foldDone, isPlan: doc => this.isPlan(doc) });
 
   constructor(private readonly d: LayerDeps) {
     this.opts = d.options;
@@ -69,10 +77,14 @@ export class PlanLayer implements ReadingHooks {
       vscode.workspace.onDidCloseTextDocument(doc => this.closed(doc.uri.toString())),
       vscode.window.onDidChangeTextEditorSelection(e => this.repaint(e.textEditor)),
       vscode.window.onDidChangeVisibleTextEditors(() => this.repaintAll()),
+      vscode.window.onDidChangeTextEditorVisibleRanges(e => this.repaint(e.textEditor)),
+      vscode.window.onDidChangeActiveTextEditor(ed => { if (ed) void this.entry.enter(ed); }),
       vscode.languages.onDidChangeDiagnostics(e => {
         for (const uri of e.uris) if (this.known.has(uri.toString())) this.changed(uri.toString());
       }),
     );
+    const active = vscode.window.activeTextEditor;
+    if (active) void this.entry.enter(active);
   }
 
   // the plans settings changed: the plan check is asked again, and every editor shows the new options
@@ -110,7 +122,7 @@ export class PlanLayer implements ReadingHooks {
       reading: uri => this.readings.get(uri),
       drawn: uri => this.drawnBy.get(uri) ?? empty(),
       hidden: uri => this.deco.hidden(uri),
-      entered: () => false,
+      entered: uri => this.entry.entered(uri),
     };
   }
 
@@ -147,6 +159,22 @@ export class PlanLayer implements ReadingHooks {
       input.margin = [];
       drawn.verdicts = [];
     }
+    const t = r?.tokens;
+    const f = r?.folds;
+    if (!f || !t) {
+      input.conclusions = [];
+      drawn.conclusions = [];
+    } else if (f.version === doc.version && t.version === doc.version) {
+      // the collapsed folds the viewport shows, each with its conclusion (spec §3.6)
+      const visible = ed.visibleRanges.map(v => ({ start: v.start.line, end: v.end.line }));
+      // an empty last row shown alone (after a fold) is an empty range, which visibleRanges
+      // leaves out (1.145.2): a fold up to the row before it runs to the document's end
+      const last = doc.lineCount - 1;
+      const rows = last > 0 && doc.lineAt(last).text === '' ? last : doc.lineCount;
+      const cs = collapsedStarts(f.ranges, visible, rows).map(x => ({ line: x.start, text: foldLabel(t.toks, lineAt, x.start, x.end) }));
+      input.conclusions = cs;
+      drawn.conclusions = cs;
+    }
     this.deco.paint(ed, input);
     this.drawnBy.set(uri, drawn);
   }
@@ -156,6 +184,7 @@ export class PlanLayer implements ReadingHooks {
     this.d.docs.forget(uri);
     // its editors (a language change keeps them open) show nothing of the plan any more
     this.known.delete(uri);
+    this.entry.forget(uri);
     this.changed(uri);
     this.drawnBy.delete(uri);
   }
