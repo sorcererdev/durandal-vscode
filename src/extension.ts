@@ -159,7 +159,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   // plans (M6): durandal.plans.*, the one plan check, durandal.isPlan, the reading layer
   let plansOptions = readPlansOptions();
   const planDocs = new PlanDocs(() => plansOptions.dir);
-  const layer = new PlanLayer({ docs: planDocs, options: plansOptions, say });
+  const layer = new PlanLayer({ docs: planDocs, options: plansOptions, say, warn: m => output.warn(m) });
   layer.register(context);
   hooks.reading = layer;
   const plansTracked = trackIsPlan(context, planDocs);

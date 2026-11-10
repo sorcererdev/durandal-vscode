@@ -3,8 +3,7 @@ import type { Conceal } from './glyphs';
 import { colourOf, Mark, MarkColour } from './verdicts';
 
 // PaintInput: what an editor on a plan shows. An absent field leaves that layer as drawn (its
-// reading is stale); an empty one clears it. The verdict margin (Task 6) and the fold
-// conclusions (Task 7) join it.
+// reading is stale); an empty one clears it.
 export interface PaintInput { conceals?: Conceal[]; margin?: Mark[] }
 
 const marginType = (colour: string) => vscode.window.createTextEditorDecorationType({
