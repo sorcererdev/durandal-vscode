@@ -252,15 +252,24 @@ export const Olifant = {
   plansReviewChoose: req<ReviewChooseParams, ChooseResult>('olifant/plans/review/choose'),
   recognitionFeedback: note<RecognitionFeedbackParams>('olifant/recognitionFeedback'),
   plansOutcome: note<OutcomeParams>('olifant/plans/outcome'),
+  // the plan is quiet: the server triages its claims (milestone 6c sends it)
+  plansIdle: note<Doc>('olifant/plans/idle'),
   suggestion: note<Suggestion>('olifant/suggestion'),
   plansReviewReady: note<ReviewReady>('olifant/plans/review/ready'),
 } as const;
 
 export const METHODS: string[] = Object.values(Olifant).map(t => t.method);
 
-// The server's own command (workspace/executeCommand); the library registers it from the
-// server's executeCommandProvider.
-export const SERVER_COMMANDS = { doctor: 'olifant.doctor' } as const;
+// The server's own commands (workspace/executeCommand); the library registers them from the
+// server's executeCommandProvider. The claim pass's three (olifant 48f38ab) are code actions'
+// commands: the chord-a menu runs them (milestone 6c), showWhy and showCode answer with
+// window/showDocument.
+export const SERVER_COMMANDS = {
+  doctor: 'olifant.doctor',
+  checkSentence: 'olifant.checkSentence',
+  showWhy: 'olifant.showWhy',
+  showCode: 'olifant.showCode',
+} as const;
 
 // Commands the server names in its inlay hints and code lenses; the client runs them.
 export const CLIENT_COMMANDS = {
@@ -278,4 +287,6 @@ export const PLAN_TOKEN_TYPES: readonly string[] = [
   'planMarker', 'planStep', 'planStepDone', 'planQuestion', 'planEvidence', 'planClaim', 'planTest',
   'planAlso', 'planJournal', 'planAnchorPath', 'planAnchorUnit', 'planVerdict', 'planFingerprint',
 ];
-export const PLAN_TOKEN_MODIFIERS: readonly string[] = ['done', 'stale', 'notFound'];
+// At 48f38ab: checked and wrong mark a bare line's text by its stored check; resolved is no
+// longer given and stays for older clients.
+export const PLAN_TOKEN_MODIFIERS: readonly string[] = ['done', 'stale', 'notFound', 'checked', 'wrong', 'resolved'];

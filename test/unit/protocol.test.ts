@@ -13,7 +13,7 @@ import { CLIENT_COMMANDS, METHODS, Olifant, PLAN_TOKEN_MODIFIERS, PLAN_TOKEN_TYP
 const PINNED = [
   'olifant/choices', 'olifant/conjure', 'olifant/debugState', 'olifant/fileActions', 'olifant/generators',
   'olifant/holes', 'olifant/model', 'olifant/mutate', 'olifant/plan', 'olifant/plans/anchor', 'olifant/plans/ask',
-  'olifant/plans/do', 'olifant/plans/errand', 'olifant/plans/errands', 'olifant/plans/files', 'olifant/plans/outcome',
+  'olifant/plans/do', 'olifant/plans/errand', 'olifant/plans/errands', 'olifant/plans/files', 'olifant/plans/idle', 'olifant/plans/outcome',
   'olifant/plans/reconcile', 'olifant/plans/review', 'olifant/plans/review/choose', 'olifant/plans/review/ready',
   'olifant/plans/reviews', 'olifant/plans/stub', 'olifant/plans/test', 'olifant/plans/validate', 'olifant/preview',
   'olifant/recognitionFeedback', 'olifant/stub', 'olifant/suggest', 'olifant/suggestion', 'olifant/tests/file',
@@ -28,11 +28,14 @@ test('every olifant/* method, once', () => {
 });
 
 test('the commands and the plan legend', () => {
-  assert.deepEqual(SERVER_COMMANDS, { doctor: 'olifant.doctor' });
+  assert.deepEqual(SERVER_COMMANDS, {
+    doctor: 'olifant.doctor', checkSentence: 'olifant.checkSentence', showWhy: 'olifant.showWhy', showCode: 'olifant.showCode',
+  });
   assert.deepEqual(Object.values(CLIENT_COMMANDS).sort(),
     ['olifant.plans.errand', 'olifant.plans.excerpt', 'olifant.plans.review', 'olifant.showActions']);
   assert.equal(PLAN_TOKEN_TYPES.length, 13);
-  assert.deepEqual([...PLAN_TOKEN_MODIFIERS], ['done', 'stale', 'notFound']);
+  assert.deepEqual([...PLAN_TOKEN_MODIFIERS], ['done', 'stale', 'notFound', 'checked', 'wrong', 'resolved']);
+  assert.equal(Olifant.plansIdle.method, 'olifant/plans/idle');
 });
 
 // hsFiles lists olifant's library sources, without the specs.
@@ -61,10 +64,12 @@ test('the contract matches olifant\'s source', { skip: !process.env.OLIFANT_REPO
     }
   }
   assert.deepEqual([...methods].sort(), PINNED);
-  assert.deepEqual([...commands].sort(), [...Object.values(CLIENT_COMMANDS), SERVER_COMMANDS.doctor].sort());
+  assert.deepEqual([...commands].sort(), [...Object.values(CLIENT_COMMANDS), ...Object.values(SERVER_COMMANDS)].sort());
   const plans = readFileSync(join(process.env.OLIFANT_REPO!, 'src/Olifant/Server/Plans.hs'), 'utf8');
   const types = /planTokenTypes =\s*\[([^\]]*)\]/.exec(plans)?.[1].match(/"[A-Za-z]+"/g)?.map(s => s.slice(1, -1));
   assert.deepEqual(types, [...PLAN_TOKEN_TYPES]);
+  const modifiers = /planTokenModifiers =\s*\[([^\]]*)\]/.exec(plans)?.[1].match(/"[A-Za-z]+"/g)?.map(s => s.slice(1, -1));
+  assert.deepEqual(modifiers, [...PLAN_TOKEN_MODIFIERS]);
 });
 
 // compile check: tsc over this file is the assertion that the types read as the server sends them.
