@@ -13,10 +13,17 @@ export interface PaintInput { conceals?: Conceal[] }
 export class PlanDecorations implements vscode.Disposable {
   private readonly hide = vscode.window.createTextEditorDecorationType({ textDecoration: 'none; display: none' });
   private readonly glyph = vscode.window.createTextEditorDecorationType({});
+  // hides: per document, the hidden ranges last set on an editor of it (VS Code cannot be asked; the e2e reads it)
+  private readonly hides = new Map<string, number>();
+
+  hidden(uri: string): number { return this.hides.get(uri) ?? 0; }
 
   paint(ed: vscode.TextEditor, input: PaintInput): void {
     if (input.conceals) {
       ed.setDecorations(this.hide, input.conceals.map(c => new vscode.Range(c.line, c.start, c.line, c.end)));
+      const uri = ed.document.uri.toString();
+      if (input.conceals.length > 0) this.hides.set(uri, input.conceals.length);
+      else this.hides.delete(uri);
       ed.setDecorations(this.glyph, input.conceals.filter(c => c.glyph !== '').map(c => ({
         range: new vscode.Range(c.line, c.start, c.line, c.start),
         renderOptions: { before: { contentText: c.glyph } },
