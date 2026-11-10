@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import type { Say } from '../server';
+import { PaintInput, PlanDecorations } from './decorate';
+import { conceals } from './glyphs';
 import type { Legend, TokenEdit } from './legend';
 import type { PlanDocs } from './planDocs';
 import { Fold, Lens, PlanReading, Readings } from './reading';
@@ -24,13 +26,15 @@ export interface LayerDeps { docs: PlanDocs; options: PlansOptions; say: Say }
 const empty = (): Drawn => ({ glyphs: [], verdicts: [], conclusions: [] });
 
 // PlanLayer owns the plans reading layer (M6 spec §3): the readings the taps fill, the events
-// that repaint, what each document shows. Later tasks add the repaint on a reading's change and
-// the glyphs (Task 5), the verdict margin (Task 6), folds and conclusions (Task 7), the Enter
-// rule and the excerpt guard (Task 8).
+// that repaint, what each document shows: a reading's change, a selection, the visible editors
+// and the options repaint, from the reading alone (no request). The glyphs are Task 5's; later
+// tasks add the verdict margin (Task 6), folds and conclusions (Task 7), the Enter rule and the
+// excerpt guard (Task 8).
 export class PlanLayer implements ReadingHooks {
-  readonly readings = new Readings();
+  readonly readings = new Readings(uri => this.changed(uri));
   private opts: PlansOptions;
   private readonly drawnBy = new Map<string, Drawn>();
+  private readonly deco = new PlanDecorations();
 
   constructor(private readonly d: LayerDeps) {
     this.opts = d.options;
@@ -47,18 +51,25 @@ export class PlanLayer implements ReadingHooks {
   lenses(uri: string, version: number, items: Lens[]): void { this.readings.lenses(uri, version, items); }
 
   register(context: vscode.ExtensionContext): void {
-    context.subscriptions.push(vscode.workspace.onDidCloseTextDocument(doc => this.closed(doc.uri.toString())));
+    context.subscriptions.push(
+      this.deco,
+      vscode.workspace.onDidCloseTextDocument(doc => this.closed(doc.uri.toString())),
+      vscode.window.onDidChangeTextEditorSelection(e => this.repaint(e.textEditor)),
+      vscode.window.onDidChangeVisibleTextEditors(() => this.repaintAll()),
+    );
   }
 
-  // the plans settings changed: the plan check is asked again
+  // the plans settings changed: the plan check is asked again, and every editor shows the new options
   options(o: PlansOptions): void {
     this.opts = o;
     this.d.docs.clear();
+    this.repaintAll();
   }
 
-  // the server stopped: nothing it said stands (spec §5.7)
+  // the server stopped: nothing it said stands (spec §5.7), and nothing it said stays drawn
   stopped(): void {
     this.readings.clear();
+    this.repaintAll();
   }
 
   api(): PlanViewApi {
@@ -67,6 +78,34 @@ export class PlanLayer implements ReadingHooks {
       drawn: uri => this.drawnBy.get(uri) ?? empty(),
       entered: () => false,
     };
+  }
+
+  // changed: URI's reading changed; the visible editors showing it repaint
+  private changed(uri: string): void {
+    for (const ed of vscode.window.visibleTextEditors) if (ed.document.uri.toString() === uri) this.repaint(ed);
+  }
+
+  private repaintAll(): void {
+    for (const ed of vscode.window.visibleTextEditors) this.repaint(ed);
+  }
+
+  // repaint: what EDITOR shows, from its document's reading and the options; no request
+  protected repaint(ed: vscode.TextEditor): void {
+    const doc = ed.document;
+    const uri = doc.uri.toString();
+    const r = this.readings.get(uri);
+    if (!r && !this.drawnBy.has(uri)) return;
+    const drawn = this.drawnBy.get(uri) ?? empty();
+    const input: PaintInput = {};
+    const lineAt = (l: number) => (l < doc.lineCount ? doc.lineAt(l).text : undefined);
+    const cursor = new Set(ed.selections.map(s => s.active.line));
+    const c = this.opts.conceal ? conceals(r?.tokens, doc.version, lineAt, this.opts.glyphs, cursor) : [];
+    if (c) {
+      input.conceals = c;
+      drawn.glyphs = c.map(x => ({ line: x.line, start: x.start, end: x.end, text: x.glyph }));
+    }
+    this.deco.paint(ed, input);
+    this.drawnBy.set(uri, drawn);
   }
 
   private closed(uri: string): void {

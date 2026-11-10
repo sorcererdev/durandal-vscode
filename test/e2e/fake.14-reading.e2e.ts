@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { encode } from '../planTokens';
-import { docOf, file, open, reply, running, settle, sleep, until, ws } from './helpers';
+import { docOf, file, open, reply, revert, running, settle, sleep, until, ws } from './helpers';
 
 // The plans reading layer over the fake server (M6 spec §3, §8): detection, the reading model,
 // glyphs, the verdict margin, folds and conclusions, the Enter rule, the excerpt guard.
@@ -74,6 +74,12 @@ describe('the plans reading layer (fake server)', () => {
     await settle(PLAN, PLAN_TEXT);
   });
 
+  afterEach(async () => {
+    for (const k of ['conceal', 'glyphs', 'foldDone']) await plansConfig().update(k, undefined, vscode.ConfigurationTarget.Global);
+    const d = docOf(PLAN);
+    if (d?.isDirty) await revert(d);
+  });
+
   it('a plan\'s tokens, folds and lenses are copied at its version; another file\'s are not (spec §3.2)', async () => {
     const a = await running();
     canned([{ range: { start: { line: 2, character: 0 }, end: { line: 2, character: 0 } }, command: { title: '1 delegation', command: 'olifant.plans.errand', arguments: [uriOf(PLAN), 2] } }]);
@@ -126,5 +132,45 @@ describe('the plans reading layer (fake server)', () => {
     await until(() => a.isPlan(), 'p.md is a plan again');
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     await settle('one/plans/notes', null);
+  });
+
+  it('conceal on: markers become glyphs, paths and fingerprints hide; the cursor line is raw; off draws none (spec §3.3)', async () => {
+    const a = await running();
+    await plansConfig().update('conceal', true, vscode.ConfigurationTarget.Global);
+    const ed = await fresh();
+    ed.selection = new vscode.Selection(0, 0, 0, 0);
+    const glyphs = () => a.planView.drawn(uriOf(PLAN)).glyphs;
+    await until(() => glyphs().some(g => g.line === 2), 'the glyphs drawn');
+    assert.deepEqual(glyphs().filter(g => g.line === 2), [{ line: 2, start: 0, end: 5, text: '☐' }, { line: 2, start: 13, end: 23, text: '' }]);
+    assert.deepEqual(glyphs().filter(g => g.line === 3).map(g => g.text), ['☑', '', '']);
+    assert.deepEqual(glyphs().filter(g => g.line === 5), [{ line: 5, start: 0, end: 3, text: '?' }]);
+    ed.selection = new vscode.Selection(2, 3, 2, 3);
+    await until(() => !glyphs().some(g => g.line === 2) || undefined, 'the cursor line raw');
+    assert.ok(glyphs().some(g => g.line === 0 || g.line === 3), 'other lines keep theirs');
+    await plansConfig().update('glyphs', { todo: '[]' }, vscode.ConfigurationTarget.Global);
+    ed.selection = new vscode.Selection(0, 0, 0, 0);
+    await until(() => glyphs().find(g => g.line === 2 && g.start === 0)?.text === '[]', 'the todo override');
+    await plansConfig().update('glyphs', undefined, vscode.ConfigurationTarget.Global);
+    await plansConfig().update('conceal', false, vscode.ConfigurationTarget.Global);
+    await until(() => glyphs().length === 0 || undefined, 'none with conceal off');
+  });
+
+  it('a stale reading leaves the glyphs as drawn until fresh tokens come (Review Focus)', async () => {
+    const a = await running();
+    await plansConfig().update('conceal', true, vscode.ConfigurationTarget.Global);
+    const ed = await fresh();
+    ed.selection = new vscode.Selection(0, 0, 0, 0);
+    const glyphs = () => a.planView.drawn(uriOf(PLAN)).glyphs;
+    await until(() => glyphs().some(g => g.line === 2), 'the glyphs drawn');
+    const before = JSON.stringify(glyphs());
+    // the next tokens answer comes 2 s late: the edit's version has none meanwhile
+    reply('textDocument/semanticTokens/full', { delay: 2, data: TOKENS });
+    await ed.edit(b => b.insert(new vscode.Position(1, 0), 'x\n'));
+    ed.selection = new vscode.Selection(1, 0, 1, 0);
+    await sleep(300);
+    assert.equal(JSON.stringify(glyphs()), before, 'nothing redrawn from old tokens');
+    await until(() => a.planView.reading(uriOf(PLAN))?.tokens?.version === ed.document.version, 'fresh tokens', 10_000);
+    await until(() => JSON.stringify(glyphs()) !== before || undefined, 'redrawn from fresh tokens');
+    await plansConfig().update('conceal', false, vscode.ConfigurationTarget.Global);
   });
 });
