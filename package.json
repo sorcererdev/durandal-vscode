@@ -108,6 +108,16 @@
           "default": false,
           "markdownDescription": "An ask's answer waits beside the plan for Accept all or Reject all, as a validate's does. Off: it goes straight into the plan, and one undo takes it back."
         },
+        "durandal.plans.reconcile": {
+          "type": "string",
+          "enum": ["auto", "key"],
+          "default": "auto",
+          "enumDescriptions": [
+            "Reconcile a plan when it is entered, when something lands, and a second after a file elsewhere is saved.",
+            "Reconcile only on Durandal: Plan: Reconcile."
+          ],
+          "description": "When the plan reconciles with the code (durandal.nvim's plans.reconcile)."
+        },
         "durandal.trace.server": {
           "type": "string",
           "enum": [

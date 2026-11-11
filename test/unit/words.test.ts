@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { doWord, fileItem, landedWord, nothingBack, PENDING, promptWord, testsWord } from '../../src/plans/words';
+import { doWord, fileItem, landedWord, NO_PAST_DO, NO_RECORD, nothingBack, PENDING, promptWord, reconcileWord, testsWord } from '../../src/plans/words';
 
 test('the do and landing notices, verbatim from durandal.nvim (plans.lua landed)', () => {
   assert.equal(doWord({ changed: ['/p/a.py'], seconds: 42 }), 'do: 1 file changed · to review · 42 s');
@@ -19,4 +19,11 @@ test('the prompt, the tests notice and a files item', () => {
   assert.deepEqual(fileItem({ section: 'T', row: 1, text: '- a', file: null, line: null }), { label: 'T · - a', detail: 'line 2' });
   assert.deepEqual(fileItem({ section: 'Next', row: 8, text: '- [ ] step', file: '/p/src/a.py', line: 12 }), { label: 'Next · - [ ] step', detail: '/p/src/a.py:12' });
   assert.deepEqual(fileItem({ section: 'Next', row: 8, text: 's', file: '/p/src/a.py' }), { label: 'Next · s', detail: '/p/src/a.py:1' });
+});
+
+test('the loop\'s words (plans.lua reconciled :550-558, review.lua :512-531)', () => {
+  assert.equal(reconcileWord(1, 2), 'reconcile: 1 facts · 2 to review');
+  assert.equal(reconcileWord(0, 0), 'reconcile: 0 facts · 0 to review');
+  assert.equal(NO_PAST_DO, 'plans: no past do here');
+  assert.equal(NO_RECORD, 'plans: no record behind this line');
 });

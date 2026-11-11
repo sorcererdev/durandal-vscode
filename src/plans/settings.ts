@@ -1,9 +1,9 @@
 // durandal.plans.* read and checked (spec §3.1). No vscode import: options.ts reads VS Code's
-// configuration through it. reconcile (M6c) joins when it is read.
+// configuration through it.
 import { DEFAULT_GLYPHS, GLYPH_NAMES, Glyphs } from './glyphs';
 import { PLANS_DIR } from './isPlan';
 
-export interface PlansOptions { dir: string; conceal: boolean; glyphs: Glyphs; foldDone: boolean; reviewAnswers: boolean }
+export interface PlansOptions { dir: string; conceal: boolean; glyphs: Glyphs; foldDone: boolean; reviewAnswers: boolean; reconcile: 'auto' | 'key' }
 
 // dir: under each project, the folder whose markdown files are plans; it must match the
 // server's [plans] dir. Slashes at either end and spaces are dropped; empty is the default.
@@ -33,5 +33,7 @@ export function plansOptionsFrom(get: (key: string, fallback: unknown) => unknow
     foldDone: typeof foldDone === 'boolean' ? foldDone : true,
     // an ask's answer waits beside the plan for Accept all / Reject all, as a validate's does
     reviewAnswers: get('reviewAnswers', false) === true,
+    // "key": only Plan: Reconcile reconciles; "auto" also on entry, landings and saves elsewhere
+    reconcile: get('reconcile', 'auto') === 'key' ? 'key' : 'auto',
   };
 }

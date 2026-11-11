@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type {
   Field, PreviewResult, Plan, FileActionsResult, ModelResult, GeneratorItem, InlineItem, SnippetData, Suggestion, SuggestResult,
   ChoicesResult, ConjureLanded, ConjurePaused, ConjureResume, MutateResult, StubResult, TestsRunResult, TestsRunParams, WaiveResult,
-  ChooseResult, DoReview, ReconcileReview, ReviewsResult, ErrandParams, ReviewChooseParams,
+  ChooseResult, DoReview, ReconcileReview, ReviewsResult, ErrandParams, ReviewChooseParams, ReconcileResult, ErrandsResult,
 } from '../../src/protocol';
 import { fixture, wrapped } from '../pauseFixtures';
 import { CLIENT_COMMANDS, Lsp, METHODS, Olifant, PLAN_TOKEN_MODIFIERS, PLAN_TOKEN_TYPES, SERVER_COMMANDS } from '../../src/protocol';
@@ -212,4 +212,13 @@ test('the standard requests the plan chords send themselves', () => {
   assert.equal(Lsp.codeAction.method, 'textDocument/codeAction');
   assert.equal(Lsp.codeActionResolve.method, 'codeAction/resolve');
   assert.equal(Olifant.plansFiles.method, 'olifant/plans/files');
+});
+
+test('compile check: the loop\'s answers are typed (no method added)', () => {
+  const r: ReconcileResult = { id: 'R1', landed: 1, readings: '2' };
+  const e: ErrandsResult = { errands: [{ id: 'E1', at: '2026-10-25T21:31:00Z', status: 'answered', choice: null, words: 'x' }] };
+  assert.equal(r.readings, '2');
+  assert.equal(e.errands[0].id, 'E1');
+  assert.equal(Olifant.plansReconcile.method, 'olifant/plans/reconcile');
+  assert.equal(Olifant.plansErrands.method, 'olifant/plans/errands');
 });

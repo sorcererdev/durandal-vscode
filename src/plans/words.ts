@@ -19,6 +19,11 @@ export const TOGGLE_NOTHING = 'toggle: nothing to change here';
 export const TOGGLE_NO_STEP = 'toggle: not on a step';
 export const PLAN_CHANGED = ' · plan changed, press again';
 export const NOT_APPLIED = 'VS Code did not apply the edit';
+export const NO_PAST_DO = 'plans: no past do here';
+export const NO_RECORD = 'plans: no record behind this line';
+
+// reconcileWord: what a reconcile landed and what waits in its review (plans.lua reconciled)
+export const reconcileWord = (landed: number, open: number): string => `reconcile: ${landed} facts · ${open} to review`;
 
 // a disabled excerpt or toggle action's reason, as said
 export const excerptWord = (reason: string): string => `excerpt: ${reason}`;

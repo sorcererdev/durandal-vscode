@@ -61,7 +61,7 @@ test('Esc dismisses the snippet ghost only while it is ours and visible (spec §
 test('the settings and the activation', () => {
   assert.deepEqual(Object.keys(pkg.contributes.configuration.properties).sort(),
     ['durandal.actionLog', 'durandal.debounceMs', 'durandal.fills', 'durandal.ghosts', 'durandal.hints', 'durandal.model', 'durandal.path',
-      'durandal.plans.conceal', 'durandal.plans.dir', 'durandal.plans.foldDone', 'durandal.plans.glyphs', 'durandal.plans.reviewAnswers', 'durandal.trace.server']);
+      'durandal.plans.conceal', 'durandal.plans.dir', 'durandal.plans.foldDone', 'durandal.plans.glyphs', 'durandal.plans.reconcile', 'durandal.plans.reviewAnswers', 'durandal.trace.server']);
   // after startup too (issue #1): a project file opened in a window with no project folder
   assert.deepEqual(pkg.activationEvents, ['workspaceContains:**/.olifant/config.toml', 'onStartupFinished']);
   const log = (pkg.contributes.configuration.properties as Record<string, { type: string; default: unknown }>)['durandal.actionLog'];
@@ -195,8 +195,10 @@ test('M6a: the 13 token types with their superTypes, the 6 modifiers, a scope fo
 });
 
 test('M6b: reviewAnswers is a boolean, false; accept and reject are milestone 7, and say so', () => {
-  const props = pkg.contributes.configuration.properties as Record<string, { type: string; default: unknown }>;
+  const props = pkg.contributes.configuration.properties as Record<string, { type: string; default: unknown; enum?: string[] }>;
   assert.deepEqual([props['durandal.plans.reviewAnswers'].type, props['durandal.plans.reviewAnswers'].default], ['boolean', false]);
+  assert.deepEqual([props['durandal.plans.reconcile'].type, props['durandal.plans.reconcile'].default, props['durandal.plans.reconcile'].enum],
+    ['string', 'auto', ['auto', 'key']]);
   assert.equal(NOT_YET['durandal.plan.accept'].milestone, 7);
   assert.equal(NOT_YET['durandal.plan.reject'].milestone, 7);
   assert.equal(notYet('Plan: Accept', 7), 'Durandal: Plan: Accept is not implemented yet (milestone 7)');

@@ -183,6 +183,13 @@ export interface ErrandResult extends Open {
   seconds?: number; cost?: number | null; changed?: string[] | null; review?: string | null;
 }
 export interface ReconcileParams extends Doc { forced: boolean }
+// plans/reconcile's answer (olifant Lsp.hs :834-852): counts. Its facts arrive before it by
+// workspace/applyEdit ("Olifant: reconcile"); the facts and blocks keys, if any, are not read.
+// nvim tonumber()s the counts, so a string count is read too.
+export interface ReconcileResult extends Open { id?: string; landed?: number | string; readings?: number | string; seconds?: number }
+// plans/errands: a step's past dos, newest first (at: ISO 8601, e.g. 2026-10-25T21:31:00Z)
+export interface Errand { id: string; at: string; status: string; choice?: string | null; words: string; model?: string }
+export interface ErrandsResult { errands: Errand[] }
 export interface AnchorResult extends Open { file?: string; line?: number; unit?: string; fingerprint?: string }
 // plans/files: file absolute (null when it does not exist), line its unit's 1-based line
 export interface FileItem { section: string; row: number; text: string; file?: string | null; line?: number | null }
@@ -256,19 +263,19 @@ export const Olifant = {
   plansAsk: req<ErrandParams, ErrandResult>('olifant/plans/ask'),
   plansValidate: req<ErrandParams, ErrandResult>('olifant/plans/validate'),
   plansDo: req<ErrandParams, ErrandResult>('olifant/plans/do'),
-  plansReconcile: req<ReconcileParams, Open>('olifant/plans/reconcile'),
+  plansReconcile: req<ReconcileParams, ReconcileResult | null>('olifant/plans/reconcile'),
   plansAnchor: req<Row, AnchorResult | null>('olifant/plans/anchor'),
   plansFiles: req<Doc, FilesResult>('olifant/plans/files'),
   plansStub: req<Row, StepResult>('olifant/plans/stub'),
   plansTest: req<Row, StepResult>('olifant/plans/test'),
-  plansErrand: req<ErrandOneParams, Open>('olifant/plans/errand'),
-  plansErrands: req<ErrandsParams, { errands: unknown[] }>('olifant/plans/errands'),
+  plansErrand: req<ErrandOneParams, Review | null>('olifant/plans/errand'),
+  plansErrands: req<ErrandsParams, ErrandsResult | null>('olifant/plans/errands'),
   plansReviews: req<Doc, ReviewsResult>('olifant/plans/reviews'),
   plansReview: req<ReviewParams, Review>('olifant/plans/review'),
   plansReviewChoose: req<ReviewChooseParams, ChooseResult>('olifant/plans/review/choose'),
   recognitionFeedback: note<RecognitionFeedbackParams>('olifant/recognitionFeedback'),
   plansOutcome: note<OutcomeParams>('olifant/plans/outcome'),
-  // the plan is quiet: the server triages its claims (milestone 6c sends it)
+  // the plan is quiet: the server triages its claims (plans/idleNotes.ts)
   plansIdle: note<Doc>('olifant/plans/idle'),
   suggestion: note<Suggestion>('olifant/suggestion'),
   plansReviewReady: note<ReviewReady>('olifant/plans/review/ready'),
