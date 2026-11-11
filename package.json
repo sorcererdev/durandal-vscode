@@ -274,6 +274,16 @@
         "command": "durandal.plan.newStep",
         "title": "Plan: New Step",
         "category": "Durandal"
+      },
+      {
+        "command": "durandal.plan.stub",
+        "title": "Plan: Stub",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.plan.test",
+        "title": "Plan: Test",
+        "category": "Durandal"
       }
     ],
     "keybindings": [
@@ -293,7 +303,7 @@
         "command": "durandal.test.here",
         "key": "ctrl+alt+d t",
         "mac": "cmd+alt+d t",
-        "when": "durandal.inProject || resourceScheme == durandal-doc || resourceScheme == untitled"
+        "when": "(durandal.inProject || resourceScheme == durandal-doc || resourceScheme == untitled) && !durandal.isPlan"
       },
       {
         "command": "durandal.test.file",
@@ -311,7 +321,7 @@
         "command": "durandal.stub",
         "key": "ctrl+alt+d s",
         "mac": "cmd+alt+d s",
-        "when": "durandal.inProject || resourceScheme == durandal-doc || resourceScheme == untitled"
+        "when": "(durandal.inProject || resourceScheme == durandal-doc || resourceScheme == untitled) && !durandal.isPlan"
       },
       {
         "command": "durandal.conjure",
@@ -389,6 +399,30 @@
         "command": "durandal.plan.newStep",
         "key": "ctrl+alt+d p enter",
         "mac": "cmd+alt+d p enter",
+        "when": "durandal.isPlan"
+      },
+      {
+        "command": "durandal.plan.stub",
+        "key": "ctrl+alt+d p s",
+        "mac": "cmd+alt+d p s",
+        "when": "durandal.isPlan"
+      },
+      {
+        "command": "durandal.plan.test",
+        "key": "ctrl+alt+d p t",
+        "mac": "cmd+alt+d p t",
+        "when": "durandal.isPlan"
+      },
+      {
+        "command": "durandal.plan.stub",
+        "key": "ctrl+alt+d s",
+        "mac": "cmd+alt+d s",
+        "when": "durandal.isPlan"
+      },
+      {
+        "command": "durandal.plan.test",
+        "key": "ctrl+alt+d t",
+        "mac": "cmd+alt+d t",
         "when": "durandal.isPlan"
       },
       {

@@ -17,6 +17,7 @@ import { Reviews } from './pause/review';
 import type { FromPage, View } from './pause/viewModel';
 import { EnterRule } from './plans/enterRule';
 import { PlanActions } from './plans/actions';
+import { PlanSteps } from './plans/steps';
 import { PlanLayer, PlanViewApi } from './plans/layer';
 import { onPlansOptions, readPlansOptions } from './plans/options';
 import { PlanDocs } from './plans/planDocs';
@@ -178,6 +179,8 @@ export function activate(context: vscode.ExtensionContext): Api {
   verbs.register(context);
   // new step, excerpt and toggle: the server's source actions (spec §4.4)
   new PlanActions({ server: s, say, planDocs, layer }).register(context);
+  // files, and stub and test on a step (spec §4.4)
+  new PlanSteps({ server: s, say, ui, planDocs, landed }).register(context);
   // the Enter rule follows durandal.isPlan (spec §3.5)
   const enterRule = new EnterRule();
   context.subscriptions.push(enterRule);

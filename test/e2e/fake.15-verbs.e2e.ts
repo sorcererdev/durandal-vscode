@@ -1,7 +1,7 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import { FakeUi } from '../fakeUi';
-import { api, docOf, file, log, open, reply, restart, revert, running, settle, sleep, tabsUnder, until } from './helpers';
+import { api, disk, docOf, file, log, open, reply, restart, revert, running, settle, sleep, tabsUnder, until } from './helpers';
 
 // The plan verbs over the fake server (M6 spec §4, §8): dispatch, pending rows, cancel, landing,
 // the prompt, new step / excerpt / toggle, files, stub and test.
@@ -448,5 +448,71 @@ describe('the plan verbs (fake server)', () => {
       await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
       await settle(XPLAN, null);
     }
+  });
+
+  it('files: section · text in a pick; an item with a file opens it at its line, one without moves in the plan', async () => {
+    const a = await running();
+    const ui = new FakeUi();
+    a.setUi(ui);
+    const main = file('one/main.py').fsPath;
+    reply('olifant/plans/files', { items: [
+      { section: 'T', row: 1, text: '- a', file: null, line: null },
+      { section: 'Next', row: 8, text: '- [ ] step', file: main, line: 1 },
+    ] });
+    ui.onPick = o => o.items[1].value;
+    await at(1);
+    await vscode.commands.executeCommand('durandal.plan.files');
+    assert.deepEqual(ui.picks[0].items.map(i => [i.label, i.detail]), [['T · - a', 'line 2'], ['Next · - [ ] step', `${main}:1`]]);
+    assert.equal(vscode.window.activeTextEditor!.document.uri.fsPath, main);
+    ui.onPick = o => o.items[0].value;
+    await at(5);
+    await vscode.commands.executeCommand('durandal.plan.files');
+    assert.equal(vscode.window.activeTextEditor!.selection.active.line, 1);
+    reply('olifant/plans/files', { items: [] });
+    await vscode.commands.executeCommand('durandal.plan.files');
+    assert.equal(a.shown.at(-1)!.text, 'plans: no files');
+  });
+
+  it('stub on a step: the stub saved, its test line in the plan, the plan still active (plans_spec :736, :746)', async () => {
+    const a = await running();
+    const other = 'one/other.py';
+    reply('olifant/plans/stub', {
+      file: file(other).fsPath, line: 1, name: 'test_foo',
+      edits: { changes: { [uriOf(other)]: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: 'def test_foo(): pass\n' }] } },
+      facts: [{ after: 8, lines: ['  - test: foo @tests/test_a.py:test_foo'] }],
+    });
+    try {
+      await at(8);
+      await vscode.commands.executeCommand('durandal.plan.stub');
+      assert.deepEqual(sent('olifant/plans/stub').at(-1)!.params, { textDocument: { uri: uriOf(PLAN) }, line: 8 });
+      assert.ok(disk(other).includes('def test_foo'));
+      assert.ok(a.shown.some(s => s.text.startsWith('stubbed test_foo')));
+      assert.equal(lines()[9], '  - test: foo @tests/test_a.py:test_foo');
+      assert.equal(vscode.window.activeTextEditor!.document.uri.toString(), uriOf(PLAN));
+      assert.equal(a.landed.fired.at(-1), 'stub');
+    } finally {
+      await settle(other, 'y = 2\n');
+    }
+  });
+
+  it('test on a step writes its facts; with the plan edited during the run it warns and writes none (plans_spec :757, :781)', async () => {
+    const a = await running();
+    reply('olifant/plans/test', { facts: [{ row: 8, text: '- [x] step @src/a.py:Foo' }], passed: 2, failed: 1, seconds: 0.5 });
+    await at(8);
+    await vscode.commands.executeCommand('durandal.plan.test');
+    assert.equal(a.shown.at(-1)!.text, 'tests: 2 passed · 1 failed · 0.5 s');
+    assert.equal(lines()[8], '- [x] step @src/a.py:Foo');
+    assert.equal(a.landed.fired.at(-1), 'test');
+    await revert(docOf(PLAN)!);
+    reply('olifant/plans/test', { delay: 2, facts: [{ row: 8, text: '- [x] step @src/a.py:Foo ✓ abc1234' }], passed: 1, failed: 0, seconds: 3 });
+    const ed = await at(8);
+    const n = sent('olifant/plans/test').length;
+    const p = vscode.commands.executeCommand('durandal.plan.test');
+    await until(() => sent('olifant/plans/test').length > n, 'the second test asked');
+    await ed.edit(b => b.insert(new vscode.Position(1, 0), 'typed\n'));
+    await p;
+    assert.deepEqual([a.shown.at(-1)!.level, a.shown.at(-1)!.text], ['warn', 'tests: 1 passed · 0 failed · 3 s · plan changed, press again']);
+    assert.equal(lines()[9], '- [ ] step @src/a.py:Foo');
+    assert.equal(a.landed.fired.at(-1), 'test');
   });
 });

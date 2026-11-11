@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import pkg from '../../package.json';
 import { GLYPH_NAMES } from '../../src/plans/glyphs';
 import { PLAN_TOKEN_MODIFIERS, PLAN_TOKEN_TYPES } from '../../src/protocol';
-import { BUILT, FORM_KEYS, KEYS, NOT_YET, PREFIX, SERVER_NAMED, SUGGEST_KEYS, notYet, TDD_WHEN } from '../../src/commandTable';
+import { BUILT, FORM_KEYS, KEYS, NOT_YET, PREFIX, SERVER_NAMED, SUGGEST_KEYS, notYet, TDD_HERE_WHEN, TDD_WHEN } from '../../src/commandTable';
 
 test('the contributed commands: Health, Restart, the built ones and the not-yet ones, each in the Durandal category', () => {
   const ids = pkg.contributes.commands.map(c => c.command).sort();
@@ -38,11 +38,15 @@ test('the keybindings are KEYS under the chord prefix, the form keys, then the s
   const byWhen = new Map<string, string[]>();
   for (const k of KEYS) byWhen.set(k.when, [...(byWhen.get(k.when) ?? []), k.keys]);
   for (const [when, keys] of byWhen) assert.equal(new Set(keys).size, keys.length, `a clash under ${when}`);
-  // the project and TDD contexts overlap: their chords must not clash with each other either
-  const project = KEYS.filter(k => !k.keys.startsWith('p ')).map(k => k.keys);
-  assert.equal(new Set(project).size, project.length, 'a clash among the project chords');
+  // s and t: the TDD chord outside a plan, the plan's inside one (their whens exclude each other)
+  const project = KEYS.filter(k => !k.keys.startsWith('p '));
+  for (const keys of new Set(project.map(k => k.keys))) {
+    const ks = project.filter(k => k.keys === keys);
+    if (ks.length === 1) continue;
+    assert.deepEqual(ks.map(k => k.when).sort(), [TDD_HERE_WHEN, 'durandal.isPlan'].sort(), `a clash on ${keys}`);
+  }
   assert.ok(KEYS.filter(k => k.keys.startsWith('p ')).every(k => k.when === 'durandal.isPlan'));
-  const tdd = ['durandal.test.here', 'durandal.test.file', 'durandal.stub'];
+  const tdd = ['durandal.test.here', 'durandal.test.file', 'durandal.stub', 'durandal.plan.stub', 'durandal.plan.test'];
   assert.ok(KEYS.filter(k => !k.keys.startsWith('p ') && !tdd.includes(k.command)).every(k => k.when === 'durandal.inProject'));
   assert.ok(FORM_KEYS.every(k => k.when === 'durandal.formOpen && inQuickOpen'));
 });
@@ -86,14 +90,25 @@ test('Tab accepts a decoration suggestion only when nothing else has Tab (spec Â
   assert.equal(BUILT['durandal.suggest.accept'].enablement, 'durandal.ghostVisible');
 });
 
-test('t, shift+t and s also work from the results document and the untitled test file (final-review ruling)', () => {
+test('t, shift+t and s also work from the results document and the untitled test file; t and s are the plan\'s in a plan', () => {
   const when = 'durandal.inProject || resourceScheme == durandal-doc || resourceScheme == untitled';
   assert.equal(TDD_WHEN, when);
-  for (const id of ['durandal.test.here', 'durandal.test.file', 'durandal.stub']) {
-    assert.equal(KEYS.find(k => k.command === id)?.when, when, id);
-    assert.equal(pkg.contributes.keybindings.find((k: { command: string }) => k.command === id)?.when, when, id);
+  assert.equal(TDD_HERE_WHEN, `(${when}) && !durandal.isPlan`);
+  const bound = (id: string) => pkg.contributes.keybindings.find((k: { command: string }) => k.command === id)?.when;
+  for (const id of ['durandal.test.here', 'durandal.stub']) {
+    assert.equal(KEYS.find(k => k.command === id)?.when, TDD_HERE_WHEN, id);
+    assert.equal(bound(id), TDD_HERE_WHEN, id);
   }
+  assert.equal(KEYS.find(k => k.command === 'durandal.test.file')?.when, when);
   for (const id of ['durandal.conjure', 'durandal.mutate', 'durandal.jump']) assert.equal(KEYS.find(k => k.command === id)?.when, 'durandal.inProject', id);
+});
+
+test('M6b: files, stub and test on a step are built; p s, p t, and s and t in a plan', () => {
+  for (const id of ['durandal.plan.files', 'durandal.plan.stub', 'durandal.plan.test']) assert.ok(id in BUILT && !(id in NOT_YET), id);
+  const keys = (id: string) => KEYS.filter(k => k.command === id).map(k => `${k.keys}|${k.when}`);
+  assert.deepEqual(keys('durandal.plan.stub'), ['p s|durandal.isPlan', 's|durandal.isPlan']);
+  assert.deepEqual(keys('durandal.plan.test'), ['p t|durandal.isPlan', 't|durandal.isPlan']);
+  assert.deepEqual(Object.keys(NOT_YET).sort(), ['durandal.plan.accept', 'durandal.plan.reconcile', 'durandal.plan.reject']);
 });
 
 test('the TDD chords match durandal.nvim: t here, shift+t the file, Test All palette only (spec ruling 2)', () => {

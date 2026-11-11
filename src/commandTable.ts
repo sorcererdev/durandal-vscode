@@ -4,7 +4,6 @@ import { CLIENT_COMMANDS } from './protocol';
 export const NOT_YET: Record<string, { title: string; milestone: number }> = {
   'durandal.plan.accept': { title: 'Plan: Accept', milestone: 7 },
   'durandal.plan.reject': { title: 'Plan: Reject', milestone: 7 },
-  'durandal.plan.files': { title: 'Plan: Files', milestone: 6 },
   'durandal.plan.reconcile': { title: 'Plan: Reconcile', milestone: 6 },
 };
 
@@ -29,6 +28,9 @@ export const BUILT: Record<string, { title: string; enablement?: string }> = {
   'durandal.plan.newStep': { title: 'Plan: New Step' },
   'durandal.plan.excerpt': { title: 'Plan: Excerpt' },
   'durandal.plan.toggle': { title: 'Plan: Toggle Step' },
+  'durandal.plan.files': { title: 'Plan: Files' },
+  'durandal.plan.stub': { title: 'Plan: Stub' },
+  'durandal.plan.test': { title: 'Plan: Test' },
   'durandal.mutate': { title: 'Mutate' },
   'durandal.jump': { title: 'Jump to Test or Module' },
   'durandal.ghosts.toggle': { title: 'Toggle Ghost Text' },
@@ -77,13 +79,17 @@ export const PREFIX = { key: 'ctrl+alt+d', mac: 'cmd+alt+d' } as const;
 // shift+t run the last run again) and the untitled test file the jump opens (s stubs there).
 export const TDD_WHEN = 'durandal.inProject || resourceScheme == durandal-doc || resourceScheme == untitled';
 
+// TDD_HERE_WHEN: t and s outside a plan; in a plan they are the plan step's (as durandal.nvim's
+// buffer-local keys are)
+export const TDD_HERE_WHEN = `(${TDD_WHEN}) && !durandal.isPlan`;
+
 export const KEYS: { command: string; keys: string; when: string }[] = [
   { command: 'durandal.actions', keys: 'a', when: 'durandal.inProject' },
   { command: 'durandal.generate', keys: 'g', when: 'durandal.inProject' },
-  { command: 'durandal.test.here', keys: 't', when: TDD_WHEN },
+  { command: 'durandal.test.here', keys: 't', when: TDD_HERE_WHEN },
   { command: 'durandal.test.file', keys: 'shift+t', when: TDD_WHEN },
   { command: 'durandal.jump', keys: 'j', when: 'durandal.inProject' },
-  { command: 'durandal.stub', keys: 's', when: TDD_WHEN },
+  { command: 'durandal.stub', keys: 's', when: TDD_HERE_WHEN },
   { command: 'durandal.conjure', keys: 'c', when: 'durandal.inProject' },
   { command: 'durandal.mutate', keys: 'm', when: 'durandal.inProject' },
   { command: 'durandal.plan.ask', keys: 'p q', when: 'durandal.isPlan' },
@@ -97,4 +103,8 @@ export const KEYS: { command: string; keys: string; when: string }[] = [
   { command: 'durandal.plan.review', keys: 'p r', when: 'durandal.isPlan' },
   { command: 'durandal.plan.toggle', keys: 'p x', when: 'durandal.isPlan' },
   { command: 'durandal.plan.newStep', keys: 'p enter', when: 'durandal.isPlan' },
+  { command: 'durandal.plan.stub', keys: 'p s', when: 'durandal.isPlan' },
+  { command: 'durandal.plan.test', keys: 'p t', when: 'durandal.isPlan' },
+  { command: 'durandal.plan.stub', keys: 's', when: 'durandal.isPlan' },
+  { command: 'durandal.plan.test', keys: 't', when: 'durandal.isPlan' },
 ];

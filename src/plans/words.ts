@@ -47,3 +47,6 @@ export function fileItem(it: FileItem): { label: string; detail: string } {
   const detail = typeof it.file === 'string' ? `${it.file}:${typeof it.line === 'number' ? it.line : 1}` : `line ${it.row + 1}`;
   return { label: `${it.section} · ${it.text}`, detail };
 }
+
+// STUBBED: a step's stub saved no name to say (the server answered none)
+export const STUBBED = 'stubbed';
