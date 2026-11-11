@@ -208,6 +208,9 @@ describe('the review window (fake server)', () => {
     ui.texts[1].finish('add a docstring');
     await until(() => sent('olifant/plans/do').length > n, 'plans/do');
     assert.deepEqual(sent('olifant/plans/do').at(-1)!.params, { textDocument: { uri: uriOf(PLAN) }, line: 2, resume: 'R1', text: 'add a docstring' });
+    // the do lands as Plan: Do lands it (M6 spec §4.4)
+    await until(() => a.shown.some(s => s.text === 'do: 1 file changed · to review · 9 s'), 'the do\'s notice');
+    assert.equal(a.landed.fired.at(-1), 'do');
   });
 
   it('a live do\'s o: choose reopen, then plans/do with the id it answered', async () => {

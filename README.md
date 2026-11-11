@@ -150,6 +150,15 @@ says:
   inside a live excerpt warns once: the next reconcile replaces it.
 - **Claim checks.** Opening or saving a plan can start an olifant claim pass that runs paid model
   checks; `[plans] pass_cost = 0` in `.olifant/config.toml` turns it off.
+- **Verbs.** On a plan row, `Cmd+Alt+D P Q` (`Ctrl+Alt+D P Q`) asks the model about it, `P V`
+  validates it, `P D` does the step. The row shows `⋯ asking` while it runs; `Durandal: Plan:
+  Cancel` stops it. An ask's answer goes straight in, fingerprints stamped, and one undo takes
+  it back (`durandal.plans.reviewAnswers` makes it wait). A validate's blocks, and a do's in a
+  project without git, open beside the plan behind Accept all / Reject all. A do in a git
+  project opens its review.
+- **Steps.** `P Enter` adds a step under the row, `P E` shows the step's code (or folds an
+  excerpt), `P X` ticks or reopens a step, `P F` lists the plan's files, and `S` / `T` (or `P S`
+  / `P T`) stub and run the step's tests.
 
 ## Settings
 
@@ -164,6 +173,7 @@ says:
 - `durandal.plans.conceal`: plan glyphs (off by default).
 - `durandal.plans.glyphs`: glyph overrides by name.
 - `durandal.plans.foldDone`: close done work on entry, not only excerpts (on by default).
+- `durandal.plans.reviewAnswers`: an ask's answer waits for Accept all / Reject all (off by default).
 - `durandal.trace.server`: LSP traffic into the Durandal output channel.
 
 A change to the first four takes effect after `Durandal: Restart Server`.

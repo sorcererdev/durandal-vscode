@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Plan verbs as in durandal.nvim: ask, validate and do on a row with a pending mark and Plan:
+  Cancel; answers land with their facts, an ask's straight in (one undo), other blocks behind
+  Accept all / Reject all beside the plan, outcomes sent; new step, excerpt, toggle, files, and
+  stub and test on a step; a reopened do lands fully (milestone 6b).
 - Plans read as in durandal.nvim: theme colours for every plan token, glyphs for markers with
   `durandal.plans.conceal`, claim verdicts at the start of their line, done work and excerpts
   closed on entry with their conclusion at the line's end, Enter continuing a step, and a warning

@@ -160,7 +160,12 @@ export function activate(context: vscode.ExtensionContext): Api {
     closed: () => hold.c?.closed(),
   });
   context.subscriptions.push({ dispose: () => panel.close() });
-  const ctl = new PauseController({ server: s, say, ui, docs, panel, reminders, conjure, platform: process.platform });
+  // the plan verbs are built with the plans below; the reopen reaches them through this holder
+  const planHold: { verbs?: PlanVerbs } = {};
+  const ctl = new PauseController({
+    server: s, say, ui, docs, panel, reminders, conjure, platform: process.platform,
+    redo: (planUri, line, id, text) => planHold.verbs?.run(planUri, 'do', line, { resume: id, text }) ?? Promise.resolve(),
+  });
   hold.c = ctl;
   ctl.register(context);
   conjure.setSink(ctl);
@@ -176,6 +181,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   hooks.reading = layer;
   // the plan verbs (M6 spec §4)
   const verbs = new PlanVerbs({ server: s, say, ui, docs, planDocs, options: () => plansOptions, landed });
+  planHold.verbs = verbs;
   verbs.register(context);
   // new step, excerpt and toggle: the server's source actions (spec §4.4)
   new PlanActions({ server: s, say, planDocs, layer }).register(context);

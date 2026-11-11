@@ -4,7 +4,7 @@ import { errorMessage } from '../errors';
 import { factEdits } from '../plans/facts';
 import { lineEdits, linesOf } from '../plans/lineEdits';
 import { Olifant } from '../protocol';
-import type { ChooseResult, ConjureParams, ErrandResult, Fact, Paused, Review } from '../protocol';
+import type { ChooseResult, ConjureParams, Fact, Paused, Review } from '../protocol';
 import { findRoot } from '../root';
 import { NOT_RUNNING, Say, Server } from '../server';
 import { chordLabel } from '../settings';
@@ -29,6 +29,8 @@ export interface KeyAct { keys: string[]; act(key: string): Promise<true | strin
 
 export interface ControllerDeps {
   server: Server; say: Say; ui: () => Ui; docs: VirtualDocs; panel: PausePanel; reminders: Reminders; conjure: Conjure; platform: string;
+  // redo: plans/do resuming a review's thread on the plan's LINE, landed as Plan: Do lands it (M6b)
+  redo(planUri: string, line: number, id: string, text: string): Promise<void>;
 }
 
 // a run: a resume in the air, one at a time across documents; pause is the one it took, drawn
@@ -556,7 +558,7 @@ export class PauseController implements PauseSink {
     const line = review.row ?? 0;
     if (review.kind === 'errand') {
       this.hide();
-      await this.redo(r.planUri, review.id, line, text);
+      await this.d.redo(r.planUri, line, review.id, text);
       return true;
     }
     if (!this.d.server.client()) return NOT_RUNNING;
@@ -575,20 +577,8 @@ export class PauseController implements PauseSink {
       return errorMessage(err);
     }
     const said = await this.answered(r, 'reopen', res);
-    if (res.reopen) await this.redo(r.planUri, res.reopen.id, line, text);
+    if (res.reopen) await this.d.redo(r.planUri, line, res.reopen.id, text);
     return said;
-  }
-
-  // redo: plans/do resuming a review's thread; its review arrives through review/ready again
-  private async redo(planUri: string, id: string, line: number, text: string): Promise<void> {
-    try {
-      const a: ErrandResult = await this.d.server.request(Olifant.plansDo, { textDocument: { uri: planUri }, line, resume: id, text });
-      const changed = Array.isArray(a.changed) ? a.changed.length : 0;
-      const review = typeof a.review === 'string' ? ' · to review' : '';
-      void this.d.say('info', `do: ${changed} ${changed === 1 ? 'file' : 'files'} changed${review} · ${Number(a.seconds) || 0} s`);
-    } catch (err) {
-      void this.d.say('error', errorMessage(err));
-    }
   }
 
   // the review's server-built details beside the window (spec §6)
