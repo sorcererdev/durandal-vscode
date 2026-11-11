@@ -103,6 +103,11 @@
           "default": true,
           "markdownDescription": "Close done steps and answered questions, as well as code excerpts, when a plan is first shown. Off: close only the excerpts."
         },
+        "durandal.plans.reviewAnswers": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "An ask's answer waits beside the plan for Accept all or Reject all, as a validate's does. Off: it goes straight into the plan, and one undo takes it back."
+        },
         "durandal.trace.server": {
           "type": "string",
           "enum": [

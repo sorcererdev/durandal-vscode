@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Fact } from '../../src/protocol';
-import { factEdits, type TextEdit0 } from '../../src/plans/facts';
+import { applyLineEdits, factEdits, span, type TextEdit0 } from '../../src/plans/facts';
 
 const PLAN = ['# T', '', '- [ ] add a label @src/a.py:Table.label', '- [ ] next'];
 
@@ -77,4 +77,22 @@ test('a range: clamped to the document; changing nothing, dropped; a replace ins
 
 test('no facts, no edits', () => {
   assert.deepEqual(factEdits(PLAN, []), []);
+});
+
+test('applyLineEdits applies factEdits\' edits in their order', () => {
+  const facts: Fact[] = [{ after: 0, lines: ['under title'] }, { row: 2, text: '- [x] a' }];
+  assert.deepEqual(applyLineEdits(PLAN, factEdits(PLAN, facts)), ['# T', 'under title', '', '- [x] a', '- [ ] next']);
+});
+
+test('span is the one edit from the first row that differs to the last; none when equal', () => {
+  assert.equal(span(['a', 'b'], ['a', 'b']), undefined);
+  assert.deepEqual(span(['a', 'b', 'c'], ['a', 'x', 'b', 'c']), { start: 1, end: 1, lines: ['x'] });
+  assert.deepEqual(span(['a', 'b', 'c'], ['a', 'B', 'c']), { start: 1, end: 2, lines: ['B'] });
+  assert.deepEqual(span(['a', 'b', 'c', 'd'], ['A', 'b', 'c', 'D']), { start: 0, end: 4, lines: ['A', 'b', 'c', 'D'] });
+  assert.deepEqual(span(['a', ''], ['a', 'x', '']), { start: 1, end: 1, lines: ['x'] });
+  assert.deepEqual(span(['a'], ['a', 'x']), { start: 1, end: 1, lines: ['x'] });
+  // applied, it gives AFTER
+  const before = ['# T', '- a', '- b', '', '- c'];
+  const after = ['# T', '- a fact', '  - early', '- b', '', '- c', '  - so'];
+  assert.deepEqual(applyLineEdits(before, [span(before, after)!]), after);
 });

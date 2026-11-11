@@ -4,7 +4,7 @@
 // the truth is src/Olifant/Lsp.hs. No other file spells a method string. A milestone that
 // consumes a result tightens its type here.
 import {
-  NotificationType, Position, Range, RequestType, TextDocumentIdentifier, WorkspaceEdit,
+  CodeAction, CodeActionParams, Command, NotificationType, Position, Range, RequestType, TextDocumentIdentifier, WorkspaceEdit,
 } from 'vscode-languageserver-protocol';
 
 export interface Doc { textDocument: TextDocumentIdentifier }
@@ -172,10 +172,26 @@ export interface WaiveResult { waived: true }
 // --- plans (milestones 5 and 6)
 // plans/do: `resume` is a review id (reopen), text what the do should change
 export interface ErrandParams extends Row { resume?: string; text?: string }
-export interface ErrandResult extends Open { id?: string; facts?: unknown; blocks?: unknown[]; review?: string }
+// plans/ask, validate, do (Lsp.hs errandJson :1962-1977). Rows 0-based. A block's line carries
+// its anchor's fingerprint (null when it did not resolve); after_text, when a string, names the
+// line the block goes under, searched in the request row's section. The server sends no
+// `replace`: the client infers it (a do's block whose first line is a step).
+export interface BlockLine { text: string; fp?: string | null }
+export interface Block { after?: number; after_text?: string | null; lines?: BlockLine[] | null; replace?: boolean }
+export interface ErrandResult extends Open {
+  id?: string; verb?: string; facts?: Fact[] | null; blocks?: Block[] | null; dropped?: number; unresolved?: number;
+  seconds?: number; cost?: number | null; changed?: string[] | null; review?: string | null;
+}
 export interface ReconcileParams extends Doc { forced: boolean }
 export interface AnchorResult extends Open { file?: string; line?: number; unit?: string; fingerprint?: string }
-export interface StepResult extends Open { edits?: WorkspaceEdit; facts?: unknown; name?: string; passed?: number; failed?: number; seconds?: number }
+// plans/files: file absolute (null when it does not exist), line its unit's 1-based line
+export interface FileItem { section: string; row: number; text: string; file?: string | null; line?: number | null }
+export interface FilesResult { items: FileItem[] }
+// plans/stub {file, line, name, edits, facts}; plans/test {facts, passed, failed, seconds}
+export interface StepResult extends Open {
+  file?: string; line?: number; name?: string; edits?: WorkspaceEdit | null; facts?: Fact[] | null;
+  passed?: number; failed?: number; seconds?: number;
+}
 export type ErrandOneParams = Doc & ({ id: string } | { row: number });
 export interface ErrandsParams extends Doc { row: number }
 export interface ReviewParams extends Doc { id: string }
@@ -242,7 +258,7 @@ export const Olifant = {
   plansDo: req<ErrandParams, ErrandResult>('olifant/plans/do'),
   plansReconcile: req<ReconcileParams, Open>('olifant/plans/reconcile'),
   plansAnchor: req<Row, AnchorResult | null>('olifant/plans/anchor'),
-  plansFiles: req<Doc, Open>('olifant/plans/files'),
+  plansFiles: req<Doc, FilesResult>('olifant/plans/files'),
   plansStub: req<Row, StepResult>('olifant/plans/stub'),
   plansTest: req<Row, StepResult>('olifant/plans/test'),
   plansErrand: req<ErrandOneParams, Open>('olifant/plans/errand'),
@@ -259,6 +275,13 @@ export const Olifant = {
 } as const;
 
 export const METHODS: string[] = Object.values(Olifant).map(t => t.method);
+
+// The standard requests the plan chords send themselves (M6b): source code actions never reach
+// the lightbulb, so new step, excerpt and toggle ask for them, and resolve them, by hand.
+export const Lsp = {
+  codeAction: req<CodeActionParams, (Command | CodeAction)[] | null>('textDocument/codeAction'),
+  codeActionResolve: req<CodeAction, CodeAction>('codeAction/resolve'),
+} as const;
 
 // The server's own commands (workspace/executeCommand); the library registers them from the
 // server's executeCommandProvider. The claim pass's three (olifant 48f38ab) are code actions'

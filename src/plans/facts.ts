@@ -1,6 +1,6 @@
 // A choose answer's facts as edits of a plan's lines (durandal.nvim plans.apply_facts, and
 // the server's applyFactsText for a range). Rows are 0-based rows of LINES as they are; `to`
-// is inclusive. No vscode import: M6's plan verbs reuse it.
+// is inclusive. No vscode import: the review's facts and the plan verbs' landings use it.
 import type { Fact } from '../protocol';
 
 // Replace lines [start, end) with LINES (0-based, the document's lines before any edit).
@@ -64,4 +64,32 @@ export function factEdits(lines: string[], facts: Fact[]): TextEdit0[] {
   }
   // bottom up; at one start the replace (end > start) goes before the insert
   return edits.sort((a, b) => b.start - a.start || b.end - a.end);
+}
+
+// applyLineEdits: LINES with EDITS applied in their order (factEdits' order: bottom-up, so each
+// edit's rows are still those of LINES when it is applied).
+export function applyLineEdits(lines: readonly string[], edits: readonly TextEdit0[]): string[] {
+  const out = [...lines];
+  for (const e of edits) out.splice(e.start, e.end - e.start, ...e.lines);
+  return out;
+}
+
+// differingRows: how many rows BEFORE and AFTER share at the top (top) and, past those, at the
+// bottom (bottom); undefined when they are equal. The one trim loop span and changedSpan share.
+export function differingRows(before: readonly string[], after: readonly string[]): { top: number; bottom: number } | undefined {
+  let top = 0;
+  while (top < before.length && top < after.length && before[top] === after[top]) top++;
+  if (top === before.length && top === after.length) return undefined;
+  let bottom = 0;
+  while (bottom < before.length - top && bottom < after.length - top
+    && before[before.length - 1 - bottom] === after[after.length - 1 - bottom]) bottom++;
+  return { top, bottom };
+}
+
+// span: the one edit, in rows of BEFORE, that turns BEFORE into AFTER: from the first row that
+// differs to the last; undefined when they are equal.
+export function span(before: readonly string[], after: readonly string[]): TextEdit0 | undefined {
+  const d = differingRows(before, after);
+  if (!d) return undefined;
+  return { start: d.top, end: before.length - d.bottom, lines: after.slice(d.top, after.length - d.bottom) };
 }

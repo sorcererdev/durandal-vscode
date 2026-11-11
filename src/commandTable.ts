@@ -5,8 +5,8 @@ export const NOT_YET: Record<string, { title: string; milestone: number }> = {
   'durandal.plan.ask': { title: 'Plan: Ask', milestone: 6 },
   'durandal.plan.validate': { title: 'Plan: Validate', milestone: 6 },
   'durandal.plan.do': { title: 'Plan: Do', milestone: 6 },
-  'durandal.plan.accept': { title: 'Plan: Accept', milestone: 6 },
-  'durandal.plan.reject': { title: 'Plan: Reject', milestone: 6 },
+  'durandal.plan.accept': { title: 'Plan: Accept', milestone: 7 },
+  'durandal.plan.reject': { title: 'Plan: Reject', milestone: 7 },
   'durandal.plan.files': { title: 'Plan: Files', milestone: 6 },
   'durandal.plan.reconcile': { title: 'Plan: Reconcile', milestone: 6 },
   'durandal.plan.excerpt': { title: 'Plan: Excerpt', milestone: 6 },
@@ -66,7 +66,7 @@ export const SERVER_NAMED: Record<string, { title: string; milestone: number }> 
   (Object.keys(SERVER_NAMED_INFO) as (keyof typeof SERVER_NAMED_INFO)[]).map(k => [CLIENT_COMMANDS[k], SERVER_NAMED_INFO[k]]),
 );
 
-export const notYet = (title: string) => `Durandal: ${title} is not implemented yet`;
+export const notYet = (title: string, milestone: number) => `Durandal: ${title} is not implemented yet (milestone ${milestone})`;
 
 // The chord prefix, then durandal.nvim's letters (spec §4).
 export const PREFIX = { key: 'ctrl+alt+d', mac: 'cmd+alt+d' } as const;

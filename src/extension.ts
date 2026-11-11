@@ -1,3 +1,4 @@
+import { Landed } from './landed';
 import * as os from 'node:os';
 import * as vscode from 'vscode';
 import { ActionLog, logDir } from './actionLog';
@@ -79,6 +80,8 @@ export interface Api {
   isPlan(): boolean;
   // the plans reading layer (M6a): a plan's reading, what it shows, whether it was entered
   planView: PlanViewApi;
+  // the landed bus: what landed, in order (M6b fires do, accept, stub, test)
+  landed: Landed;
 }
 
 let server: Server | undefined;
@@ -103,6 +106,9 @@ export function activate(context: vscode.ExtensionContext): Api {
   let testUi: Ui | undefined;
   const ui = (): Ui => testUi ?? realUi;
   const plans = new Plans({ server: s, docs, say });
+  // the landed bus (M6 spec §5.1)
+  const landed = new Landed();
+  context.subscriptions.push(landed);
   const log = new ActionLog({
     dir: () => logDir(process.env, os.homedir()),
     enabled: () => vscode.workspace.getConfiguration('durandal').get<boolean>('actionLog', true),
@@ -231,7 +237,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     for (const r of await discover()) await s.addRoot(r);
     if (s.roots().length > 0) await s.start();
   })();
-  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest, tdd, pause, isPlan: plansTracked.isPlan, planView: layer.api() };
+  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest, tdd, pause, isPlan: plansTracked.isPlan, planView: layer.api(), landed };
 }
 
 export async function deactivate(): Promise<void> {

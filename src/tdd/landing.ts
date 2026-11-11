@@ -1,4 +1,5 @@
 import type { ConjureLanded } from '../protocol';
+import { differingRows } from '../plans/facts';
 
 // landing: the words and spans of a conjure's or a stub's landing (durandal.nvim conjure.lua
 // :117-207, stub.lua). Spec §4.
@@ -35,12 +36,9 @@ export function conjureNotice(a: ConjureLanded, written: string | undefined): No
 // differing line to the last; a pure deletion flashes the line where it was
 export function changedSpan(before: string[], after: string[]): { first: number; last: number } | undefined {
   if (after.length === 0) return undefined;
-  let top = 0;
-  while (top < before.length && top < after.length && before[top] === after[top]) top++;
-  if (top === before.length && top === after.length) return undefined;
-  let bottom = 0;
-  while (bottom < before.length - top && bottom < after.length - top
-    && before[before.length - 1 - bottom] === after[after.length - 1 - bottom]) bottom++;
+  const d = differingRows(before, after);
+  if (!d) return undefined;
+  const { top, bottom } = d;
   const last = after.length - 1 - bottom;
   if (last < top) {
     const at = Math.min(top, after.length - 1);

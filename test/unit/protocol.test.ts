@@ -8,7 +8,7 @@ import type {
   ChooseResult, DoReview, ReconcileReview, ReviewsResult, ErrandParams, ReviewChooseParams,
 } from '../../src/protocol';
 import { fixture, wrapped } from '../pauseFixtures';
-import { CLIENT_COMMANDS, METHODS, Olifant, PLAN_TOKEN_MODIFIERS, PLAN_TOKEN_TYPES, SERVER_COMMANDS } from '../../src/protocol';
+import { CLIENT_COMMANDS, Lsp, METHODS, Olifant, PLAN_TOKEN_MODIFIERS, PLAN_TOKEN_TYPES, SERVER_COMMANDS } from '../../src/protocol';
 
 const PINNED = [
   'olifant/choices', 'olifant/conjure', 'olifant/debugState', 'olifant/fileActions', 'olifant/generators',
@@ -206,4 +206,10 @@ const TDD_KEYS = [
 test('the TDD keys are olifant\'s', { skip: !process.env.OLIFANT_REPO && 'OLIFANT_REPO is not set' }, () => {
   const src = hsFiles(join(process.env.OLIFANT_REPO!, 'src')).map(f => readFileSync(f, 'utf8')).join('\n');
   assert.deepEqual(TDD_KEYS.filter(k => !src.includes(`"${k}"`)), []);
+});
+
+test('the standard requests the plan chords send themselves', () => {
+  assert.equal(Lsp.codeAction.method, 'textDocument/codeAction');
+  assert.equal(Lsp.codeActionResolve.method, 'codeAction/resolve');
+  assert.equal(Olifant.plansFiles.method, 'olifant/plans/files');
 });

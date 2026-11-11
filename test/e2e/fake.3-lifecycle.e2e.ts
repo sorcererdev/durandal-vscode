@@ -26,7 +26,7 @@ describe('lifecycle and health (fake server)', () => {
   it('a server-named command not built yet says so', async () => {
     const a = await running();
     await vscode.commands.executeCommand('olifant.plans.excerpt');
-    assert.ok(a.shown.some(s => s.text === 'Durandal: Plan Excerpt is not implemented yet'));
+    assert.ok(a.shown.some(s => s.text === 'Durandal: Plan Excerpt is not implemented yet (milestone 6)'));
   });
 
   it('a crash is one notification and no restart; requests say it is not running', async () => {

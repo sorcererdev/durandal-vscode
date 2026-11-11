@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import pkg from '../../package.json';
 import { GLYPH_NAMES } from '../../src/plans/glyphs';
 import { PLAN_TOKEN_MODIFIERS, PLAN_TOKEN_TYPES } from '../../src/protocol';
-import { BUILT, FORM_KEYS, KEYS, NOT_YET, PREFIX, SERVER_NAMED, SUGGEST_KEYS, TDD_WHEN } from '../../src/commandTable';
+import { BUILT, FORM_KEYS, KEYS, NOT_YET, PREFIX, SERVER_NAMED, SUGGEST_KEYS, notYet, TDD_WHEN } from '../../src/commandTable';
 
 test('the contributed commands: Health, Restart, the built ones and the not-yet ones, each in the Durandal category', () => {
   const ids = pkg.contributes.commands.map(c => c.command).sort();
@@ -57,7 +57,7 @@ test('Esc dismisses the snippet ghost only while it is ours and visible (spec §
 test('the settings and the activation', () => {
   assert.deepEqual(Object.keys(pkg.contributes.configuration.properties).sort(),
     ['durandal.actionLog', 'durandal.debounceMs', 'durandal.fills', 'durandal.ghosts', 'durandal.hints', 'durandal.model', 'durandal.path',
-      'durandal.plans.conceal', 'durandal.plans.dir', 'durandal.plans.foldDone', 'durandal.plans.glyphs', 'durandal.trace.server']);
+      'durandal.plans.conceal', 'durandal.plans.dir', 'durandal.plans.foldDone', 'durandal.plans.glyphs', 'durandal.plans.reviewAnswers', 'durandal.trace.server']);
   // after startup too (issue #1): a project file opened in a window with no project folder
   assert.deepEqual(pkg.activationEvents, ['workspaceContains:**/.olifant/config.toml', 'onStartupFinished']);
   const log = (pkg.contributes.configuration.properties as Record<string, { type: string; default: unknown }>)['durandal.actionLog'];
@@ -177,4 +177,12 @@ test('M6a: the 13 token types with their superTypes, the 6 modifiers, a scope fo
   assert.deepEqual(Object.keys(scopes).sort(), [...PLAN_TOKEN_TYPES, '*.stale'].sort());
   assert.deepEqual(scopes['*.stale'], ['comment']);
   assert.ok(!Object.keys(scopes).some(k => k.includes('.done')), 'done maps to nothing: the folding does the work');
+});
+
+test('M6b: reviewAnswers is a boolean, false; accept and reject are milestone 7, and say so', () => {
+  const props = pkg.contributes.configuration.properties as Record<string, { type: string; default: unknown }>;
+  assert.deepEqual([props['durandal.plans.reviewAnswers'].type, props['durandal.plans.reviewAnswers'].default], ['boolean', false]);
+  assert.equal(NOT_YET['durandal.plan.accept'].milestone, 7);
+  assert.equal(NOT_YET['durandal.plan.reject'].milestone, 7);
+  assert.equal(notYet('Plan: Accept', 7), 'Durandal: Plan: Accept is not implemented yet (milestone 7)');
 });

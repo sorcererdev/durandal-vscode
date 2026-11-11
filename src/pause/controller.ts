@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { applyServerEdit } from '../applyEdit';
 import { errorMessage } from '../errors';
 import { factEdits } from '../plans/facts';
+import { lineEdits, linesOf } from '../plans/lineEdits';
 import { Olifant } from '../protocol';
 import type { ChooseResult, ConjureParams, ErrandResult, Fact, Paused, Review } from '../protocol';
 import { findRoot } from '../root';
@@ -518,24 +519,8 @@ export class PauseController implements PauseSink {
     }
     if (facts && facts.length > 0) {
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(planUri));
-      // lineAt, not split('\n'): a CRLF plan's lines without their '\r'
-      const lines = Array.from({ length: doc.lineCount }, (_, i) => doc.lineAt(i).text);
-      const edits = factEdits(lines, facts);
-      if (edits.length > 0) {
-        const we = new vscode.WorkspaceEdit();
-        const uri = doc.uri;
-        for (const e of edits) {
-          if (e.end < doc.lineCount) {
-            we.replace(uri, new vscode.Range(e.start, 0, e.end, 0), e.lines.map(l => l + '\n').join(''));
-          } else {
-            // the edit reaches past the last line: replace to the end, no trailing newline added
-            const end = doc.lineAt(doc.lineCount - 1).range.end;
-            const start = e.start < doc.lineCount ? new vscode.Position(e.start, 0) : end;
-            we.replace(uri, new vscode.Range(start, end), (e.start >= doc.lineCount ? '\n' : '') + e.lines.join('\n'));
-          }
-        }
-        if (!await vscode.workspace.applyEdit(we)) return 'VS Code did not apply the plan facts';
-      }
+      const edits = factEdits(linesOf(doc), facts);
+      if (edits.length > 0 && !await vscode.workspace.applyEdit(lineEdits(doc, edits))) return 'VS Code did not apply the plan facts';
     }
     return undefined;
   }
