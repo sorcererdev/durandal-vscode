@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { Landed } from '../landed';
 import { Olifant, TestsRunParams, TestsRunResult } from '../protocol';
 import { NOT_RUNNING, Say, Server } from '../server';
 import { DOC_SCHEME, tabsUnder, VirtualDocs } from '../virtualDocs';
@@ -13,6 +14,7 @@ export interface TestsDeps {
   server: Server; docs: VirtualDocs; say: Say; marks: Marks; flights: TddFlights;
   // the re-mutate after a green run of the tests of uri (spec §5)
   recheck(uri: string): void;
+  landed: Landed;
 }
 
 // Tests: the three runs (durandal.nvim test.lua), the results document and its links (spec §3).
@@ -86,6 +88,8 @@ export class Tests implements vscode.DocumentLinkProvider {
     const a = o.value;
     this.show(a, worthOpening(a));
     void this.d.say(levelOf(a), summaryOf(a));
+    // a run finished: the open plans reconcile with it (M6 spec §5.1; nvim test.lua :231)
+    this.d.landed.fire('test');
     if (p.scope !== 'all' && isGreen(a)) this.d.recheck(p.textDocument.uri);
   }
 

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { applyServerEdit } from '../applyEdit';
 import { errorMessage } from '../errors';
+import type { Landed } from '../landed';
 import { MutateSurvivor, Olifant, StubParams, StubResult } from '../protocol';
 import { NOT_RUNNING, Say, Server } from '../server';
 import { here, NO_FILE } from './common';
@@ -11,7 +12,7 @@ import { plainSurvivor } from './memory';
 // stub.lua). Its edit lands as every server edit does: refused if stale, files saved (M1's
 // convention, spec §4); then the test file opens with the cursor on the test's name.
 export class Stub {
-  constructor(private readonly d: { server: Server; say: Say }) {}
+  constructor(private readonly d: { server: Server; say: Say; landed: Landed }) {}
 
   register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(vscode.commands.registerCommand('durandal.stub', () => this.run()));
@@ -55,6 +56,7 @@ export class Stub {
       void this.d.say('error', done.failureReason ?? 'VS Code did not apply the stub');
       return;
     }
+    this.d.landed.fire('stub');
     const ed = await vscode.window.showTextDocument(vscode.Uri.file(r.file), { preview: false });
     const row = Math.max(0, Math.min((Number(r.line) || 1) - 1, ed.document.lineCount - 1));
     const at = new vscode.Position(row, cursorColumn(ed.document.lineAt(row).text, name));

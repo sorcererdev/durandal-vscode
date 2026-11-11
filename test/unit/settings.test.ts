@@ -21,8 +21,14 @@ test('the chord label follows the platform, and names the review chord of KEYS',
 });
 
 test('initializationOptions: debug off, the review key, the debounce; model and fills only when set', () => {
-  assert.deepEqual(initOptions({ debounceMs: 300, model: '', fills: '' }, 'linux'),
+  assert.deepEqual(initOptions({ debounceMs: 300, model: '', fills: '' }, 'linux', {}),
     { debug: false, keys: { plan_review: 'Ctrl+Alt+D P R' }, debounce_ms: 300 });
-  assert.deepEqual(initOptions({ debounceMs: 50, model: 'qwen', fills: '/f.toml' }, 'darwin'),
+  assert.deepEqual(initOptions({ debounceMs: 50, model: 'qwen', fills: '/f.toml' }, 'darwin', {}),
     { debug: false, keys: { plan_review: 'Cmd+Alt+D P R' }, debounce_ms: 50, model: 'qwen', fills: '/f.toml' });
+});
+
+test('check_answers passes olifant\'s test hook through from the environment, only when set', () => {
+  const s = settingsFrom(getter({}));
+  assert.equal(initOptions(s, 'linux', {}).check_answers, undefined);
+  assert.equal(initOptions(s, 'linux', { DURANDAL_CHECK_ANSWERS: '/tmp/checks.json' }).check_answers, '/tmp/checks.json');
 });

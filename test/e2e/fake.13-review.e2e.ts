@@ -71,12 +71,16 @@ describe('the review window (fake server)', () => {
     reply('olifant/plans/review/choose', { delay: 1, done: true, said: 'kept', edit: planEdit('  ✓ kept line\n') });
     const from = a.shown.length;
     const n = chooses().length;
+    const fired = a.landed.fired.length;
     void a.pause.press('a');
     await until(() => chooses().length > n, 'the choose sent');
     await a.pause.press('a');
     assert.ok(a.pause.notices().includes('a: the last answer is still on its way'));
     assert.equal(a.pause.view()!.state, 'busy');
     await until(() => a.shown.slice(from).some(s => s.text === 'do: kept'), 'do: kept');
+    await until(() => a.landed.fired.length > fired, 'the review landed');
+    assert.equal(a.landed.fired.length, fired + 1);
+    assert.equal(a.landed.fired.at(-1), 'review');
     assert.deepEqual(chooses()[n], { textDocument: { uri: uriOf(PLAN) }, id: 'R1', choice: 'keep' });
     assert.equal(chooses().length, n + 1);
     assert.equal(a.pause.view(), undefined);

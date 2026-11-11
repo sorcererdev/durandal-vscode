@@ -72,9 +72,13 @@ describe('the TDD loop (fake server)', () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     reply('olifant/tests/run', red());
     await open(file(MAIN));
+    const a = await api();
+    const fired = a.landed.fired.length;
     const text = await said('durandal.test.file', t => t.includes('failed'));
     assert.equal(text, '1 passed · 1 failed · 1.3 s');
-    const a = await api();
+    await until(() => a.landed.fired.length > fired, 'the run landed');
+    assert.equal(a.landed.fired.length, fired + 1);
+    assert.equal(a.landed.fired.at(-1), 'test');
     assert.equal(a.shown[a.shown.length - 1].level, 'warn');
     const ds = await until(() => testMarks(TEST).length > 0 ? testMarks(TEST) : undefined, 'the failure marked');
     assert.equal(ds[0].range.start.line, 5);
@@ -217,10 +221,14 @@ describe('the TDD loop (fake server)', () => {
 
   it('stub: applied, saved, the test file opened on the name', async () => {
     await settle(TEST, TEST_TEXT);
-    await running();
+    const a = await running();
     await open(file(MAIN));
     reply('olifant/stub', stubAnswer());
+    const fired = a.landed.fired.length;
     assert.equal(await said('durandal.stub', t => t.startsWith('stubbed')), 'stubbed test_main_2 · saved main__test.py');
+    await until(() => a.landed.fired.length > fired, 'the stub landed');
+    assert.equal(a.landed.fired.length, fired + 1);
+    assert.equal(a.landed.fired.at(-1), 'stub');
     assert.ok(disk(TEST).endsWith('\n\n\ndef test_main_2():\n    ...\n'));
     const ed = vscode.window.activeTextEditor!;
     assert.equal(ed.document.uri.toString(), uriOf(TEST));
@@ -240,7 +248,11 @@ describe('the TDD loop (fake server)', () => {
     await open(file(MAIN));
     reply('olifant/conjure', landed());
     const flashes = a.tdd.flashes.length;
+    const fired = a.landed.fired.length;
     assert.equal(await said('durandal.conjure', t => t.startsWith('conjured')), 'conjured · green · saved');
+    await until(() => a.landed.fired.length > fired, 'the conjure landed');
+    assert.equal(a.landed.fired.length, fired + 1);
+    assert.equal(a.landed.fired.at(-1), 'conjure');
     assert.equal(disk(MAIN), 'x = 2\n');
     assert.deepEqual(a.tdd.flashes.slice(flashes), [{ first: 0, last: 0 }]);
     assert.equal(testMarks(TEST).length, 0);

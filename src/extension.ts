@@ -83,7 +83,7 @@ export interface Api {
   isPlan(): boolean;
   // the plans reading layer (M6a): a plan's reading, what it shows, whether it was entered
   planView: PlanViewApi;
-  // the landed bus: what landed, in order (M6b fires do, accept, stub, test)
+  // the landed bus: what landed, in order
   landed: Landed;
   // the plan verbs (M6b): the rows in the air, their marks, the flashes, the blocks waiting
   planVerbs: PlanVerbsApi;
@@ -137,17 +137,17 @@ export function activate(context: vscode.ExtensionContext): Api {
   const flights = newFlights();
   const marks = new Marks();
   marks.register(context);
-  const stub = new Stub({ server: s, say });
+  const stub = new Stub({ server: s, say, landed });
   stub.register(context);
   const survivors = new Survivors({ server: s, say, ui, marks, stub });
   survivors.register(context);
   const mutate = new Mutate({ server: s, say, marks, flights, survivors });
   mutate.register(context);
-  const tests = new Tests({ server: s, docs, say, marks, flights, recheck: uri => void mutate.recheck(uri) });
+  const tests = new Tests({ server: s, docs, say, marks, flights, recheck: uri => void mutate.recheck(uri), landed });
   tests.register(context);
   new Jump({ server: s, say }).register(context);
   const flashes: { first: number; last: number }[] = [];
-  const conjure = new Conjure({ server: s, say, ui, flights, tests, flashes });
+  const conjure = new Conjure({ server: s, say, ui, flights, tests, flashes, landed });
   conjure.register(context);
   // the pause window (M5 spec §2): the panel knows nothing of conjure; the controller decides
   const reminders = new Reminders();
@@ -163,7 +163,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   // the plan verbs are built with the plans below; the reopen reaches them through this holder
   const planHold: { verbs?: PlanVerbs } = {};
   const ctl = new PauseController({
-    server: s, say, ui, docs, panel, reminders, conjure, platform: process.platform,
+    server: s, say, ui, docs, panel, reminders, conjure, platform: process.platform, landed,
     redo: (planUri, line, id, text) => planHold.verbs?.run(planUri, 'do', line, { resume: id, text }) ?? Promise.resolve(),
   });
   hold.c = ctl;

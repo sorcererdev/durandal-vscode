@@ -23,11 +23,15 @@ export interface InitOptions {
   debounce_ms: number;
   model?: string;
   fills?: string;
+  check_answers?: string;
 }
 
-export function initOptions(s: Settings, platform: string): InitOptions {
+// env: the extension host's environment. DURANDAL_CHECK_ANSWERS is olifant's check_answers test
+// hook (a file of recorded claim checks, LspSpec claimPassSpec); only the real e2e sets it.
+export function initOptions(s: Settings, platform: string, env: NodeJS.ProcessEnv = process.env): InitOptions {
   const o: InitOptions = { debug: false, keys: { plan_review: chordLabel(platform, 'P R') }, debounce_ms: s.debounceMs };
   if (s.model) o.model = s.model;
   if (s.fills) o.fills = s.fills;
+  if (env.DURANDAL_CHECK_ANSWERS) o.check_answers = env.DURANDAL_CHECK_ANSWERS;
   return o;
 }

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { applyServerEdit } from '../applyEdit';
 import { errorMessage } from '../errors';
+import type { Landed } from '../landed';
 import { factEdits } from '../plans/facts';
 import { lineEdits, linesOf } from '../plans/lineEdits';
 import { Olifant } from '../protocol';
@@ -28,7 +29,7 @@ export type SourceKind = 'conjure' | 'do' | 'errand' | 'reconcile';
 export interface KeyAct { keys: string[]; act(key: string): Promise<true | string> | true | string }
 
 export interface ControllerDeps {
-  server: Server; say: Say; ui: () => Ui; docs: VirtualDocs; panel: PausePanel; reminders: Reminders; conjure: Conjure; platform: string;
+  server: Server; say: Say; ui: () => Ui; docs: VirtualDocs; panel: PausePanel; reminders: Reminders; conjure: Conjure; platform: string; landed: Landed;
   // redo: plans/do resuming a review's thread on the plan's LINE, landed as Plan: Do lands it (M6b)
   redo(planUri: string, line: number, id: string, text: string): Promise<void>;
 }
@@ -498,6 +499,8 @@ export class PauseController implements PauseSink {
     if (res.done) {
       if (this.rev === r) this.hide();
       void this.d.say('info', `${kind}: ${res.said ?? choice}`);
+      // a review answered done landed (review.lua :192): the plan reconciles
+      this.d.landed.fire('review');
       return true;
     }
     // the window moved on (closed, or another review): what it said is not that window's (nvim is silent)

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { applyServerEdit } from '../applyEdit';
+import type { Landed } from '../landed';
 import { ConjureLanded, ConjureParams, ConjureResult, Olifant, Paused } from '../protocol';
 import { NOT_RUNNING, Say, Server } from '../server';
 import type { Ui } from '../uiTypes';
@@ -12,6 +13,7 @@ export interface ConjureDeps {
   server: Server; say: Say; ui: () => Ui; flights: TddFlights; tests: Tests;
   // each landing's flashed span (Api.tdd.flashes, for the e2e tests)
   flashes: { first: number; last: number }[];
+  landed: Landed;
 }
 
 // PauseSink: where a pause goes (the pause controller, M5 spec §3)
@@ -129,6 +131,8 @@ export class Conjure {
     if (a.tests && typeof a.tests === 'object' && !(a.stopped && !a.edits)) this.d.tests.show(a.tests, false);
     const n = conjureNotice(a, written);
     void this.d.say(n.level, n.text);
+    // stopped with no edits: nothing landed (conjure.lua :190-205)
+    if (!(a.stopped && !a.edits)) this.d.landed.fire('conjure');
   }
 
   // flash: the changed lines for half a second; the cursor to the first, when its editor is active

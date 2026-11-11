@@ -19,12 +19,13 @@ let lock: Promise<unknown> = Promise.resolve();
 // kept on save); one notice names the files saved, and those it could not save.
 // word: the one notice, from the files saved, those that could not be, and those kept unsaved
 // because they had unsaved edits before (default: the label and the names; a plan says
-// "Applied <name>: N files").
+// "Applied <name>: N files"). onApplied: hears the label and the edited files once the edit applied.
 export function applyServerEdit(
   lc: LanguageClient, params: ApplyWorkspaceEditParams, say: (text: string) => void,
   word: (saved: string[], unsaved: string[], kept: string[]) => string | undefined = (s, u) => appliedMessage(params.label, s, u),
+  onApplied?: (label: string | undefined, uris: vscode.Uri[]) => void,
 ): Promise<ApplyWorkspaceEditResult> {
-  const run = lock.then(() => applyNow(lc, params, say, word));
+  const run = lock.then(() => applyNow(lc, params, say, word, onApplied));
   lock = run.catch(() => undefined);
   return run;
 }
@@ -32,6 +33,7 @@ export function applyServerEdit(
 async function applyNow(
   lc: LanguageClient, params: ApplyWorkspaceEditParams, say: (text: string) => void,
   word: (saved: string[], unsaved: string[], kept: string[]) => string | undefined,
+  onApplied?: (label: string | undefined, uris: vscode.Uri[]) => void,
 ): Promise<ApplyWorkspaceEditResult> {
   const edit = stripAnnotations(params.edit);
   let converted: vscode.WorkspaceEdit;
@@ -52,6 +54,9 @@ async function applyNow(
     return { applied: false, failureReason: errorMessage(err) };
   }
   if (!ok) return { applied: false, failureReason: 'VS Code did not apply the edit' };
+  // the edited documents are at their new versions now, before any save (the reconcile's own
+  // edits must not count as the plan moving, M6 spec §5.2)
+  onApplied?.(params.label, targets);
   const saved: string[] = [];
   const unsaved: string[] = [];
   // kept: files the edit left unsaved because they had unsaved edits before

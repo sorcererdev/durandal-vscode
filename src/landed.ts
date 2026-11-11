@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
 
 // The landed bus (M6 spec §5.1): something landed that the open plans should reconcile with. The
-// only cross-module event in the port. M6b fires do and accept (plans/verbs.ts) and a plan step's
-// stub and test (plans/steps.ts); M6c adds the TDD runs, stubs, conjures and reviews, and the
-// reconcile, its first listener.
+// only cross-module event in the port. Fired by the TDD runs, stubs and conjures, a review answered
+// done, and the plan verbs (do, accept) and steps (stub, test); plans/reconcile.ts listens.
 export type LandedKind = 'test' | 'stub' | 'conjure' | 'do' | 'accept' | 'review';
 
 export class Landed implements vscode.Disposable {

@@ -46,6 +46,10 @@ export interface ClientHooks {
   stopped?(): void;
   // plans (M6 spec §3.2): the server's tokens, folds and lenses of a plan, copied as they pass
   reading?: ReadingHooks;
+  // a server edit (workspace/applyEdit) applied: its label and files (the reconcile hears its own)
+  applied?(label: string | undefined, uris: vscode.Uri[]): void;
+  // a client started running, its folders sent (nvim's LspAttach: an active plan reconciles)
+  started?(): void;
 }
 
 // OlifantClient keeps the library's forced notifications out of a start: the extension reports
@@ -165,7 +169,7 @@ export class Server {
         workspace: {
           // the server's edits take durandal.nvim's path, not the library's (no refactor preview)
           handleApplyEdit: params => made.lc
-            ? applyServerEdit(made.lc, params, text => void this.say('info', text))
+            ? applyServerEdit(made.lc, params, text => void this.say('info', text), undefined, (label, uris) => hooks.applied?.(label, uris))
             : { applied: false, failureReason: NOT_RUNNING },
         },
         // a code action picked from the lightbulb (Ctrl+.): resolved here so the server's edit
@@ -267,6 +271,7 @@ export class Server {
     this.st = 'running';
     this.sent.clear();
     await this.sendFolders();
+    if (gen === this.gen) this.hooks.started?.();
     return true;
   }
 
