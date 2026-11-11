@@ -155,7 +155,10 @@ export class PlanVerbs {
     if (e.verb === 'do' && typeof r.review === 'string') {
       // a git project's do: its lines are its review's (opened by review/ready), its files are
       // reloaded by VS Code itself
-      await writeLines(doc, lines, applyLineEdits(lines, facts));
+      if (!(await writeLines(doc, lines, applyLineEdits(lines, facts)))) {
+        void this.d.say('error', NOT_APPLIED);
+        return;
+      }
       void this.d.say('info', doWord(r));
       this.d.landed.fire('do');
       return;
