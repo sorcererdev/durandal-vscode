@@ -227,6 +227,28 @@ describe('the plan verbs (fake server)', () => {
     assert.deepEqual(a.shown.slice(from).filter(s => s.level !== 'info' || s.text === 'cancelled'), []);
   });
 
+  it('a server stop while a stub and a files run: the late rejections say nothing, nothing is written', async () => {
+    const a = await running();
+    reply('olifant/plans/stub', { hold: true, title: 'stubbing' });
+    reply('olifant/plans/files', { hold: true, title: 'listing' });
+    await at(8);
+    const stubs = sent('olifant/plans/stub').length;
+    const files = sent('olifant/plans/files').length;
+    const fired = a.landed.fired.length;
+    const from = a.shown.length;
+    const p = vscode.commands.executeCommand('durandal.plan.stub');
+    const q = vscode.commands.executeCommand('durandal.plan.files');
+    await until(() => sent('olifant/plans/stub').length > stubs && sent('olifant/plans/files').length > files, 'the stub and the files asked');
+    await restart();
+    await p;
+    await q;
+    await sleep(300);
+    assert.deepEqual(a.shown.slice(from).filter(s => s.level !== 'info'), []);
+    assert.ok(!a.shown.slice(from).some(s => /disposed|stub/i.test(s.text)), 'no late word');
+    assert.equal(docOf(PLAN)!.getText(), TEXT);
+    assert.equal(a.landed.fired.length, fired);
+  });
+
   // held: a FakeUi whose prompt waits for the test to answer it
   function held(): { ui: FakeUi; answer(pick: string | undefined): void } {
     const ui = new FakeUi();

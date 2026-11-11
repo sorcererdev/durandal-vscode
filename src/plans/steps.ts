@@ -1,11 +1,10 @@
 import * as vscode from 'vscode';
-import { errorMessage } from '../errors';
 import type { Landed } from '../landed';
 import { FileItem, Olifant, StepResult } from '../protocol';
 import { Say, Server } from '../server';
 import { stubWord } from '../tdd/landing';
 import type { Ui } from '../uiTypes';
-import { runningHere } from './here';
+import { asked, runningHere } from './here';
 import { writeFacts } from './lineEdits';
 import type { PlanDocs } from './planDocs';
 import { applyPlanEdit } from './serverEdit';
@@ -31,14 +30,9 @@ export class PlanSteps {
   async files(): Promise<void> {
     const h = await runningHere(this.d);
     if (!h) return;
-    let items: FileItem[];
-    try {
-      const r = await this.d.server.request(Olifant.plansFiles, { textDocument: { uri: h.uri } });
-      items = Array.isArray(r?.items) ? r.items : [];
-    } catch (err) {
-      void this.d.say('error', errorMessage(err));
-      return;
-    }
+    const a = await asked(this.d, h, () => this.d.server.request(Olifant.plansFiles, { textDocument: { uri: h.uri } }));
+    if (!a) return;
+    const items: FileItem[] = Array.isArray(a.r?.items) ? a.r.items : [];
     if (items.length === 0) {
       void this.d.say('info', NO_FILES);
       return;
@@ -61,13 +55,9 @@ export class PlanSteps {
     if (!h) return;
     const doc = h.editor.document;
     const tick = doc.version;
-    let r: StepResult | null;
-    try {
-      r = await this.d.server.request(Olifant.plansStub, { textDocument: { uri: h.uri }, line: h.row });
-    } catch (err) {
-      void this.d.say('error', errorMessage(err));
-      return;
-    }
+    const a = await asked(this.d, h, () => this.d.server.request(Olifant.plansStub, { textDocument: { uri: h.uri }, line: h.row }));
+    if (!a) return;
+    const r: StepResult | null = a.r;
     if (!r || typeof r !== 'object') return;
     const name = typeof r.name === 'string' ? r.name : undefined;
     if (r.edits) {
@@ -87,13 +77,9 @@ export class PlanSteps {
     if (!h) return;
     const doc = h.editor.document;
     const tick = doc.version;
-    let r: StepResult | null;
-    try {
-      r = await this.d.server.request(Olifant.plansTest, { textDocument: { uri: h.uri }, line: h.row });
-    } catch (err) {
-      void this.d.say('error', errorMessage(err));
-      return;
-    }
+    const a = await asked(this.d, h, () => this.d.server.request(Olifant.plansTest, { textDocument: { uri: h.uri }, line: h.row }));
+    if (!a) return;
+    const r: StepResult | null = a.r;
     if (!r || typeof r !== 'object') return;
     const word = testsWord(r);
     if (!doc.isClosed && doc.version === tick) {

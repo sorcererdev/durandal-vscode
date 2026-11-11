@@ -1,10 +1,9 @@
 import * as vscode from 'vscode';
 import type { CodeAction, WorkspaceEdit } from 'vscode-languageserver-protocol';
-import { errorMessage } from '../errors';
 import { Lsp } from '../protocol';
 import type { Say, Server } from '../server';
 import { toggleFoldAt } from './folds';
-import { PlanHere, runningHere } from './here';
+import { asked, RunningHere, runningHere } from './here';
 import type { PlanLayer } from './layer';
 import type { PlanDocs } from './planDocs';
 import { applyPlanEdit } from './serverEdit';
@@ -67,19 +66,15 @@ export class PlanActions {
     if (h && xs) await this.next(h, toggleNext(xs));
   }
 
-  private async sources(h: PlanHere): Promise<CodeAction[] | undefined> {
+  private async sources(h: RunningHere): Promise<CodeAction[] | undefined> {
     const at = { line: h.row, character: 0 };
-    try {
-      return sources(await this.d.server.request(Lsp.codeAction, {
-        textDocument: { uri: h.uri }, range: { start: at, end: at }, context: { only: ['source'], diagnostics: [] },
-      }));
-    } catch (err) {
-      void this.d.say('error', errorMessage(err));
-      return undefined;
-    }
+    const a = await asked(this.d, h, () => this.d.server.request(Lsp.codeAction, {
+      textDocument: { uri: h.uri }, range: { start: at, end: at }, context: { only: ['source'], diagnostics: [] },
+    }));
+    return a && sources(a.r);
   }
 
-  private async next(h: PlanHere, n: Next): Promise<void> {
+  private async next(h: RunningHere, n: Next): Promise<void> {
     switch (n.kind) {
       case 'say':
         void this.d.say(n.level, n.text);
@@ -92,14 +87,10 @@ export class PlanActions {
         await this.apply(n.action);
         return;
       case 'resolve': {
-        let r: CodeAction | null;
-        try {
-          r = await this.d.server.request(Lsp.codeActionResolve, n.action);
-        } catch (err) {
-          // a plan that moved since: "the plan changed since; ask again"
-          void this.d.say('error', errorMessage(err));
-          return;
-        }
+        // a failure (a plan that moved since: "the plan changed since; ask again") is said
+        const a = await asked(this.d, h, () => this.d.server.request(Lsp.codeActionResolve, n.action));
+        if (!a) return;
+        const r: CodeAction | null = a.r;
         if (r?.edit) await this.apply(r);
         else void this.d.say('info', n.none);
       }
