@@ -350,4 +350,103 @@ describe('the plan verbs (fake server)', () => {
     await vscode.commands.executeCommand('durandal.plan.reject');
     assert.equal(a.shown.at(-1)!.text, 'Durandal: Plan: Reject is not implemented yet (milestone 7)');
   });
+
+  // the source code actions the plan chords asked (VS Code's lightbulb asks its own, without only)
+  const actionsAsked = () => sent('textDocument/codeAction')
+    .filter(m => m.params.textDocument.uri === uriOf(PLAN) && (m.params.context?.only ?? []).includes('source'));
+
+  it('new step: the source action\'s edit under the row, the cursor at its end; only source asked', async () => {
+    const a = await running();
+    reply('textDocument/codeAction', [
+      { title: 'Show why', kind: '', command: { title: 'Show why', command: 'olifant.showWhy', arguments: [] } },
+      { title: 'New step below', kind: 'source', edit: { changes: { [uriOf(PLAN)]: [{ range: { start: { line: 3, character: 3 }, end: { line: 3, character: 3 } }, newText: '\n- [ ] step @anchor' }] } } },
+    ]);
+    const ed = await at(3);
+    await vscode.commands.executeCommand('durandal.plan.newStep');
+    assert.equal(lines()[4], '- [ ] step @anchor');
+    assert.deepEqual([ed.selection.active.line, ed.selection.active.character], [4, '- [ ] step @anchor'.length]);
+    const p = actionsAsked().at(-1)!.params;
+    assert.deepEqual(p.context, { only: ['source'], diagnostics: [] });
+    assert.deepEqual(p.range, { start: { line: 3, character: 0 }, end: { line: 3, character: 0 } });
+    reply('textDocument/codeAction', []);
+    await vscode.commands.executeCommand('durandal.plan.newStep');
+    assert.deepEqual([a.shown.at(-1)!.level, a.shown.at(-1)!.text], ['warn', 'no new step here']);
+  });
+
+  it('excerpt: a disabled action says its reason; one that needs resolving is resolved and applied', async () => {
+    const a = await running();
+    reply('textDocument/codeAction', [{ title: 'Show the code here', kind: 'source', disabled: { reason: 'not on a step' }, data: { kind: 'excerpt', path: '/x', line: 1, version: null } }]);
+    await at(1);
+    await vscode.commands.executeCommand('durandal.plan.excerpt');
+    assert.equal(a.shown.at(-1)!.text, 'excerpt: not on a step');
+    const action = { title: 'Show the code here', kind: 'source', data: { kind: 'excerpt', path: '/x', line: 8, version: null } };
+    reply('textDocument/codeAction', [action]);
+    reply('codeAction/resolve', { ...action, edit: { documentChanges: [{ textDocument: { uri: uriOf(PLAN), version: null }, edits: [
+      { range: { start: { line: 8, character: 24 }, end: { line: 8, character: 24 } }, newText: '\n  ```python @src/a.py:Foo\n  ```' },
+    ] }] } });
+    await at(8);
+    await vscode.commands.executeCommand('durandal.plan.excerpt');
+    assert.deepEqual(lines().slice(8, 11), ['- [ ] step @src/a.py:Foo', '  ```python @src/a.py:Foo', '  ```']);
+    assert.deepEqual(sent('codeAction/resolve').at(-1)!.params.data, action.data);
+  });
+
+  it('a resolve against a plan that moved is refused with the server\'s words; nothing changes', async () => {
+    const a = await running();
+    reply('textDocument/codeAction', [{ title: 'Mark done', kind: 'source', data: { kind: 'toggle', path: '/x', line: 8, version: 1 } }]);
+    reply('codeAction/resolve', { lsp_error: 'the plan changed since; ask again' });
+    await at(8);
+    await vscode.commands.executeCommand('durandal.plan.toggle');
+    assert.deepEqual([a.shown.at(-1)!.level, a.shown.at(-1)!.text], ['error', 'the plan changed since; ask again']);
+    assert.equal(docOf(PLAN)!.getText(), TEXT);
+  });
+
+  it('toggle: resolved and applied; disabled or absent says so', async () => {
+    const a = await running();
+    const action = { title: 'Mark done', kind: 'source', data: { kind: 'toggle', path: '/x', line: 8, version: null } };
+    reply('textDocument/codeAction', [action]);
+    reply('codeAction/resolve', { ...action, edit: { documentChanges: [{ textDocument: { uri: uriOf(PLAN), version: null }, edits: [
+      { range: { start: { line: 8, character: 0 }, end: { line: 8, character: 5 } }, newText: '- [x]' },
+    ] }] } });
+    await at(8);
+    await vscode.commands.executeCommand('durandal.plan.toggle');
+    assert.equal(lines()[8], '- [x] step @src/a.py:Foo');
+    reply('textDocument/codeAction', [{ ...action, disabled: { reason: 'not on a step' } }]);
+    await vscode.commands.executeCommand('durandal.plan.toggle');
+    assert.equal(a.shown.at(-1)!.text, 'toggle: not on a step');
+    reply('textDocument/codeAction', []);
+    await vscode.commands.executeCommand('durandal.plan.toggle');
+    assert.equal(a.shown.at(-1)!.text, 'toggle: not on a step');
+  });
+
+  it('excerpt on a closed excerpt opens it without asking; again (no lens) asks, and the disabled answer folds it', async () => {
+    const a = await running();
+    const XPLAN = 'one/plans/x.md';
+    const XTEXT = ['# X', '- [ ] show F @src/a.py:F', '  ```python @src/a.py:F', '  def F():', '      return 1', '  ```', '- [ ] next', ''].join('\n');
+    reply('textDocument/foldingRange', [{ startLine: 2, endLine: 5, kind: 'region' }]);
+    reply('textDocument/codeLens', []);
+    await settle(XPLAN, XTEXT);
+    try {
+      const ed = await at(2, XPLAN);
+      const ux = uriOf(XPLAN);
+      const shown = (row: number) => ed.visibleRanges.some(r => r.start.line <= row && row <= r.end.line);
+      const asked = () => sent('textDocument/codeAction')
+        .filter(m => m.params.textDocument.uri === ux && (m.params.context?.only ?? []).includes('source')).length;
+      await until(() => a.planView.entered(ux), 'entered');
+      await until(() => !shown(3) || undefined, 'the excerpt closed on entry');
+      const before = asked();
+      ed.selection = new vscode.Selection(2, 0, 2, 0);
+      await vscode.commands.executeCommand('durandal.plan.excerpt');
+      await until(() => shown(3) || undefined, 'opened');
+      assert.equal(asked(), before, 'nothing asked');
+      reply('textDocument/codeAction', [{ title: 'Show the code here', kind: 'source', disabled: { reason: 'the step shows its code already' }, data: { kind: 'excerpt', open: 2 } }]);
+      ed.selection = new vscode.Selection(1, 0, 1, 0);
+      await vscode.commands.executeCommand('durandal.plan.excerpt');
+      await until(() => !shown(3) || undefined, 'closed again');
+      assert.equal(asked(), before + 1, 'asked once');
+      assert.equal(ed.selection.active.line, 1, 'the cursor stays');
+    } finally {
+      await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+      await settle(XPLAN, null);
+    }
+  });
 });

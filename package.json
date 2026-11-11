@@ -267,7 +267,12 @@
       },
       {
         "command": "durandal.plan.toggle",
-        "title": "Plan: Toggle Reading",
+        "title": "Plan: Toggle Step",
+        "category": "Durandal"
+      },
+      {
+        "command": "durandal.plan.newStep",
+        "title": "Plan: New Step",
         "category": "Durandal"
       }
     ],
@@ -378,6 +383,12 @@
         "command": "durandal.plan.toggle",
         "key": "ctrl+alt+d p x",
         "mac": "cmd+alt+d p x",
+        "when": "durandal.isPlan"
+      },
+      {
+        "command": "durandal.plan.newStep",
+        "key": "ctrl+alt+d p enter",
+        "mac": "cmd+alt+d p enter",
         "when": "durandal.isPlan"
       },
       {

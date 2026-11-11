@@ -6,8 +6,6 @@ export const NOT_YET: Record<string, { title: string; milestone: number }> = {
   'durandal.plan.reject': { title: 'Plan: Reject', milestone: 7 },
   'durandal.plan.files': { title: 'Plan: Files', milestone: 6 },
   'durandal.plan.reconcile': { title: 'Plan: Reconcile', milestone: 6 },
-  'durandal.plan.excerpt': { title: 'Plan: Excerpt', milestone: 6 },
-  'durandal.plan.toggle': { title: 'Plan: Toggle Reading', milestone: 6 },
 };
 
 // The commands built so far, contributed with these titles (spec §6's rest is NOT_YET). The
@@ -28,6 +26,9 @@ export const BUILT: Record<string, { title: string; enablement?: string }> = {
   'durandal.plan.validate': { title: 'Plan: Validate' },
   'durandal.plan.do': { title: 'Plan: Do' },
   'durandal.plan.cancel': { title: 'Plan: Cancel' },
+  'durandal.plan.newStep': { title: 'Plan: New Step' },
+  'durandal.plan.excerpt': { title: 'Plan: Excerpt' },
+  'durandal.plan.toggle': { title: 'Plan: Toggle Step' },
   'durandal.mutate': { title: 'Mutate' },
   'durandal.jump': { title: 'Jump to Test or Module' },
   'durandal.ghosts.toggle': { title: 'Toggle Ghost Text' },
@@ -95,4 +96,5 @@ export const KEYS: { command: string; keys: string; when: string }[] = [
   { command: 'durandal.plan.excerpt', keys: 'p e', when: 'durandal.isPlan' },
   { command: 'durandal.plan.review', keys: 'p r', when: 'durandal.isPlan' },
   { command: 'durandal.plan.toggle', keys: 'p x', when: 'durandal.isPlan' },
+  { command: 'durandal.plan.newStep', keys: 'p enter', when: 'durandal.isPlan' },
 ];

@@ -7,7 +7,7 @@ import { conceals } from './glyphs';
 import type { Legend, TokenEdit } from './legend';
 import type { PlanDocs } from './planDocs';
 import { DiagLike, Mark, Severity, worstPerLine } from './verdicts';
-import { Fold, Lens, liveExcerpts, PlanReading, Readings, typedInto } from './reading';
+import { Excerpt, excerptAt, Fold, Lens, liveExcerpts, PlanReading, Readings, typedInto } from './reading';
 import type { PlansOptions } from './settings';
 import type { ReadingHooks } from './taps';
 
@@ -164,6 +164,28 @@ export class PlanLayer implements ReadingHooks {
       entered: uri => this.entry.entered(uri),
       margins: uri => this.marginCount.get(uri) ?? 0,
     };
+  }
+
+  // collapsedAt: the server fold starting at ROW that ED shows collapsed (folds read at its version)
+  collapsedAt(ed: vscode.TextEditor, row: number): Fold | undefined {
+    const doc = ed.document;
+    const f = this.readings.get(doc.uri.toString())?.folds;
+    if (!f || f.version !== doc.version) return undefined;
+    const visible = ed.visibleRanges.map(v => ({ start: v.start.line, end: v.end.line }));
+    const lastRowEmpty = doc.lineAt(doc.lineCount - 1).text === '';
+    return collapsedStarts(f.ranges, visible, doc.lineCount, lastRowEmpty).find(x => x.start === row);
+  }
+
+  // foldStartsAt: a server fold starts at ROW (folds read at ED's version)
+  foldStartsAt(ed: vscode.TextEditor, row: number): boolean {
+    const f = this.readings.get(ed.document.uri.toString())?.folds;
+    return !!f && f.version === ed.document.version && f.ranges.some(x => x.start === row && x.end > x.start);
+  }
+
+  // excerptAt: the excerpt holding ROW, by the lenses read at ED's version
+  excerptAt(ed: vscode.TextEditor, row: number): Excerpt | undefined {
+    const l = this.readings.get(ed.document.uri.toString())?.lenses;
+    return l && l.version === ed.document.version ? excerptAt(l.items, row) : undefined;
   }
 
   // typed: a change inside a live excerpt warns once per excerpt per document (spec §3.7). The

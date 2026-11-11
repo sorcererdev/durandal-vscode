@@ -90,6 +90,19 @@ export function liveExcerpts(lenses: readonly Lens[]): LiveExcerpt[] {
   return out;
 }
 
+// Excerpt: an excerpt's fence rows (its lens: CLIENT_COMMANDS.planExcerpt [uri, open, close, live, anchor])
+export interface Excerpt { open: number; close: number }
+
+// excerptAt: the excerpt, live or frozen, whose fence rows hold ROW
+export function excerptAt(lenses: readonly Lens[], row: number): Excerpt | undefined {
+  for (const l of lenses) {
+    if (l.command !== CLIENT_COMMANDS.planExcerpt) continue;
+    const [, open, close] = l.args;
+    if (typeof open === 'number' && typeof close === 'number' && open <= row && row <= close) return { open, close };
+  }
+  return undefined;
+}
+
 // typedInto: the keys of the live excerpts a change lies strictly inside (between the opening
 // and the closing fence rows; the fences themselves are the server's), once each.
 export function typedInto(excerpts: readonly LiveExcerpt[], changes: readonly { start: number; end: number }[]): string[] {

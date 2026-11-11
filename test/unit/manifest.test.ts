@@ -194,3 +194,10 @@ test('M6b: ask, validate, do and cancel are built; Plan: Cancel is palette-only'
   assert.equal(BUILT['durandal.plan.cancel'].title, 'Plan: Cancel');
   assert.ok(!KEYS.some(k => k.command === 'durandal.plan.cancel'));
 });
+
+test('M6b: new step (p enter), excerpt and toggle are built; toggle is Plan: Toggle Step', () => {
+  for (const id of ['durandal.plan.newStep', 'durandal.plan.excerpt', 'durandal.plan.toggle']) assert.ok(id in BUILT && !(id in NOT_YET), id);
+  assert.equal(BUILT['durandal.plan.newStep'].title, 'Plan: New Step');
+  assert.equal(BUILT['durandal.plan.toggle'].title, 'Plan: Toggle Step');
+  assert.deepEqual(KEYS.find(k => k.command === 'durandal.plan.newStep'), { command: 'durandal.plan.newStep', keys: 'p enter', when: 'durandal.isPlan' });
+});

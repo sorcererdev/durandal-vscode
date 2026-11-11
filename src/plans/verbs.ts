@@ -8,14 +8,14 @@ import type { Ui } from '../uiTypes';
 import type { VirtualDocs } from '../virtualDocs';
 import { landing, Placed, placeBlocks, throughEdits, Verb } from './blocks';
 import { applyLineEdits, factEdits, TextEdit0 } from './facts';
-import { planHere } from './here';
+import { runningHere } from './here';
 import { linesOf, writeLines } from './lineEdits';
 import type { PlanDocs } from './planDocs';
 import { askBlocks } from './prompt';
 import { LineChange, shiftRows } from './rows';
 import type { PlansOptions } from './settings';
 import {
-  CANCELLED_WORD, doWord, landedWord, NO_PLAN, NOT_APPLIED, NOTHING_RUNNING, nothingBack, PENDING, RUNNING_HERE,
+  CANCELLED_WORD, doWord, landedWord, NOT_APPLIED, NOTHING_RUNNING, nothingBack, PENDING, RUNNING_HERE,
 } from './words';
 
 export interface VerbsDeps {
@@ -94,12 +94,8 @@ export class PlanVerbs {
 
   // command: the verb on the active plan's cursor row
   async command(verb: Verb): Promise<void> {
-    const h = await planHere(this.d.planDocs);
-    if (!h) {
-      void this.d.say('error', NO_PLAN);
-      return;
-    }
-    await this.run(h.uri, verb, h.row);
+    const h = await runningHere({ planDocs: this.d.planDocs, server: this.d.server, say: this.d.say });
+    if (h) await this.run(h.uri, verb, h.row);
   }
 
   // run: VERB on ROW of the plan URI, its answer landed; PARAMS a reopen's resume and text. A

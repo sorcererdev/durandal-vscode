@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lineTokens, liveExcerpts, Readings, tokText, typedInto } from '../../src/plans/reading';
+import { excerptAt, lineTokens, liveExcerpts, Readings, tokText, typedInto } from '../../src/plans/reading';
 import { encode, PLAN_LEGEND } from '../planTokens';
 
 test('Readings: each part keeps its own version; changed hears the part', () => {
@@ -65,4 +65,17 @@ test('typedInto: a change strictly between a live excerpt\'s fences; each key on
   assert.deepEqual(typedInto(ex, [{ start: 4, end: 4 }]), ['@a.py:F']);
   assert.deepEqual(typedInto(ex, [{ start: 3, end: 3 }, { start: 6, end: 6 }, { start: 2, end: 4 }]), []);
   assert.deepEqual(typedInto(ex, [{ start: 11, end: 11 }, { start: 5, end: 5 }, { start: 4, end: 5 }]), ['@a.py:F', '10']);
+});
+
+test('excerptAt: the excerpt lens whose fence rows hold ROW, live or frozen', () => {
+  const lenses = [
+    { line: 3, command: 'olifant.plans.excerpt', args: ['u', 3, 6, true, '@a.py:F'] },
+    { line: 9, command: 'olifant.plans.excerpt', args: ['u', 9, 11, false, '@a.py:G'] },
+    { line: 0, command: 'olifant.plans.review', args: ['R1', 'u'] },
+  ];
+  assert.deepEqual(excerptAt(lenses, 3), { open: 3, close: 6 });
+  assert.deepEqual(excerptAt(lenses, 5), { open: 3, close: 6 });
+  assert.deepEqual(excerptAt(lenses, 10), { open: 9, close: 11 });
+  assert.equal(excerptAt(lenses, 7), undefined);
+  assert.equal(excerptAt([{ line: 1, command: 'olifant.plans.excerpt', args: ['u', 'x', 2] }], 1), undefined);
 });

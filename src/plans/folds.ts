@@ -81,3 +81,9 @@ export class FoldEntry {
     }
   }
 }
+
+// toggleFoldAt: the fold at ROW of the focused editor opens when COLLAPSED, else closes; levels 1
+// touches only the region at the row (nvim toggle_fold). The cursor stays.
+export async function toggleFoldAt(row: number, collapsed: boolean): Promise<void> {
+  await vscode.commands.executeCommand(collapsed ? 'editor.unfold' : 'editor.fold', { levels: 1, selectionLines: [row] });
+}

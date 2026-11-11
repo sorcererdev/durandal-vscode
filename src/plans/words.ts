@@ -20,6 +20,10 @@ export const TOGGLE_NO_STEP = 'toggle: not on a step';
 export const PLAN_CHANGED = ' · plan changed, press again';
 export const NOT_APPLIED = 'VS Code did not apply the edit';
 
+// a disabled excerpt or toggle action's reason, as said
+export const excerptWord = (reason: string): string => `excerpt: ${reason}`;
+export const toggleWord = (reason: string): string => `toggle: ${reason}`;
+
 export const nothingBack = (verb: Verb): string => `${verb}: nothing came back`;
 
 // doWord: a do that ends in a review (a git project)
