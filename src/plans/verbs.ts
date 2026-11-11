@@ -7,10 +7,11 @@ import { CANCELLED } from '../tdd/flights';
 import type { Ui } from '../uiTypes';
 import type { VirtualDocs } from '../virtualDocs';
 import { landing, Placed, placeBlocks, throughEdits, Verb } from './blocks';
-import { applyLineEdits, factEdits } from './facts';
+import { applyLineEdits, factEdits, TextEdit0 } from './facts';
 import { planHere } from './here';
 import { linesOf, writeLines } from './lineEdits';
 import type { PlanDocs } from './planDocs';
+import { askBlocks } from './prompt';
 import { LineChange, shiftRows } from './rows';
 import type { PlansOptions } from './settings';
 import {
@@ -167,21 +168,13 @@ export class PlanVerbs {
     const tracked = throughEdits(facts, e.row);
     const withFacts = applyLineEdits(lines, facts);
     const placed = placeBlocks(withFacts, r.blocks, e.verb, e.request, tracked);
+    const straight = e.verb === 'ask' && !this.d.options().reviewAnswers;
     let rows: number[];
-    if (e.verb === 'ask' && !this.d.options().reviewAnswers) {
+    if (straight) {
       // an ask's answer goes straight in: facts and blocks in one edit, one undo step
-      const l = landing(lines, facts, placed);
-      if (!(await writeLines(doc, lines, l.lines))) {
-        void this.d.say('error', NOT_APPLIED);
-        return;
-      }
-      rows = l.rows;
-      // nvim's `if wrote`: the outcomes and the accept only when lines went in
-      const wrote = placed.filter(p => p.lines.length > 0);
-      if (wrote.length > 0) {
-        this.outcomes(e.uri, r.id, wrote, 'accepted');
-        this.d.landed.fire('accept');
-      }
+      const written = await this.writeBlocks(doc, lines, facts, placed, r.id);
+      if (!written) return;
+      rows = written;
     } else {
       // the facts now; the blocks wait for the prompt, placed on the plan as the facts left it
       if (!(await writeLines(doc, lines, withFacts))) {
@@ -194,7 +187,54 @@ export class PlanVerbs {
     void this.d.say('info', landedWord(e.verb, count, r));
     this.flashRow(doc, rows.at(-1) ?? tracked);
     if (e.verb === 'do') this.d.landed.fire('do');
-    // until the prompt (Task 4), held blocks stay unanswered, as a dismissed prompt leaves them
+    if (!straight && placed.length > 0) this.hold(e.uri, e.verb, placed, typeof r.id === 'string' ? r.id : undefined, count);
+  }
+
+  // hold: blocks that wait for the prompt; their rows follow the plan's edits meanwhile
+  private hold(uri: string, verb: Verb, placed: Placed[], id: string | undefined, lines: number): void {
+    const w: Wait = { uri, placed, gen: this.gen };
+    this.waits.add(w);
+    void askBlocks({ docs: this.d.docs, ui: this.d.ui() }, uri, verb, placed, lines).then(async answer => {
+      // a stop (another gen), or the plan closed (dropped from waits): the answer does nothing
+      if (!this.waits.delete(w) || w.gen !== this.gen) return;
+      if (answer === 'accept') await this.accept(uri, placed, id);
+      else if (answer === 'reject') this.outcomes(uri, id, placed, 'rejected');
+    }).catch((err: unknown) => {
+      this.waits.delete(w);
+      void this.d.say('error', errorMessage(err));
+    });
+  }
+
+  // accept: the blocks written at their rows now (ghosts.lua accept_id), one edit. A plan no
+  // longer open drops them without an outcome.
+  private async accept(uri: string, placed: readonly Placed[], id: string | undefined): Promise<void> {
+    const doc = openDoc(uri);
+    if (!doc) return;
+    const lines = linesOf(doc);
+    const last = Math.max(lines.length - 1, 0);
+    const at = placed.map(p => ({ ...p, row: Math.max(0, Math.min(p.row, last)) }));
+    const rows = await this.writeBlocks(doc, lines, [], at, id);
+    if (rows) this.flashRow(doc, rows.at(-1) ?? 0);
+  }
+
+  // writeBlocks: DOC's LINES (read just now, no await since) with FACTS and the PLACED blocks
+  // written in one edit, one undo step; then, nvim's `if wrote`, outcome accepted for each block
+  // that had lines and landed accept, only when some did. The blocks' rows in the result, or
+  // undefined (said) when VS Code did not apply the edit. An ask straight in and Accept all.
+  private async writeBlocks(
+    doc: vscode.TextDocument, lines: readonly string[], facts: readonly TextEdit0[], placed: readonly Placed[], id: unknown,
+  ): Promise<number[] | undefined> {
+    const l = landing(lines, facts, placed);
+    if (!(await writeLines(doc, lines, l.lines))) {
+      void this.d.say('error', NOT_APPLIED);
+      return undefined;
+    }
+    const wrote = placed.filter(p => p.lines.length > 0);
+    if (wrote.length > 0) {
+      this.outcomes(doc.uri.toString(), id, wrote, 'accepted');
+      this.d.landed.fire('accept');
+    }
+    return l.rows;
   }
 
   // outcomes: each placed block's outcome, to the server, against the answer's id

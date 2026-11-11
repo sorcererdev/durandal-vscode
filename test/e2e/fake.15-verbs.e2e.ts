@@ -1,6 +1,7 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
-import { api, docOf, file, log, open, reply, restart, revert, running, settle, sleep, until } from './helpers';
+import { FakeUi } from '../fakeUi';
+import { api, docOf, file, log, open, reply, restart, revert, running, settle, sleep, tabsUnder, until } from './helpers';
 
 // The plan verbs over the fake server (M6 spec §4, §8): dispatch, pending rows, cancel, landing,
 // the prompt, new step / excerpt / toggle, files, stub and test.
@@ -167,6 +168,8 @@ describe('the plan verbs (fake server)', () => {
 
   it('a validate: the facts land now, the blocks are held under the request row as the facts moved it', async () => {
     const a = await running();
+    // the prompt dismissed (FakeUi's default): the held blocks send nothing
+    a.setUi(new FakeUi());
     reply('olifant/plans/validate', {
       id: 'V1', verb: 'validate', facts: [{ after: 0, lines: ['- new'] }],
       blocks: [{ after: 3, after_text: null, lines: [{ text: '  - checked', fp: null }] }],
@@ -222,5 +225,129 @@ describe('the plan verbs (fake server)', () => {
     assert.deepEqual(a.planVerbs.running(uriOf(PLAN)), []);
     await sleep(300);
     assert.deepEqual(a.shown.slice(from).filter(s => s.level !== 'info' || s.text === 'cancelled'), []);
+  });
+
+  // held: a FakeUi whose prompt waits for the test to answer it
+  function held(): { ui: FakeUi; answer(pick: string | undefined): void } {
+    const ui = new FakeUi();
+    let answer!: (pick: string | undefined) => void;
+    ui.onAsk = () => new Promise(r => { answer = r; });
+    return { ui, answer: pick => answer(pick) };
+  }
+
+  const VALIDATE = {
+    id: 'V1', verb: 'validate', facts: [], blocks: [{ after: 0, after_text: '- e target line', lines: [{ text: '  - ok', fp: null }] }],
+    dropped: 0, unresolved: 0, seconds: 1, cost: null, changed: [], review: null,
+  };
+
+  it('validate: the blocks beside the plan, then Accept all; the rows followed the typing (plans_spec :631)', async () => {
+    const a = await running();
+    const h = held();
+    a.setUi(h.ui);
+    reply('olifant/plans/validate', VALIDATE);
+    const ed = await at(2);
+    const outcomes = sent('olifant/plans/outcome').length;
+    await vscode.commands.executeCommand('durandal.plan.validate');
+    await until(() => h.ui.asks.length === 1, 'the prompt');
+    assert.equal(h.ui.asks[0], 'validate: 1 lines in 1 blocks');
+    assert.ok(a.shown.some(s => s.text === 'validate: 1 lines · 0 not found · 1 s'));
+    await until(() => tabsUnder('/plans/v/').length === 1, 'the proposal beside the plan');
+    assert.equal(docOf(PLAN)!.getText(), TEXT, 'nothing written before the answer');
+    assert.deepEqual(a.planVerbs.waiting(uriOf(PLAN)), [{ row: 5, lines: ['  - ok'] }]);
+    await ed.edit(b => b.insert(new vscode.Position(0, 0), 'typed\n'));
+    assert.deepEqual(a.planVerbs.waiting(uriOf(PLAN)), [{ row: 6, lines: ['  - ok'] }]);
+    h.answer('Accept all');
+    await until(() => lines()[7] === '  - ok', 'the block under the target line');
+    assert.equal(lines()[6], '- e target line');
+    await until(() => sent('olifant/plans/outcome').length === outcomes + 1, 'the outcome');
+    assert.deepEqual(sent('olifant/plans/outcome').at(-1)!.params, { textDocument: { uri: uriOf(PLAN) }, id: 'V1', block: 0, outcome: 'accepted' });
+    assert.equal(a.landed.fired.at(-1), 'accept');
+    await until(() => tabsUnder('/plans/v/').length === 0, 'the proposal closed');
+    assert.deepEqual(a.planVerbs.waiting(uriOf(PLAN)), []);
+  });
+
+  it('Reject all sends rejected and writes nothing; a dismissed prompt sends nothing', async () => {
+    const a = await running();
+    const h = held();
+    a.setUi(h.ui);
+    reply('olifant/plans/validate', VALIDATE);
+    await at(2);
+    const outcomes = sent('olifant/plans/outcome').length;
+    await vscode.commands.executeCommand('durandal.plan.validate');
+    await until(() => h.ui.asks.length === 1, 'the prompt');
+    h.answer('Reject all');
+    await until(() => sent('olifant/plans/outcome').length === outcomes + 1, 'the outcome');
+    assert.equal(sent('olifant/plans/outcome').at(-1)!.params.outcome, 'rejected');
+    assert.equal(docOf(PLAN)!.getText(), TEXT);
+    await vscode.commands.executeCommand('durandal.plan.validate');
+    await until(() => h.ui.asks.length === 2, 'the second prompt');
+    h.answer(undefined);
+    await until(() => tabsUnder('/plans/v/').length === 0, 'the proposal closed');
+    await sleep(300);
+    assert.equal(sent('olifant/plans/outcome').length, outcomes + 1);
+    assert.equal(docOf(PLAN)!.getText(), TEXT);
+  });
+
+  it('a do with no review (no git) replaces its step when accepted (plans_spec :641)', async () => {
+    const a = await running();
+    const ui = new FakeUi();
+    ui.onAsk = () => 'Accept all';
+    a.setUi(ui);
+    reply('olifant/plans/do', {
+      id: 'D1', verb: 'do', facts: [], dropped: 0, unresolved: 0, seconds: 2, cost: null, changed: [], review: null,
+      blocks: [{ after: 8, after_text: null, lines: [{ text: '- [x] step @src/a.py:Foo', fp: null }, { text: '  - did it', fp: null }] }],
+    });
+    await at(8);
+    await vscode.commands.executeCommand('durandal.plan.do');
+    await until(() => lines()[9] === '  - did it', 'the do landed');
+    assert.equal(lines()[8], '- [x] step @src/a.py:Foo');
+    assert.ok(a.landed.fired.includes('do'));
+  });
+
+  it('with reviewAnswers an ask waits for the prompt (plans_spec :560)', async () => {
+    const a = await running();
+    const ui = new FakeUi();
+    ui.onAsk = () => 'Accept all';
+    a.setUi(ui);
+    await vscode.workspace.getConfiguration('durandal.plans').update('reviewAnswers', true, vscode.ConfigurationTarget.Global);
+    try {
+      await sleep(200);
+      reply('olifant/plans/ask', {
+        id: 'S4', verb: 'ask', facts: [], blocks: [{ after: 3, after_text: null, lines: [{ text: '  - a @src/a.py:F', fp: 'abc1234' }, { text: '  - so', fp: null }] }],
+        dropped: 1, unresolved: 0, seconds: 9.1, cost: 0.0123, changed: [], review: null,
+      });
+      await at(3);
+      await vscode.commands.executeCommand('durandal.plan.ask');
+      await until(() => ui.asks.length === 1, 'the prompt');
+      assert.ok(a.shown.some(s => s.text === 'ask: 2 lines · 1 not found · 9.1 s · $0.0123'));
+      await until(() => lines()[4] === '  - a @src/a.py:F ✓ abc1234', 'accepted, stamped');
+    } finally {
+      await vscode.workspace.getConfiguration('durandal.plans').update('reviewAnswers', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  it('a server stop while the prompt waits: Accept all then writes and sends nothing', async () => {
+    const a = await running();
+    const h = held();
+    a.setUi(h.ui);
+    reply('olifant/plans/validate', VALIDATE);
+    await at(2);
+    await vscode.commands.executeCommand('durandal.plan.validate');
+    await until(() => h.ui.asks.length === 1, 'the prompt');
+    await restart();
+    const outcomes = sent('olifant/plans/outcome').length;
+    h.answer('Accept all');
+    await sleep(500);
+    assert.equal(docOf(PLAN)!.getText(), TEXT);
+    assert.equal(sent('olifant/plans/outcome').length, outcomes);
+  });
+
+  it('p y and p n are milestone 7', async () => {
+    const a = await running();
+    await at(1);
+    await vscode.commands.executeCommand('durandal.plan.accept');
+    assert.equal(a.shown.at(-1)!.text, 'Durandal: Plan: Accept is not implemented yet (milestone 7)');
+    await vscode.commands.executeCommand('durandal.plan.reject');
+    assert.equal(a.shown.at(-1)!.text, 'Durandal: Plan: Reject is not implemented yet (milestone 7)');
   });
 });
