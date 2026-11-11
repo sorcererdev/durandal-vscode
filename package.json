@@ -231,6 +231,11 @@
         "category": "Durandal"
       },
       {
+        "command": "durandal.plan.cancel",
+        "title": "Plan: Cancel",
+        "category": "Durandal"
+      },
+      {
         "command": "durandal.plan.accept",
         "title": "Plan: Accept",
         "category": "Durandal"

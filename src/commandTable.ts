@@ -2,9 +2,6 @@ import { CLIENT_COMMANDS } from './protocol';
 
 // The commands later milestones build (spec §6); until then each says so when run.
 export const NOT_YET: Record<string, { title: string; milestone: number }> = {
-  'durandal.plan.ask': { title: 'Plan: Ask', milestone: 6 },
-  'durandal.plan.validate': { title: 'Plan: Validate', milestone: 6 },
-  'durandal.plan.do': { title: 'Plan: Do', milestone: 6 },
   'durandal.plan.accept': { title: 'Plan: Accept', milestone: 7 },
   'durandal.plan.reject': { title: 'Plan: Reject', milestone: 7 },
   'durandal.plan.files': { title: 'Plan: Files', milestone: 6 },
@@ -27,6 +24,10 @@ export const BUILT: Record<string, { title: string; enablement?: string }> = {
   'durandal.stub': { title: 'Stub a Test' },
   'durandal.conjure': { title: 'Conjure' },
   'durandal.plan.review': { title: 'Plan: Review' },
+  'durandal.plan.ask': { title: 'Plan: Ask' },
+  'durandal.plan.validate': { title: 'Plan: Validate' },
+  'durandal.plan.do': { title: 'Plan: Do' },
+  'durandal.plan.cancel': { title: 'Plan: Cancel' },
   'durandal.mutate': { title: 'Mutate' },
   'durandal.jump': { title: 'Jump to Test or Module' },
   'durandal.ghosts.toggle': { title: 'Toggle Ghost Text' },

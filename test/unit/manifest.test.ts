@@ -186,3 +186,11 @@ test('M6b: reviewAnswers is a boolean, false; accept and reject are milestone 7,
   assert.equal(NOT_YET['durandal.plan.reject'].milestone, 7);
   assert.equal(notYet('Plan: Accept', 7), 'Durandal: Plan: Accept is not implemented yet (milestone 7)');
 });
+
+test('M6b: ask, validate, do and cancel are built; Plan: Cancel is palette-only', () => {
+  for (const id of ['durandal.plan.ask', 'durandal.plan.validate', 'durandal.plan.do', 'durandal.plan.cancel']) {
+    assert.ok(id in BUILT && !(id in NOT_YET), id);
+  }
+  assert.equal(BUILT['durandal.plan.cancel'].title, 'Plan: Cancel');
+  assert.ok(!KEYS.some(k => k.command === 'durandal.plan.cancel'));
+});

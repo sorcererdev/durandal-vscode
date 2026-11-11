@@ -1,0 +1,226 @@
+import * as assert from 'node:assert/strict';
+import * as vscode from 'vscode';
+import { api, docOf, file, log, open, reply, restart, revert, running, settle, sleep, until } from './helpers';
+
+// The plan verbs over the fake server (M6 spec §4, §8): dispatch, pending rows, cancel, landing,
+// the prompt, new step / excerpt / toggle, files, stub and test.
+const PLAN = 'one/plans/v.md';
+// durandal.nvim plans_spec.lua :557
+const LINES = ['# T', '- a', '- b', '- c', '- d', '- e target line', '- f', '## Next', '- [ ] step @src/a.py:Foo'];
+const TEXT = LINES.join('\n') + '\n';
+const uriOf = (rel: string) => file(rel).toString();
+const sent = (method: string) => log().filter(m => m.method === method);
+const REPLIES = [
+  'olifant/plans/ask', 'olifant/plans/validate', 'olifant/plans/do', 'olifant/plans/files', 'olifant/plans/stub',
+  'olifant/plans/test', 'textDocument/codeAction', 'codeAction/resolve', 'textDocument/foldingRange', 'textDocument/codeLens',
+];
+const lines = () => docOf(PLAN)!.getText().split('\n');
+
+// at: the plan open and active, the cursor on ROW, durandal.isPlan known
+async function at(row: number, rel = PLAN): Promise<vscode.TextEditor> {
+  const a = await running();
+  const ed = await open(file(rel));
+  const p = new vscode.Position(row, 0);
+  ed.selection = new vscode.Selection(p, p);
+  await until(() => a.isPlan(), 'durandal.isPlan');
+  return ed;
+}
+
+describe('the plan verbs (fake server)', () => {
+  before(async () => {
+    await vscode.commands.executeCommand('workbench.action.closeAllGroups');
+    await settle(PLAN, TEXT);
+  });
+
+  after(async () => {
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    await settle(PLAN, null);
+  });
+
+  afterEach(async () => {
+    const a = await api();
+    a.setUi(undefined);
+    for (const m of REPLIES) reply(m, null);
+    const d = docOf(PLAN);
+    if (d?.isDirty) await revert(d);
+    await settle(PLAN, TEXT);
+  });
+
+  it('an ask goes straight in: facts and blocks, fingerprints stamped, outcomes accepted, one undo (plans_spec :575)', async () => {
+    const a = await running();
+    reply('olifant/plans/ask', {
+      id: 'S1', verb: 'ask', facts: [{ row: 1, text: '- a fact' }],
+      blocks: [
+        { after: 3, after_text: null, lines: [{ text: '  - a @src/a.py:F', fp: 'abc1234' }, { text: '  - so', fp: null }] },
+        { after: 3, after_text: null, lines: [{ text: '  - then', fp: null }] },
+        { after: 1, after_text: null, lines: [{ text: '  - early', fp: null }] },
+      ],
+      dropped: 0, unresolved: 0, seconds: 1, cost: null, changed: [], review: null,
+    });
+    const outcomes = sent('olifant/plans/outcome').length;
+    await at(3);
+    await vscode.commands.executeCommand('durandal.plan.ask');
+    assert.deepEqual(sent('olifant/plans/ask').at(-1)!.params, { textDocument: { uri: uriOf(PLAN) }, line: 3 });
+    assert.deepEqual(lines().slice(0, 9), ['# T', '- a fact', '  - early', '- b', '- c', '  - a @src/a.py:F ✓ abc1234', '  - so', '  - then', '- d']);
+    await until(() => sent('olifant/plans/outcome').length === outcomes + 3, 'three outcomes');
+    const os = sent('olifant/plans/outcome').slice(outcomes).map(m => m.params);
+    assert.deepEqual(os.map(p => [p.id, p.block, p.outcome]).sort(), [['S1', 0, 'accepted'], ['S1', 1, 'accepted'], ['S1', 2, 'accepted']]);
+    assert.ok(os.every(p => p.textDocument.uri === uriOf(PLAN)));
+    assert.equal(a.landed.fired.at(-1), 'accept');
+    assert.equal(a.shown.at(-1)!.text, 'ask: 4 lines · 0 not found · 1 s');
+    assert.ok(a.planVerbs.flashes.some(f => f.uri === uriOf(PLAN) && f.row === 1));
+    assert.deepEqual(a.planVerbs.running(uriOf(PLAN)), []);
+    await vscode.commands.executeCommand('undo');
+    assert.equal(docOf(PLAN)!.getText(), TEXT);
+  });
+
+  it('a RequestFailed shows the reason and leaves the plan alone; an empty answer says so', async () => {
+    const a = await running();
+    reply('olifant/plans/ask', { lsp_error: 'claude exited 2: no credentials' });
+    await at(1);
+    await vscode.commands.executeCommand('durandal.plan.ask');
+    assert.deepEqual([a.shown.at(-1)!.level, a.shown.at(-1)!.text], ['error', 'claude exited 2: no credentials']);
+    assert.equal(docOf(PLAN)!.getText(), TEXT);
+    reply('olifant/plans/ask', null);
+    await vscode.commands.executeCommand('durandal.plan.ask');
+    assert.equal(a.shown.at(-1)!.text, 'ask: nothing came back');
+  });
+
+  it('a second verb on a running row is refused; Plan: Cancel cancels it; nothing running says so', async () => {
+    const a = await running();
+    reply('olifant/plans/do', { hold: true, title: 'doing' });
+    await at(8);
+    const n = sent('olifant/plans/do').length;
+    const cancels = sent('$/cancelRequest').length;
+    void vscode.commands.executeCommand('durandal.plan.do');
+    await until(() => a.planVerbs.running(uriOf(PLAN)).length === 1, 'the do in the air');
+    assert.deepEqual(a.planVerbs.running(uriOf(PLAN)), [{ row: 8, verb: 'do' }]);
+    assert.deepEqual(a.planVerbs.pending(uriOf(PLAN)), [' ⋯ doing']);
+    await vscode.commands.executeCommand('durandal.plan.do');
+    assert.equal(a.shown.at(-1)!.text, 'plans: a request is already running on this line');
+    assert.equal(sent('olifant/plans/do').length, n + 1);
+    const from = a.shown.length;
+    await vscode.commands.executeCommand('durandal.plan.cancel');
+    await until(() => sent('$/cancelRequest').length > cancels, '$/cancelRequest');
+    assert.deepEqual(a.planVerbs.running(uriOf(PLAN)), []);
+    assert.deepEqual(a.planVerbs.pending(uriOf(PLAN)), []);
+    await sleep(500);
+    assert.deepEqual(a.shown.slice(from).map(s => s.text), ['cancelled'], 'said once, by the cancel');
+    await vscode.commands.executeCommand('durandal.plan.cancel');
+    assert.equal(a.shown.at(-1)!.text, 'plans: nothing is running');
+  });
+
+  it('typing above the row while the answer is out: the block follows the row, the facts are dropped', async () => {
+    const a = await running();
+    reply('olifant/plans/ask', {
+      delay: 2, id: 'S2', verb: 'ask', facts: [{ row: 1, text: '- a fact' }],
+      blocks: [{ after: 3, after_text: null, lines: [{ text: '  - so', fp: null }] }],
+      dropped: 0, unresolved: 0, seconds: 2, cost: null, changed: [], review: null,
+    });
+    const ed = await at(3);
+    const p = vscode.commands.executeCommand('durandal.plan.ask');
+    await until(() => a.planVerbs.running(uriOf(PLAN)).length === 1, 'the ask in the air');
+    await ed.edit(b => b.insert(new vscode.Position(0, 0), 'typed\n'));
+    assert.deepEqual(a.planVerbs.running(uriOf(PLAN)), [{ row: 4, verb: 'ask' }]);
+    await p;
+    assert.deepEqual(lines().slice(0, 7), ['typed', '# T', '- a', '- b', '- c', '  - so', '- d']);
+  });
+
+  it('a plan closed (reopened with another language) before the answer: nothing lands, nothing is sent or said', async () => {
+    const a = await running();
+    reply('olifant/plans/ask', {
+      delay: 2, id: 'S3', verb: 'ask', facts: [], blocks: [{ after: 3, after_text: null, lines: [{ text: '  - so', fp: null }] }],
+      dropped: 0, unresolved: 0, seconds: 2, cost: null, changed: [], review: null,
+    });
+    const ed = await at(3);
+    const outcomes = sent('olifant/plans/outcome').length;
+    const p = vscode.commands.executeCommand('durandal.plan.ask');
+    await until(() => a.planVerbs.running(uriOf(PLAN)).length === 1, 'the ask in the air');
+    const from = a.shown.length;
+    // VS Code closes the document and opens a new one on a language change
+    await vscode.languages.setTextDocumentLanguage(ed.document, 'plaintext');
+    await p;
+    await sleep(300);
+    assert.equal(docOf(PLAN)!.getText(), TEXT);
+    assert.equal(sent('olifant/plans/outcome').length, outcomes);
+    assert.deepEqual(a.shown.slice(from), []);
+    await vscode.languages.setTextDocumentLanguage(docOf(PLAN)!, 'markdown');
+  });
+
+  it('an ask whose blocks hold no lines: nothing lands, no outcome is sent, no accept fires', async () => {
+    const a = await running();
+    reply('olifant/plans/ask', {
+      id: 'S4', verb: 'ask', facts: [],
+      blocks: [{ after: 3, after_text: null, lines: [] }, { after: 3, after_text: null, lines: null }],
+      dropped: 1, unresolved: 0, seconds: 1, cost: null, changed: [], review: null,
+    });
+    await at(3);
+    const outcomes = sent('olifant/plans/outcome').length;
+    const fired = a.landed.fired.length;
+    await vscode.commands.executeCommand('durandal.plan.ask');
+    assert.equal(a.shown.at(-1)!.text, 'ask: 0 lines · 1 not found · 1 s');
+    await sleep(300);
+    assert.equal(docOf(PLAN)!.getText(), TEXT);
+    assert.equal(sent('olifant/plans/outcome').length, outcomes);
+    assert.equal(a.landed.fired.length, fired);
+  });
+
+  it('a validate: the facts land now, the blocks are held under the request row as the facts moved it', async () => {
+    const a = await running();
+    reply('olifant/plans/validate', {
+      id: 'V1', verb: 'validate', facts: [{ after: 0, lines: ['- new'] }],
+      blocks: [{ after: 3, after_text: null, lines: [{ text: '  - checked', fp: null }] }],
+      dropped: 0, unresolved: 0, seconds: 1, cost: 0.0123, changed: [], review: null,
+    });
+    await at(3);
+    const outcomes = sent('olifant/plans/outcome').length;
+    const fired = a.landed.fired.length;
+    await vscode.commands.executeCommand('durandal.plan.validate');
+    assert.deepEqual(sent('olifant/plans/validate').at(-1)!.params, { textDocument: { uri: uriOf(PLAN) }, line: 3 });
+    assert.equal(docOf(PLAN)!.getText(), ['# T', '- new', ...LINES.slice(1)].join('\n') + '\n');
+    assert.equal(a.shown.at(-1)!.text, 'validate: 1 lines · 0 not found · 1 s · $0.0123');
+    assert.deepEqual(a.planVerbs.flashes.at(-1), { uri: uriOf(PLAN), row: 4 });
+    await sleep(300);
+    assert.equal(sent('olifant/plans/outcome').length, outcomes);
+    assert.equal(a.landed.fired.length, fired);
+  });
+
+  it("a fact that takes the plan's last rows: they go, from the end of the row before them", async () => {
+    const a = await running();
+    reply('olifant/plans/validate', {
+      id: 'V2', verb: 'validate', facts: [{ from: 7, to: 9, lines: [] }], blocks: [],
+      dropped: 0, unresolved: 0, seconds: 1, cost: null, changed: [], review: null,
+    });
+    await at(1);
+    await vscode.commands.executeCommand('durandal.plan.validate');
+    assert.equal(docOf(PLAN)!.getText(), LINES.slice(0, 7).join('\n'));
+    assert.equal(a.shown.at(-1)!.text, 'validate: 0 lines · 0 not found · 1 s');
+  });
+
+  it('a do with a review says so and fires landed do; no lines land', async () => {
+    const a = await running();
+    reply('olifant/plans/do', {
+      id: 'D9', verb: 'do', facts: [], blocks: [], dropped: 0, unresolved: 0, seconds: 3, cost: 0.5,
+      changed: ['/w/one/src/a.py'], review: 'D9',
+    });
+    await at(8);
+    await vscode.commands.executeCommand('durandal.plan.do');
+    assert.equal(a.shown.at(-1)!.text, 'do: 1 file changed · to review · 3 s · $0.5');
+    assert.equal(a.landed.fired.at(-1), 'do');
+    assert.equal(docOf(PLAN)!.getText(), TEXT);
+  });
+
+  it('a server stop while a do runs: the row and its mark go, the late end says nothing', async () => {
+    const a = await running();
+    reply('olifant/plans/do', { hold: true, title: 'doing' });
+    await at(8);
+    const p = vscode.commands.executeCommand('durandal.plan.do');
+    await until(() => a.planVerbs.running(uriOf(PLAN)).length === 1, 'the do in the air');
+    const from = a.shown.length;
+    await restart();
+    await p;
+    assert.deepEqual(a.planVerbs.running(uriOf(PLAN)), []);
+    await sleep(300);
+    assert.deepEqual(a.shown.slice(from).filter(s => s.level !== 'info' || s.text === 'cancelled'), []);
+  });
+});

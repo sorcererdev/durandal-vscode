@@ -20,6 +20,7 @@ import { PlanLayer, PlanViewApi } from './plans/layer';
 import { onPlansOptions, readPlansOptions } from './plans/options';
 import { PlanDocs } from './plans/planDocs';
 import { trackIsPlan } from './plans/trackIsPlan';
+import { PlanVerbs, PlanVerbsApi } from './plans/verbs';
 import { discover, trackProjects } from './projects';
 import { quickInputUi } from './quickInput';
 import { findRoot } from './root';
@@ -82,6 +83,8 @@ export interface Api {
   planView: PlanViewApi;
   // the landed bus: what landed, in order (M6b fires do, accept, stub, test)
   landed: Landed;
+  // the plan verbs (M6b): the rows in the air, their marks, the flashes, the blocks waiting
+  planVerbs: PlanVerbsApi;
 }
 
 let server: Server | undefined;
@@ -169,6 +172,9 @@ export function activate(context: vscode.ExtensionContext): Api {
   const layer = new PlanLayer({ docs: planDocs, options: plansOptions, say, warn: m => output.warn(m) });
   layer.register(context);
   hooks.reading = layer;
+  // the plan verbs (M6 spec §4)
+  const verbs = new PlanVerbs({ server: s, say, ui, docs, planDocs, options: () => plansOptions, landed });
+  verbs.register(context);
   // the Enter rule follows durandal.isPlan (spec §3.5)
   const enterRule = new EnterRule();
   context.subscriptions.push(enterRule);
@@ -199,6 +205,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     flights.cancelAll('stopped');
     ctl.stopped();
     layer.stopped();
+    verbs.stopped();
   };
   hooks.progress = (token, v) => ctl.progress(token, v);
 
@@ -237,7 +244,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     for (const r of await discover()) await s.addRoot(r);
     if (s.roots().length > 0) await s.start();
   })();
-  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest, tdd, pause, isPlan: plansTracked.isPlan, planView: layer.api(), landed };
+  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest, tdd, pause, isPlan: plansTracked.isPlan, planView: layer.api(), landed, planVerbs: verbs.api() };
 }
 
 export async function deactivate(): Promise<void> {
