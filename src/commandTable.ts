@@ -4,7 +4,6 @@ import { CLIENT_COMMANDS } from './protocol';
 export const NOT_YET: Record<string, { title: string; milestone: number }> = {
   'durandal.plan.accept': { title: 'Plan: Accept', milestone: 7 },
   'durandal.plan.reject': { title: 'Plan: Reject', milestone: 7 },
-  'durandal.plan.reconcile': { title: 'Plan: Reconcile', milestone: 6 },
 };
 
 // The commands built so far, contributed with these titles (spec §6's rest is NOT_YET). The
@@ -25,6 +24,7 @@ export const BUILT: Record<string, { title: string; enablement?: string }> = {
   'durandal.plan.validate': { title: 'Plan: Validate' },
   'durandal.plan.do': { title: 'Plan: Do' },
   'durandal.plan.cancel': { title: 'Plan: Cancel' },
+  'durandal.plan.reconcile': { title: 'Plan: Reconcile' },
   'durandal.plan.newStep': { title: 'Plan: New Step' },
   'durandal.plan.excerpt': { title: 'Plan: Excerpt' },
   'durandal.plan.toggle': { title: 'Plan: Toggle Step' },

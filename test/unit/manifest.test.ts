@@ -108,7 +108,8 @@ test('M6b: files, stub and test on a step are built; p s, p t, and s and t in a 
   const keys = (id: string) => KEYS.filter(k => k.command === id).map(k => `${k.keys}|${k.when}`);
   assert.deepEqual(keys('durandal.plan.stub'), ['p s|durandal.isPlan', 's|durandal.isPlan']);
   assert.deepEqual(keys('durandal.plan.test'), ['p t|durandal.isPlan', 't|durandal.isPlan']);
-  assert.deepEqual(Object.keys(NOT_YET).sort(), ['durandal.plan.accept', 'durandal.plan.reconcile', 'durandal.plan.reject']);
+  assert.deepEqual(Object.keys(NOT_YET).sort(), ['durandal.plan.accept', 'durandal.plan.reject']);
+  assert.equal(BUILT['durandal.plan.reconcile'].title, 'Plan: Reconcile');
 });
 
 test('the TDD chords match durandal.nvim: t here, shift+t the file, Test All palette only (spec ruling 2)', () => {

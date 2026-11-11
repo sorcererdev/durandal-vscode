@@ -19,6 +19,7 @@ import { EnterRule } from './plans/enterRule';
 import { PlanActions } from './plans/actions';
 import { PlanSteps } from './plans/steps';
 import { PlanLayer, PlanViewApi } from './plans/layer';
+import { PlanReconcile, PlanReconcileApi } from './plans/reconcile';
 import { onPlansOptions, readPlansOptions } from './plans/options';
 import { PlanDocs } from './plans/planDocs';
 import { trackIsPlan } from './plans/trackIsPlan';
@@ -87,6 +88,8 @@ export interface Api {
   landed: Landed;
   // the plan verbs (M6b): the rows in the air, their marks, the flashes, the blocks waiting
   planVerbs: PlanVerbsApi;
+  // the reconcile (M6c): in the air on a plan, a save elsewhere waiting
+  planReconcile: PlanReconcileApi;
 }
 
 let server: Server | undefined;
@@ -187,6 +190,14 @@ export function activate(context: vscode.ExtensionContext): Api {
   new PlanActions({ server: s, say, planDocs, layer }).register(context);
   // files, and stub and test on a step (spec §4.4)
   new PlanSteps({ server: s, say, ui, planDocs, landed }).register(context);
+  // the loop (M6 spec §5.2): p c, and in auto mode entry, landings and saves elsewhere
+  const reconcile = new PlanReconcile({
+    server: s, say, planDocs, options: () => plansOptions, landed, review: uri => reviews.open(uri, 'reconcile'),
+  });
+  reconcile.register(context);
+  verbs.setReconcile(reconcile);
+  hooks.applied = (label, uris) => reconcile.applied(label, uris);
+  hooks.started = () => void reconcile.entered();
   // the Enter rule follows durandal.isPlan (spec §3.5)
   const enterRule = new EnterRule();
   context.subscriptions.push(enterRule);
@@ -218,6 +229,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     ctl.stopped();
     layer.stopped();
     verbs.stopped();
+    reconcile.stopped();
   };
   hooks.progress = (token, v) => ctl.progress(token, v);
 
@@ -256,7 +268,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     for (const r of await discover()) await s.addRoot(r);
     if (s.roots().length > 0) await s.start();
   })();
-  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest, tdd, pause, isPlan: plansTracked.isPlan, planView: layer.api(), landed, planVerbs: verbs.api() };
+  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest, tdd, pause, isPlan: plansTracked.isPlan, planView: layer.api(), landed, planVerbs: verbs.api(), planReconcile: reconcile.api() };
 }
 
 export async function deactivate(): Promise<void> {

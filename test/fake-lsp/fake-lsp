@@ -18,6 +18,7 @@
 # {"notify": [{method, params}], …} sends those notifications first ("$uri" the
 # request's document), then the rest as the answer; one with "request": true is sent as a
 # server request (id "srv-N"; "$version" the document's last version, "$stale" one before).
+# {"after": seconds} with "notify" pauses between the notifications and the answer.
 import json
 import signal, os, sys, time
 if "--help" in sys.argv[1:]:
@@ -135,6 +136,9 @@ while True:
                     send({"jsonrpc": "2.0", "id": "srv-%d" % sent, "method": n["method"], "params": json.loads(params)})
                 else:
                     send({"jsonrpc": "2.0", "method": n["method"], "params": json.loads(params)})
+            if "after" in result:
+                # the client's handling of what was sent, before the answer (a reconcile's own edit)
+                time.sleep(result.pop("after"))
         if isinstance(result, dict) and "lsp_error" in result:
             # a refusal, as olifant lsp sends one: RequestFailed with its sentence
             send({"jsonrpc": "2.0", "id": msg["id"], "error": {"code": -32803, "message": result["lsp_error"]}})

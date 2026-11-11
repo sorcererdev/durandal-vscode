@@ -57,6 +57,8 @@ export class PlanVerbs {
   private readonly waits = new Set<Wait>();
   // gen: bumped by every server stop; a prompt from an older start does nothing when answered
   private gen = 0;
+  // the plan's reconcile, which Plan: Cancel also stops (set once both exist)
+  private reconcile: { cancel(uri: string): boolean } | undefined;
   private readonly flashes: { uri: string; row: number }[] = [];
   // drawn: the pending marks' texts painted on each plan's visible editors, top to bottom
   private readonly drawn = new Map<string, string[]>();
@@ -68,6 +70,8 @@ export class PlanVerbs {
   });
 
   constructor(private readonly d: VerbsDeps) {}
+
+  setReconcile(r: { cancel(uri: string): boolean }): void { this.reconcile = r; }
 
   register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
@@ -244,11 +248,12 @@ export class PlanVerbs {
     }
   }
 
-  // cancel: every verb in the air on the active plan (plans.lua cancel); M6c adds its reconcile
+  // cancel: every verb in the air on the active plan, and its reconcile (plans.lua cancel)
   cancel(): void {
     const uri = vscode.window.activeTextEditor?.document.uri.toString();
     const mine = [...this.entries].filter(e => e.uri === uri);
-    if (mine.length === 0) {
+    const reconciling = uri !== undefined && (this.reconcile?.cancel(uri) ?? false);
+    if (mine.length === 0 && !reconciling) {
       void this.d.say('info', NOTHING_RUNNING);
       return;
     }
