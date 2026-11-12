@@ -19,6 +19,7 @@ import { EnterRule } from './plans/enterRule';
 import { PlanActions } from './plans/actions';
 import { PlanSteps } from './plans/steps';
 import { PlanLayer, PlanViewApi } from './plans/layer';
+import { PlanIdle } from './plans/idleNotes';
 import { PlanReconcile, PlanReconcileApi } from './plans/reconcile';
 import { onPlansOptions, readPlansOptions } from './plans/options';
 import { PlanDocs } from './plans/planDocs';
@@ -198,6 +199,9 @@ export function activate(context: vscode.ExtensionContext): Api {
   verbs.setReconcile(reconcile);
   hooks.applied = (label, uris) => reconcile.applied(label, uris);
   hooks.started = () => void reconcile.entered();
+  // idle: the claim pass's triage, a second after a plan's last change (spec §5.3)
+  const idle = new PlanIdle({ server: s, planDocs });
+  idle.register(context);
   // the Enter rule follows durandal.isPlan (spec §3.5)
   const enterRule = new EnterRule();
   context.subscriptions.push(enterRule);
@@ -230,6 +234,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     layer.stopped();
     verbs.stopped();
     reconcile.stopped();
+    idle.stopped();
   };
   hooks.progress = (token, v) => ctl.progress(token, v);
 

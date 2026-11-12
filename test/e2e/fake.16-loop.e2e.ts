@@ -15,6 +15,7 @@ const sent = (method: string) => log().filter(m => m.method === method);
 // every reconcile sent; reconciles: those of PLAN (plans left open by the suites before count too)
 const allReconciles = () => sent('olifant/plans/reconcile');
 const reconciles = () => allReconciles().filter(m => m.params.textDocument.uri === uriOf(PLAN));
+const idles = () => sent('olifant/plans/idle');
 const REPLIES = [
   'olifant/plans/reconcile', 'olifant/plans/review', 'olifant/plans/errand', 'olifant/plans/errands',
   'textDocument/codeAction', 'codeAction/resolve', 'workspace/executeCommand', 'textDocument/foldingRange', 'textDocument/codeLens',
@@ -302,5 +303,43 @@ describe('the loop (fake server)', () => {
     await sleep(1500);
     assert.equal(reconciles().length, n + 2);
     assert.deepEqual((await said(from)).filter(t => !t.startsWith('Durandal')), []);
+  });
+
+  it('typing in a plan: no idle while it goes on; one a second after it stops (plans_spec :1316-1364)', async () => {
+    await running();
+    const ed = await at(1);
+    await quiet();
+    const n = idles().length;
+    for (let i = 0; i < 5; i++) {
+      await ed.edit(e => e.insert(new vscode.Position(0, 0), 'x'));
+      await sleep(300);
+    }
+    assert.equal(idles().length, n);
+    await until(() => idles().length === n + 1, 'one idle', 3_000);
+    assert.deepEqual(idles().at(-1)!.params, { textDocument: { uri: uriOf(PLAN) } });
+    await sleep(1500);
+    assert.equal(idles().length, n + 1);
+  });
+
+  it('idle goes out in "key" mode too; never for another file; never after the plan closed', async () => {
+    await running();
+    await auto('key');
+    const ed = await at(1);
+    // the previous test's revert armed an idle for PLAN; let it land before the baseline (F4)
+    await sleep(1100);
+    const n = idles().length;
+    await ed.edit(e => e.insert(new vscode.Position(0, 0), 'x'));
+    await until(() => idles().length === n + 1, 'idle in key mode', 3_000);
+    const other = await open(file(OTHER));
+    await other.edit(e => e.insert(new vscode.Position(0, 0), '#'));
+    await sleep(1500);
+    assert.equal(idles().length, n + 1);
+    const plan = await at(1);
+    await plan.edit(e => e.insert(new vscode.Position(0, 0), 'x'));
+    // VS Code closes and reopens a document whose language changes
+    await vscode.languages.setTextDocumentLanguage(plan.document, 'plaintext');
+    await sleep(1500);
+    assert.equal(idles().length, n + 1);
+    await vscode.languages.setTextDocumentLanguage(docOf(PLAN)!, 'markdown');
   });
 });
