@@ -1,5 +1,6 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
+import { FakeUi } from '../fakeUi';
 import { reviewFixture } from '../pauseFixtures';
 import { api, docOf, file, log, open, reply, restart, revert, running, settle, sleep, until } from './helpers';
 
@@ -341,5 +342,78 @@ describe('the loop (fake server)', () => {
     await sleep(1500);
     assert.equal(idles().length, n + 1);
     await vscode.languages.setTextDocumentLanguage(docOf(PLAN)!, 'markdown');
+  });
+
+  const JOURNAL = [...LINES, '  - 25 Oct 21:31 · do (sonnet) · answered: x'];
+
+  it('p o on a journal line opens the do behind it, read-only (plans_spec :346)', async () => {
+    const a = await running();
+    await settle(PLAN, JOURNAL.join('\n') + '\n');
+    reply('olifant/plans/errand', reviewFixture('errand'));
+    await at(4);
+    await vscode.commands.executeCommand('durandal.plan.errand');
+    await until(() => sent('olifant/plans/errand').length > 0, 'the errand asked');
+    assert.deepEqual(sent('olifant/plans/errand').at(-1)!.params, { textDocument: { uri: uriOf(PLAN) }, row: 4 });
+    await until(() => a.pause.source() === 'errand', 'the past do in the window');
+  });
+
+  it('p o off a journal line, or with nothing behind it, says there is no record', async () => {
+    await running();
+    await settle(PLAN, JOURNAL.join('\n') + '\n');
+    await at(1);
+    const asked = sent('olifant/plans/errand').length;
+    const from = (await api()).shown.length;
+    await vscode.commands.executeCommand('durandal.plan.errand');
+    assert.deepEqual(await said(from), ['plans: no record behind this line']);
+    assert.equal(sent('olifant/plans/errand').length, asked);
+    // a journal line the server finds nothing behind: null
+    reply('olifant/plans/errand', null);
+    await at(4);
+    await vscode.commands.executeCommand('durandal.plan.errand');
+    assert.deepEqual(await said(from), ['plans: no record behind this line', 'plans: no record behind this line']);
+  });
+
+  it('the past-do lens: none says so; one opens by id; several are picked from (review.lua :512-531)', async () => {
+    const a = await running();
+    await at(1);
+    const ui = new FakeUi();
+    a.setUi(ui);
+    const from = a.shown.length;
+    reply('olifant/plans/errands', { errands: [] });
+    await vscode.commands.executeCommand('olifant.plans.errand', uriOf(PLAN), 1);
+    assert.deepEqual(sent('olifant/plans/errands').at(-1)!.params, { textDocument: { uri: uriOf(PLAN) }, row: 1 });
+    assert.deepEqual(await said(from), ['plans: no past do here']);
+    reply('olifant/plans/errand', reviewFixture('errand'));
+    reply('olifant/plans/errands', { errands: [{ id: 'E1', at: '2026-10-25T21:31:00Z', status: 'answered', choice: 'kept', words: 'done', model: 'sonnet' }] });
+    await vscode.commands.executeCommand('olifant.plans.errand', uriOf(PLAN), 1);
+    assert.deepEqual(sent('olifant/plans/errand').at(-1)!.params, { textDocument: { uri: uriOf(PLAN) }, id: 'E1' });
+    await until(() => a.pause.source() === 'errand', 'opened');
+    reply('olifant/plans/errands', { errands: [
+      { id: 'E2', at: '2026-10-26T08:00:00Z', status: 'blocked', choice: null, words: 'blocked' },
+      { id: 'E1', at: '2026-10-25T21:31:00Z', status: 'answered', choice: 'kept', words: 'done' },
+    ] });
+    ui.onPick = o => o.items[1].value;
+    await vscode.commands.executeCommand('olifant.plans.errand', uriOf(PLAN), 1);
+    assert.equal(ui.picks.at(-1)!.title, 'past dos');
+    assert.deepEqual(ui.picks.at(-1)!.items.map(i => i.label),
+      ['2026-10-26 08:00 · blocked · nil · blocked', '2026-10-25 21:31 · answered · kept · done']);
+    assert.deepEqual(sent('olifant/plans/errand').at(-1)!.params, { textDocument: { uri: uriOf(PLAN) }, id: 'E1' });
+  });
+
+  it('the excerpt lens opens and closes the excerpt\'s fold at its opening fence (plans_spec :211)', async () => {
+    const a = await running();
+    const EXCERPT = ['# Steps', '- [ ] s @src/a.py:Foo', '  ```python @src/a.py:Foo', '  x = 1', '  ```', '- other'];
+    await settle(PLAN, EXCERPT.join('\n') + '\n');
+    reply('textDocument/foldingRange', [{ startLine: 2, endLine: 4, kind: 'region' }]);
+    const ed = await at(0);
+    const uri = ed.document.uri.toString();
+    await until(() => a.planView.reading(uri)?.folds?.version === ed.document.version || undefined, 'the folds');
+    const shown = (row: number) => ed.visibleRanges.some(r => r.start.line <= row && row <= r.end.line);
+    // closed on entry (foldDone)
+    await until(() => (a.planView.entered(uri) && !shown(3)) || undefined, 'entered, the excerpt folded');
+    await vscode.commands.executeCommand('olifant.plans.excerpt', uriOf(PLAN), 2, 4, true, '@src/a.py:Foo');
+    await until(() => shown(3) || undefined, 'opened');
+    await vscode.commands.executeCommand('olifant.plans.excerpt', uriOf(PLAN), 2, 4, true, '@src/a.py:Foo');
+    await until(() => !shown(3) || undefined, 'closed again');
   });
 });

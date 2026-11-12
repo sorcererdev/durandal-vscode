@@ -19,7 +19,9 @@ import { EnterRule } from './plans/enterRule';
 import { PlanActions } from './plans/actions';
 import { PlanSteps } from './plans/steps';
 import { PlanLayer, PlanViewApi } from './plans/layer';
+import { PlanErrands } from './plans/errands';
 import { PlanIdle } from './plans/idleNotes';
+import { registerLenses } from './plans/lenses';
 import { PlanReconcile, PlanReconcileApi } from './plans/reconcile';
 import { onPlansOptions, readPlansOptions } from './plans/options';
 import { PlanDocs } from './plans/planDocs';
@@ -202,6 +204,10 @@ export function activate(context: vscode.ExtensionContext): Api {
   // idle: the claim pass's triage, a second after a plan's last change (spec §5.3)
   const idle = new PlanIdle({ server: s, planDocs });
   idle.register(context);
+  // the past dos and the lenses (spec §5.4-5.5)
+  const errands = new PlanErrands({ server: s, say, ui, planDocs, show: (uri, review) => ctl.showReview(uri, review) });
+  errands.register(context);
+  registerLenses(context, { errands, layer });
   // the Enter rule follows durandal.isPlan (spec §3.5)
   const enterRule = new EnterRule();
   context.subscriptions.push(enterRule);

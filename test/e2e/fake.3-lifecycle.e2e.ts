@@ -23,10 +23,12 @@ describe('lifecycle and health (fake server)', () => {
     assert.deepEqual(call?.params, { command: 'olifant.doctor', arguments: [file('one/main.py').toString()] });
   });
 
-  it('a server-named command not built yet says so', async () => {
+  it('a lens command without its arguments does nothing and says nothing', async () => {
     const a = await running();
+    const before = a.shown.length;
     await vscode.commands.executeCommand('olifant.plans.excerpt');
-    assert.ok(a.shown.some(s => s.text === 'Durandal: Plan Excerpt is not implemented yet (milestone 6)'));
+    await vscode.commands.executeCommand('olifant.plans.errand');
+    assert.equal(a.shown.length, before);
   });
 
   it('a crash is one notification and no restart; requests say it is not running', async () => {

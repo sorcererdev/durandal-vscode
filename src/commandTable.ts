@@ -25,6 +25,7 @@ export const BUILT: Record<string, { title: string; enablement?: string }> = {
   'durandal.plan.do': { title: 'Plan: Do' },
   'durandal.plan.cancel': { title: 'Plan: Cancel' },
   'durandal.plan.reconcile': { title: 'Plan: Reconcile' },
+  'durandal.plan.errand': { title: 'Plan: Open Past Do' },
   'durandal.plan.newStep': { title: 'Plan: New Step' },
   'durandal.plan.excerpt': { title: 'Plan: Excerpt' },
   'durandal.plan.toggle': { title: 'Plan: Toggle Step' },
@@ -60,11 +61,9 @@ export const SUGGEST_KEYS: { command: string; key: string; when: string }[] = [
 // never fails with "command not found", not contributed (they need the server's arguments).
 // Keyed by protocol.ts CLIENT_COMMANDS' values, so a command added there must be given a
 // title and milestone here (the Record type fails to compile otherwise).
-// showActions is built (actions/command.ts), planReview too (pause/review.ts); the rest are later milestones'.
-const SERVER_NAMED_INFO: Record<Exclude<keyof typeof CLIENT_COMMANDS, 'showActions' | 'planReview'>, { title: string; milestone: number }> = {
-  planExcerpt: { title: 'Plan Excerpt', milestone: 6 },
-  planErrand: { title: 'Plan Delegations', milestone: 6 },
-};
+// showActions is built (actions/command.ts), planReview (pause/review.ts), planExcerpt and
+// planErrand (plans/lenses.ts): none is left for a later milestone.
+const SERVER_NAMED_INFO: Record<Exclude<keyof typeof CLIENT_COMMANDS, 'showActions' | 'planReview' | 'planExcerpt' | 'planErrand'>, { title: string; milestone: number }> = {};
 
 export const SERVER_NAMED: Record<string, { title: string; milestone: number }> = Object.fromEntries(
   (Object.keys(SERVER_NAMED_INFO) as (keyof typeof SERVER_NAMED_INFO)[]).map(k => [CLIENT_COMMANDS[k], SERVER_NAMED_INFO[k]]),
@@ -99,6 +98,7 @@ export const KEYS: { command: string; keys: string; when: string }[] = [
   { command: 'durandal.plan.reject', keys: 'p n', when: 'durandal.isPlan' },
   { command: 'durandal.plan.files', keys: 'p f', when: 'durandal.isPlan' },
   { command: 'durandal.plan.reconcile', keys: 'p c', when: 'durandal.isPlan' },
+  { command: 'durandal.plan.errand', keys: 'p o', when: 'durandal.isPlan' },
   { command: 'durandal.plan.excerpt', keys: 'p e', when: 'durandal.isPlan' },
   { command: 'durandal.plan.review', keys: 'p r', when: 'durandal.isPlan' },
   { command: 'durandal.plan.toggle', keys: 'p x', when: 'durandal.isPlan' },

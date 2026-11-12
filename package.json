@@ -266,6 +266,11 @@
         "category": "Durandal"
       },
       {
+        "command": "durandal.plan.errand",
+        "title": "Plan: Open Past Do",
+        "category": "Durandal"
+      },
+      {
         "command": "durandal.plan.excerpt",
         "title": "Plan: Excerpt",
         "category": "Durandal"
@@ -385,6 +390,12 @@
         "command": "durandal.plan.reconcile",
         "key": "ctrl+alt+d p c",
         "mac": "cmd+alt+d p c",
+        "when": "durandal.isPlan"
+      },
+      {
+        "command": "durandal.plan.errand",
+        "key": "ctrl+alt+d p o",
+        "mac": "cmd+alt+d p o",
         "when": "durandal.isPlan"
       },
       {

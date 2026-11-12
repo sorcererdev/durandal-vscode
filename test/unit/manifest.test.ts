@@ -219,3 +219,9 @@ test('M6b: new step (p enter), excerpt and toggle are built; toggle is Plan: Tog
   assert.equal(BUILT['durandal.plan.toggle'].title, 'Plan: Toggle Step');
   assert.deepEqual(KEYS.find(k => k.command === 'durandal.plan.newStep'), { command: 'durandal.plan.newStep', keys: 'p enter', when: 'durandal.isPlan' });
 });
+
+test('Plan: Open Past Do is built on p o in a plan; no server-named command is left unbuilt', () => {
+  assert.equal(BUILT['durandal.plan.errand'].title, 'Plan: Open Past Do');
+  assert.ok(KEYS.some(k => k.command === 'durandal.plan.errand' && k.keys === 'p o' && k.when === 'durandal.isPlan'));
+  assert.deepEqual(Object.keys(SERVER_NAMED), []);
+});
