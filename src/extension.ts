@@ -136,7 +136,10 @@ export function activate(context: vscode.ExtensionContext): Api {
   hooks.suggestion = p => suggest.pushed(p);
   const generate = new Generate({ server: s, docs, plans, log, state: context.workspaceState, ui });
   generate.register(context);
-  new Actions({ server: s, plans, generate, log, ui, say, recognition: suggest.recognitions }).register(context);
+  // the one plan check (M6), built here for the menu's plan actions (spec §5.6) and the plans below
+  let plansOptions = readPlansOptions();
+  const planDocs = new PlanDocs(() => plansOptions.dir);
+  new Actions({ server: s, plans, generate, log, ui, say, recognition: suggest.recognitions, planDocs }).register(context);
   registerMigration(context, { server: s, docs, ui });
 
   // the TDD loop (M4 spec §2); a server stop cancels its requests (spec §6)
@@ -179,9 +182,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   const reviews = new Reviews({ server: s, say, controller: ctl });
   reviews.register(context);
   hooks.reviewReady = p => reviews.ready(p);
-  // plans (M6): durandal.plans.*, the one plan check, durandal.isPlan, the reading layer
-  let plansOptions = readPlansOptions();
-  const planDocs = new PlanDocs(() => plansOptions.dir);
+  // plans (M6): durandal.plans.*, durandal.isPlan, the reading layer
   const layer = new PlanLayer({ docs: planDocs, options: plansOptions, say, warn: m => output.warn(m) });
   layer.register(context);
   hooks.reading = layer;

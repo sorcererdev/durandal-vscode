@@ -416,4 +416,67 @@ describe('the loop (fake server)', () => {
     await vscode.commands.executeCommand('olifant.plans.excerpt', uriOf(PLAN), 2, 4, true, '@src/a.py:Foo');
     await until(() => !shown(3) || undefined, 'closed again');
   });
+
+  // menu: the chord-a menu on ROW of the plan, picking the item whose label starts with LABEL
+  async function menu(row: number, label: string): Promise<FakeUi> {
+    const a = await running();
+    const ui = new FakeUi();
+    ui.onPick = o => o.items.find(i => i.label.startsWith(label))?.value;
+    a.setUi(ui);
+    await at(row);
+    await vscode.commands.executeCommand('durandal.actions');
+    return ui;
+  }
+  const lineEdit = (row: number, text: string) => ({ changes: { [uriOf(PLAN)]: [{
+    range: { start: { line: row, character: 0 }, end: { line: row, character: LINES[row].length } }, newText: text,
+  }] } });
+
+  it('the claim pass\'s Check this runs on the server (workspace/executeCommand); the menu lists every plan action', async () => {
+    reply('textDocument/codeAction', [
+      { title: 'Check this (sonnet, ~$0.10)', kind: '', command: { title: 'Check this (sonnet, ~$0.10)', command: 'olifant.checkSentence', arguments: [uriOf(PLAN), 'other'] } },
+      { title: 'New step below', kind: 'source', edit: lineEdit(3, '- other\n- [ ] ') },
+    ]);
+    const resolves = sent('codeAction/resolve').length;
+    const ui = await menu(3, 'Check this');
+    await until(() => sent('workspace/executeCommand').some(m => m.params.command === 'olifant.checkSentence'), 'the check sent');
+    assert.deepEqual(sent('workspace/executeCommand').at(-1)!.params, { command: 'olifant.checkSentence', arguments: [uriOf(PLAN), 'other'] });
+    assert.deepEqual(ui.picks[0].items.map(i => i.label), ['Check this (sonnet, ~$0.10)', 'New step below']);
+    assert.equal(sent('codeAction/resolve').length, resolves);
+    assert.deepEqual(ui.log.filter(l => l.startsWith('error')), []);
+  });
+
+  it('a claim-pass command the server refuses is said as an error, and nothing is resolved', async () => {
+    reply('workspace/executeCommand', { lsp_error: 'that sentence has no check yet' });
+    reply('textDocument/codeAction', [
+      { title: 'Show why', kind: '', command: { title: 'Show why', command: 'olifant.showWhy', arguments: [uriOf(PLAN), 'other'] } },
+    ]);
+    const resolves = sent('codeAction/resolve').length;
+    const ui = await menu(3, 'Show why');
+    await until(() => ui.log.includes('error that sentence has no check yet') || undefined, 'the refusal said');
+    assert.equal(sent('codeAction/resolve').length, resolves);
+    assert.equal(docOf(PLAN)!.getText(), TEXT);
+  });
+
+  it('in a plan, an action\'s own edit applies (Re-fingerprint this claim, a quickfix); the plan stays unsaved', async () => {
+    reply('textDocument/codeAction', [{ title: 'Re-fingerprint this claim', kind: 'quickfix', edit: lineEdit(2, '  - test_it ✓ abc1234') }]);
+    await menu(2, 'Fix: Re-fingerprint');
+    await until(() => docOf(PLAN)!.lineAt(2).text === '  - test_it ✓ abc1234' || undefined, 'the edit applied');
+    assert.ok(docOf(PLAN)!.isDirty);
+  });
+
+  it('in a plan, a source action resolves to its edit (Mark done)', async () => {
+    reply('textDocument/codeAction', [{ title: 'Mark done', kind: 'source', data: { kind: 'toggle', path: 'plans/l.md', line: 1, version: 1 } }]);
+    reply('codeAction/resolve', { title: 'Mark done', kind: 'source', edit: lineEdit(1, '- [x] s @src/a.py:Foo') });
+    await menu(1, 'Mark done');
+    await until(() => docOf(PLAN)!.lineAt(1).text === '- [x] s @src/a.py:Foo' || undefined, 'resolved and applied');
+    assert.equal(sent('codeAction/resolve').at(-1)!.params.title, 'Mark done');
+  });
+
+  it('in a plan, a resolve with no edit says so', async () => {
+    reply('textDocument/codeAction', [{ title: 'Mark done', kind: 'source', data: { kind: 'toggle', path: 'plans/l.md', line: 1, version: 1 } }]);
+    reply('codeAction/resolve', { title: 'Mark done', kind: 'source' });
+    const ui = await menu(1, 'Mark done');
+    await until(() => ui.log.includes('error the server sent no edit') || undefined, 'said');
+    assert.equal(docOf(PLAN)!.getText(), TEXT);
+  });
 });

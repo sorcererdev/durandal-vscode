@@ -1,12 +1,13 @@
 import { relative } from 'node:path';
 import * as vscode from 'vscode';
-import { CodeAction, CodeActionRequest, CodeActionResolveRequest, WorkspaceEdit } from 'vscode-languageserver-protocol';
+import { CodeAction, CodeActionRequest, CodeActionResolveRequest, ExecuteCommandRequest, WorkspaceEdit } from 'vscode-languageserver-protocol';
 import type { ActionLog } from '../actionLog';
 import { applyServerEdit } from '../applyEdit';
 import { errorMessage } from '../errors';
 import type { Generate } from '../generate/command';
 import type { Plans } from '../land';
-import { CLIENT_COMMANDS, FileActionsResult, Olifant, Values } from '../protocol';
+import { NO_EDIT, NOT_APPLIED } from '../plans/words';
+import { CLIENT_COMMANDS, FileActionsResult, Olifant, SERVER_COMMANDS, Values } from '../protocol';
 import { findRoot, realRoot } from '../root';
 import { APPLY_RESOLVED, NOT_RUNNING, Say, Server } from '../server';
 import type { Shown } from '../suggest/types';
@@ -19,12 +20,15 @@ export interface ActionsDeps {
   server: Server; plans: Plans; generate: Generate; log: ActionLog; ui(): Ui; say: Say;
   // recognition: the line's recognition (suggest/editor.ts), first in the menu
   recognition?: { at(uri: string, line: number): Shown | undefined; choose(st: Shown): Promise<void>; reset(st: Shown): void };
+  // plan documents (M6c): the menu applies a plan action's edit itself (spec §5.6)
+  planDocs?: { is(doc: vscode.TextDocument): Promise<boolean> };
 }
 
 // Actions is durandal.actions (the chord, at the cursor) and olifant.showActions (the ⚡ hint's
 // command, at its line), ported from durandal.nvim actions.lua: the server's code actions as a
 // menu (a rule's fixes first); the pick asks what it still needs, resolves to its plan and
-// opens the review window (a snippet goes in its line). Nothing here: why, from the file's
+// opens the review window (a snippet goes in its line). In a plan, and for a bare command
+// anywhere, the pick runs or applies directly (direct). Nothing here: why, from the file's
 // actions. Also APPLY_RESOLVED, the lightbulb path's apply.
 export class Actions {
   constructor(private readonly d: ActionsDeps) {}
@@ -45,7 +49,7 @@ export class Actions {
         const lc = this.d.server.client();
         if (!lc) return void this.d.say('error', NOT_RUNNING);
         const r = await applyServerEdit(lc, { label, edit }, text => void this.d.say('info', text));
-        if (!r.applied) void this.d.say('error', r.failureReason ?? 'VS Code did not apply the edit');
+        if (!r.applied) void this.d.say('error', r.failureReason ?? NOT_APPLIED);
       }),
     );
   }
@@ -86,8 +90,52 @@ export class Actions {
     if (picked.kind === 'reset') return this.d.recognition!.reset(rec!);
     const a = picked.item.action;
     this.d.log.write({ event: a.kind === 'quickfix' ? 'fix-picked' : 'picked', file: rel, generator: generatorOf(a) });
+    if (await this.direct(uri, a, ui)) return;
     const sets = await this.ask(a, ui);
     if (sets) await this.resolve(a, sets, root, ui);
+  }
+
+  // direct: an action outside the generators' review path (M6 spec §5.6). A bare command runs
+  // (the claim pass's Check this, Show why, Show the code here: the server's go to the server);
+  // in a plan, an action's own edit applies and a source action resolves to its edit
+  // (Re-fingerprint this claim, Mark done, New step below). False: the review path's.
+  private async direct(uri: vscode.Uri, a: CodeAction, ui: Ui): Promise<boolean> {
+    if (a.command && !a.edit && a.data === undefined) {
+      const { command, arguments: args = [] } = a.command;
+      try {
+        if ((Object.values(SERVER_COMMANDS) as string[]).includes(command)) {
+          await this.d.server.request(ExecuteCommandRequest.type, { command, arguments: args });
+        } else {
+          await vscode.commands.executeCommand(command, ...args);
+        }
+      } catch (err) {
+        ui.error(errorMessage(err));
+      }
+      return true;
+    }
+    const doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === uri.toString());
+    if (!doc || !(await this.d.planDocs?.is(doc))) return false;
+    let edit = a.edit;
+    if (!edit) {
+      try {
+        edit = (await this.d.server.request(CodeActionResolveRequest.type, a))?.edit;
+      } catch (err) {
+        ui.error(errorMessage(err));
+        return true;
+      }
+      if (!edit) {
+        ui.error(NO_EDIT);
+        return true;
+      }
+    }
+    const lc = this.d.server.client();
+    if (!lc) {
+      ui.error(NOT_RUNNING);
+      return true;
+    }
+    const done = await applyServerEdit(lc, { label: a.title, edit }, text => void this.d.say('info', text));
+    if (!done.applied) ui.error(done.failureReason ?? NOT_APPLIED);
+    return true;
   }
 
   // ask is what the action still needs (actions.lua ask): undefined when skipped, or when the

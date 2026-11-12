@@ -19,6 +19,7 @@ export const TOGGLE_NOTHING = 'toggle: nothing to change here';
 export const TOGGLE_NO_STEP = 'toggle: not on a step';
 export const PLAN_CHANGED = ' · plan changed, press again';
 export const NOT_APPLIED = 'VS Code did not apply the edit';
+export const NO_EDIT = 'the server sent no edit';
 export const NO_PAST_DO = 'plans: no past do here';
 export const NO_RECORD = 'plans: no record behind this line';
 
