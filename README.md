@@ -148,8 +148,9 @@ says:
   step's unit and verdict, at the end of its line.
 - **Typing.** Enter after an open step starts another; after a done step, a plain item. Typing
   inside a live excerpt warns once: the next reconcile replaces it.
-- **Claim checks.** Opening or saving a plan can start an olifant claim pass that runs paid model
-  checks; `[plans] pass_cost = 0` in `.olifant/config.toml` turns it off.
+- **Claim checks.** Opening or saving a plan, and a second after typing stops in it (triage
+  only: olifant sorts the plan's sentences), can start an olifant claim pass that runs paid
+  model checks; `[plans] pass_cost = 0` in `.olifant/config.toml` turns it off.
 - **Verbs.** On a plan row, `Cmd+Alt+D P Q` (`Ctrl+Alt+D P Q`) asks the model about it, `P V`
   validates it, `P D` does the step. The row shows `⋯ asking` while it runs; `Durandal: Plan:
   Cancel` stops it. An ask's answer goes straight in, fingerprints stamped, and one undo takes
@@ -159,6 +160,17 @@ says:
 - **Steps.** `P Enter` adds a step under the row, `P E` shows the step's code (or folds an
   excerpt), `P X` ticks or reopens a step, `P F` lists the plan's files, and `S` / `T` (or `P S`
   / `P T`) stub and run the step's tests.
+- **The loop.** A plan reconciles with the code when you enter it, when something lands (a
+  test run, a stub, a conjure, a do, accepted blocks, a review answered done), and a second
+  after a file elsewhere is saved (only the plans shown in an editor). `Cmd+Alt+D P C`
+  (`Ctrl+Alt+D P C`) reconciles at once and opens the review when readings wait;
+  `durandal.plans.reconcile: "key"` leaves only that. `Durandal: Plan: Cancel` also stops a
+  reconcile.
+- **Past dos.** `P O` on a journal line opens the do behind it, read-only, in the review
+  window. A step's `N delegations` lens lists its past dos. An excerpt's lens folds it.
+- **Claim checks from the menu.** In a plan, `Cmd+Alt+D A` lists the server's actions on the
+  line: `Check this (~$…)` checks the claim, `Show why` and `Show the code here` open what the
+  check found, and plan edits such as `Re-fingerprint this claim` apply directly.
 
 ## Settings
 
@@ -174,6 +186,7 @@ says:
 - `durandal.plans.glyphs`: glyph overrides by name.
 - `durandal.plans.foldDone`: close done work on entry, not only excerpts (on by default).
 - `durandal.plans.reviewAnswers`: an ask's answer waits for Accept all / Reject all (off by default).
+- `durandal.plans.reconcile`: `"auto"` (default) reconciles on entry, landings and saves elsewhere; `"key"` only on Plan: Reconcile.
 - `durandal.trace.server`: LSP traffic into the Durandal output channel.
 
 A change to the first four takes effect after `Durandal: Restart Server`.

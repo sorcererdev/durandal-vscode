@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The plan loop as in durandal.nvim: automatic reconciles on entry, landings and saves
+  elsewhere (`durandal.plans.reconcile`), `Plan: Reconcile` with the review of its readings,
+  idle notices for the claim pass, `Plan: Open Past Do` on journal lines, the past-do and
+  excerpt lenses, and the claim pass's actions in the chord-`a` menu (milestone 6c).
 - Plan verbs as in durandal.nvim: ask, validate and do on a row with a pending mark and Plan:
   Cancel; answers land with their facts, an ask's straight in (one undo), other blocks behind
   Accept all / Reject all beside the plan, outcomes sent; new step, excerpt, toggle, files, and

@@ -99,8 +99,15 @@ async function real(bin: string, repo: string): Promise<void> {
       appendFileSync(join(ws, name, '.olifant/config.toml'), '\n[plans]\npass_cost = 0\n');
       execFileSync('git', ['-C', join(ws, name), '-c', 'user.name=olifant', '-c', 'user.email=olifant@localhost', 'commit', '-qam', 'pass_cost = 0']);
     }
+    // one recorded claim check (olifant's check_answers test hook, LspSpec claimPassSpec): a
+    // deterministic verdict with no model; the sentence key is the line's words, anchor dropped
+    const checks = join(ws, 'checks.json');
+    writeFileSync(checks, JSON.stringify({ replies: { 'CreateBooking checks the party size.': {
+      text: '```json\n' + JSON.stringify({ verdict: 'wrong', why: 'it checks nothing', evidence: [{ path: 'src/bistro/booking/commands/create_booking.py', unit: 'CreateBooking' }] }) + '\n```',
+      cost: 0.1,
+    } } }));
     settings(ws, bin);
-    await launch(ws, { DURANDAL_E2E_SUITE: 'real' });
+    await launch(ws, { DURANDAL_E2E_SUITE: 'real', DURANDAL_CHECK_ANSWERS: checks });
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }
