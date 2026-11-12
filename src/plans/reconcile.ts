@@ -97,6 +97,7 @@ export class PlanReconcile {
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => {
       this.saveTimer = undefined;
+      if (!this.auto()) return;
       void this.shown();
     }, SAVED_MS);
   }
@@ -125,7 +126,7 @@ export class PlanReconcile {
     try {
       a = { result: await this.d.server.request(Olifant.plansReconcile, { textDocument: { uri: key }, forced }, f.cts.token) };
     } catch (err) {
-      a = { error: { code: (err as { code?: number }).code, message: errorMessage(err) } };
+      a = { error: { code: (err as { code?: number } | undefined)?.code, message: errorMessage(err) } };
     } finally {
       f.cts.dispose();
       if (this.flights.get(key) === f) this.flights.delete(key);

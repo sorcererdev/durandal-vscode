@@ -7,4 +7,4 @@ export const isJournal = (line: string): boolean => /^\s*- \d\d? [A-Za-z]{3} \d\
 
 // errandLabel: a past do in the pick: its time (minutes, T as a space), status, choice, words
 export const errandLabel = (e: Errand): string =>
-  [e.at.slice(0, 16).replace('T', ' '), e.status, e.choice ?? 'nil', e.words].join(' · ');
+  [e.at.slice(0, 16).replace('T', ' '), e.status, e.choice ?? '', e.words].join(' · ');

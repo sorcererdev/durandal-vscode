@@ -251,6 +251,17 @@ describe('the loop (fake server)', () => {
     await until(() => reconciles().length === n + 1, 'p c');
   });
 
+  it('a save elsewhere, then "key" inside the second: the timer re-checks the mode and sends nothing', async () => {
+    const a = await running();
+    await at(1);
+    const n = await quiet();
+    await saveOther();
+    assert.ok(a.planReconcile.saving());
+    await auto('key'); // afterEach restores the setting
+    await sleep(1600);
+    assert.equal(reconciles().length, n);
+  });
+
   it('Plan: Cancel stops the reconcile: $/cancelRequest, "cancelled", nothing more said', async () => {
     const a = await running();
     await at(1);
@@ -396,7 +407,7 @@ describe('the loop (fake server)', () => {
     await vscode.commands.executeCommand('olifant.plans.errand', uriOf(PLAN), 1);
     assert.equal(ui.picks.at(-1)!.title, 'past dos');
     assert.deepEqual(ui.picks.at(-1)!.items.map(i => i.label),
-      ['2026-10-26 08:00 · blocked · nil · blocked', '2026-10-25 21:31 · answered · kept · done']);
+      ['2026-10-26 08:00 · blocked ·  · blocked', '2026-10-25 21:31 · answered · kept · done']);
     assert.deepEqual(sent('olifant/plans/errand').at(-1)!.params, { textDocument: { uri: uriOf(PLAN) }, id: 'E1' });
   });
 

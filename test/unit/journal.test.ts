@@ -19,7 +19,7 @@ test('not a journal line', () => {
 test('a past do\'s label in the pick', () => {
   assert.equal(errandLabel({ id: 'E1', at: '2026-10-25T21:31:00Z', status: 'answered', choice: 'kept', words: 'it is done', model: 'sonnet' }),
     '2026-10-25 21:31 · answered · kept · it is done');
-  // no choice yet: nvim's tostring(nil)
+  // no choice yet: nvim's tostring(given(nil) or ""), an empty field
   assert.equal(errandLabel({ id: 'E2', at: '2026-10-25T21:31:00.5Z', status: 'blocked', choice: null, words: 'blocked' }),
-    '2026-10-25 21:31 · blocked · nil · blocked');
+    '2026-10-25 21:31 · blocked ·  · blocked');
 });
