@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { doWord, fileItem, landedWord, NO_PAST_DO, NO_RECORD, nothingBack, PENDING, promptWord, reconcileWord, testsWord } from '../../src/plans/words';
+import { doWord, fileItem, landedWord, NO_GHOST, NO_PAST_DO, NO_RECORD, nothingBack, PENDING, reconcileWord, testsWord } from '../../src/plans/words';
 
 test('the do and landing notices, verbatim from durandal.nvim (plans.lua landed)', () => {
   assert.equal(doWord({ changed: ['/p/a.py'], seconds: 42 }), 'do: 1 file changed · to review · 42 s');
@@ -12,8 +12,8 @@ test('the do and landing notices, verbatim from durandal.nvim (plans.lua landed)
   assert.deepEqual(PENDING, { ask: ' ⋯ asking', validate: ' ⋯ validating', do: ' ⋯ doing' });
 });
 
-test('the prompt, the tests notice and a files item', () => {
-  assert.equal(promptWord('validate', 3, 2), 'validate: 3 lines in 2 blocks');
+test('no ghost here, the tests notice and a files item', () => {
+  assert.equal(NO_GHOST, 'no ghost here');
   assert.equal(testsWord({ passed: 2, failed: 1, seconds: 0.5 }), 'tests: 2 passed · 1 failed · 0.5 s');
   assert.equal(testsWord({}), 'tests: 0 passed · 0 failed · 0 s');
   assert.deepEqual(fileItem({ section: 'T', row: 1, text: '- a', file: null, line: null }), { label: 'T · - a', detail: 'line 2' });

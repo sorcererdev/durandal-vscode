@@ -106,7 +106,7 @@
         "durandal.plans.reviewAnswers": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "An ask's answer waits beside the plan for Accept all or Reject all, as a validate's does. Off: it goes straight into the plan, and one undo takes it back."
+          "markdownDescription": "An ask's answer waits as a ghost under its row for `Ctrl+Alt+D P Y` or `P N`, as a validate's does. Off: it goes straight into the plan, and one undo takes it back."
         },
         "durandal.plans.reconcile": {
           "type": "string",
@@ -247,12 +247,12 @@
       },
       {
         "command": "durandal.plan.accept",
-        "title": "Plan: Accept",
+        "title": "Plan: Accept Ghost",
         "category": "Durandal"
       },
       {
         "command": "durandal.plan.reject",
-        "title": "Plan: Reject",
+        "title": "Plan: Reject Ghost",
         "category": "Durandal"
       },
       {

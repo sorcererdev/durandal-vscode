@@ -35,21 +35,15 @@ test('add copies the lines: changing the answer\'s array changes no ghost', () =
   assert.deepEqual(g.at(U, 5)[0].lines, ['  - one']);
 });
 
-test('take removes and returns a row\'s blocks; takeKeys the blocks named; put brings blocks back', () => {
+test('takeKeys removes and returns the blocks named that are still here', () => {
   const g = new Ghosts();
   g.add(U, 'validate', 'V1', [p(0, 5, ['a']), p(1, 2, ['b'])]);
-  const five = g.take(U, 5);
-  assert.deepEqual(five.map(b => b.index), [0]);
-  assert.deepEqual(g.rows(U), [2]);
-  assert.deepEqual(g.take(U, 5), []);
-  g.put(U, five);
-  assert.deepEqual(g.rows(U), [2, 5]);
   const two = g.at(U, 2)[0];
   assert.deepEqual(g.takeKeys(U, [two.key, 9999]).map(b => b.index), [1]);
   assert.deepEqual(g.takeKeys(U, [two.key]), []);
   assert.deepEqual(g.rows(U), [5]);
-  g.put(U, []);
-  assert.deepEqual(g.rows(U), [5]);
+  assert.deepEqual(g.takeKeys(U, g.at(U, 5).map(b => b.key)).map(b => b.index), [0]);
+  assert.deepEqual(g.rows(U), []);
 });
 
 // the rows follow the edits as M6b's verbs' rows do (rows.ts, nvim's extmarks without invalidate)

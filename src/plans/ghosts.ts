@@ -30,20 +30,9 @@ export class Ghosts {
     return [...new Set((this.m.get(uri) ?? []).map(g => g.row))].sort((a, b) => a - b);
   }
 
-  // take: ROW's blocks, removed
-  take(uri: string, row: number): Ghost[] {
-    return this.remove(uri, g => g.row === row);
-  }
-
   // takeKeys: the blocks named by KEYS that are still here, removed
   takeKeys(uri: string, keys: readonly number[]): Ghost[] {
     return this.remove(uri, g => keys.includes(g.key));
-  }
-
-  // put: BLOCKS taken back (an accept VS Code did not apply), before the rest
-  put(uri: string, blocks: readonly Ghost[]): void {
-    if (blocks.length === 0) return;
-    this.m.set(uri, [...blocks, ...(this.m.get(uri) ?? [])]);
   }
 
   // shift: the rows after one change event's changes; true when URI has ghosts

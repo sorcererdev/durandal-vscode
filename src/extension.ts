@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as vscode from 'vscode';
 import { ActionLog, logDir } from './actionLog';
 import { Actions } from './actions/command';
-import { registerNotYet } from './commands';
+import { registerServerNamed } from './commands';
 import { registerMigration } from './migrationCommand';
 import { errorMessage } from './errors';
 import { Generate } from './generate/command';
@@ -89,7 +89,7 @@ export interface Api {
   planView: PlanViewApi;
   // the landed bus: what landed, in order
   landed: Landed;
-  // the plan verbs (M6b): the rows in the air, their marks, the flashes, the blocks waiting
+  // the plan verbs (M6b) and their ghosts (M7): the rows in the air, their marks, the flashes, the ghost rows
   planVerbs: PlanVerbsApi;
   // the reconcile (M6c): in the air on a plan, a save elsewhere waiting
   planReconcile: PlanReconcileApi;
@@ -187,7 +187,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   layer.register(context);
   hooks.reading = layer;
   // the plan verbs (M6 spec §4)
-  const verbs = new PlanVerbs({ server: s, say, ui, docs, planDocs, options: () => plansOptions, landed });
+  const verbs = new PlanVerbs({ server: s, say, planDocs, options: () => plansOptions, landed, log });
   planHold.verbs = verbs;
   verbs.register(context);
   // new step, excerpt and toggle: the server's source actions (spec §4.4)
@@ -275,7 +275,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       }
     }),
   );
-  registerNotYet(context, say);
+  registerServerNamed(context, say);
   void (async () => {
     for (const r of await discover()) await s.addRoot(r);
     if (s.roots().length > 0) await s.start();

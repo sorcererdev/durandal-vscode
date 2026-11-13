@@ -1,14 +1,7 @@
 import { CLIENT_COMMANDS } from './protocol';
 
-// The commands later milestones build (spec §6); until then each says so when run.
-export const NOT_YET: Record<string, { title: string; milestone: number }> = {
-  'durandal.plan.accept': { title: 'Plan: Accept', milestone: 7 },
-  'durandal.plan.reject': { title: 'Plan: Reject', milestone: 7 },
-};
-
-// The commands built so far, contributed with these titles (spec §6's rest is NOT_YET). The
-// form keys' commands (spec §9) are enabled only while the generate form is open; the
-// suggestion's only while one is shown (M3 spec §4).
+// The commands, contributed with these titles. The form keys' commands (spec §9) are enabled
+// only while the generate form is open; the suggestion's only while one is shown (M3 spec §4).
 export const BUILT: Record<string, { title: string; enablement?: string }> = {
   'durandal.generate': { title: 'Generate…' },
   'durandal.actions': { title: 'Actions Here' },
@@ -24,6 +17,8 @@ export const BUILT: Record<string, { title: string; enablement?: string }> = {
   'durandal.plan.validate': { title: 'Plan: Validate' },
   'durandal.plan.do': { title: 'Plan: Do' },
   'durandal.plan.cancel': { title: 'Plan: Cancel' },
+  'durandal.plan.accept': { title: 'Plan: Accept Ghost' },
+  'durandal.plan.reject': { title: 'Plan: Reject Ghost' },
   'durandal.plan.reconcile': { title: 'Plan: Reconcile' },
   'durandal.plan.errand': { title: 'Plan: Open Past Do' },
   'durandal.plan.newStep': { title: 'Plan: New Step' },

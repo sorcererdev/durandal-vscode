@@ -31,7 +31,7 @@ export function plansOptionsFrom(get: (key: string, fallback: unknown) => unknow
     conceal: conceal === true,
     glyphs: glyphsOf(get('glyphs', {})),
     foldDone: typeof foldDone === 'boolean' ? foldDone : true,
-    // an ask's answer waits beside the plan for Accept all / Reject all, as a validate's does
+    // an ask's answer waits as a ghost under its row, as a validate's does (M7)
     reviewAnswers: get('reviewAnswers', false) === true,
     // "key": only Plan: Reconcile reconciles; "auto" also on entry, landings and saves elsewhere
     reconcile: get('reconcile', 'auto') === 'key' ? 'key' : 'auto',

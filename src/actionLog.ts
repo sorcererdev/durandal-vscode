@@ -14,7 +14,12 @@ export type ActionEvent =
   | { event: 'hinted'; generator: string }
   // ghost text and snippets (durandal.nvim suggest.lua's util.log calls)
   | { event: `${SuggestKind}-${'shown' | 'dismissed' | 'reviewed' | 'applied'}`; generator: string; band?: string; score?: number; model?: boolean }
-  | { event: 'snippet-anticipated'; generator: string; line: number };
+  | { event: 'snippet-anticipated'; generator: string; line: number }
+  // plan ghost blocks (M7 spec §5): held under a row, then decided by a chord or by Tab
+  | { event: 'plan-ghost-shown'; verb: string; blocks: number }
+  | { event: 'plan-ghost-accepted' | 'plan-ghost-rejected'; verb: string; blocks: number; how: 'chord' | 'tab' }
+  // a suggestion's ghost lines inserted as they stand (the hover toolbar's Accept): no fill
+  | { event: 'ghost-inserted'; generator: string };
 
 // logDir is durandal.nvim's: $DURANDAL_LOG_DIR, else the cache directory's durandal folder
 // (nvim's stdpath("cache") honours XDG_CACHE_HOME), so both editors write the same file.

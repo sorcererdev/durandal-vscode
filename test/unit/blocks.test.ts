@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  anchorEnd, fingerprintable, landing, locate, placeBlocks, proposalText, replaces, sectionRange, stamp, throughEdits,
+  anchorEnd, fingerprintable, landing, locate, placeBlocks, replaces, sectionRange, stamp, throughEdits,
 } from '../../src/plans/blocks';
 import { applyLineEdits, factEdits } from '../../src/plans/facts';
 
@@ -102,11 +102,4 @@ test('throughEdits: a row moved by the facts above it; a replaced row is its edi
   assert.equal(throughEdits(facts, 5), 7);
   assert.equal(throughEdits(facts, 7), 8);
   assert.equal(throughEdits(facts, 8), 9);
-});
-
-test('proposalText: the blocks\' lines in order, a blank line between blocks', () => {
-  assert.equal(proposalText([
-    { index: 0, row: 1, replace: false, lines: ['  - a', '  - b'] },
-    { index: 1, row: 3, replace: true, lines: ['- [x] s'] },
-  ]), '  - a\n  - b\n\n- [x] s\n');
 });

@@ -22,6 +22,8 @@ export const NOT_APPLIED = 'VS Code did not apply the edit';
 export const NO_EDIT = 'the server sent no edit';
 export const NO_PAST_DO = 'plans: no past do here';
 export const NO_RECORD = 'plans: no record behind this line';
+// p y / p n on a row with no ghost (plans.lua :49-50)
+export const NO_GHOST = 'no ghost here';
 
 // reconcileWord: what a reconcile landed and what waits in its review (plans.lua reconciled)
 export const reconcileWord = (landed: number, open: number): string => `reconcile: ${landed} facts · ${open} to review`;
@@ -41,9 +43,6 @@ export function doWord(r: ErrandResult): string {
 // landedWord: any other landing; LINES the blocks' lines, not found the dropped and unresolved
 export const landedWord = (verb: Verb, lines: number, r: ErrandResult): string =>
   `${verb}: ${lines} lines · ${num(r.dropped) + num(r.unresolved)} not found · ${num(r.seconds)} s${cost(r)}`;
-
-// promptWord: the blocks waiting beside the plan
-export const promptWord = (verb: Verb, lines: number, blocks: number): string => `${verb}: ${lines} lines in ${blocks} blocks`;
 
 export const testsWord = (r: StepResult): string =>
   `tests: ${num(r.passed)} passed · ${num(r.failed)} failed · ${num(r.seconds)} s`;

@@ -5,17 +5,16 @@ import { join } from 'node:path';
 import pkg from '../../package.json';
 import { GLYPH_NAMES } from '../../src/plans/glyphs';
 import { PLAN_TOKEN_MODIFIERS, PLAN_TOKEN_TYPES } from '../../src/protocol';
-import { BUILT, FORM_KEYS, KEYS, NOT_YET, PREFIX, SERVER_NAMED, SUGGEST_KEYS, notYet, TDD_HERE_WHEN, TDD_WHEN } from '../../src/commandTable';
+import { BUILT, FORM_KEYS, KEYS, PREFIX, SERVER_NAMED, SUGGEST_KEYS, TDD_HERE_WHEN, TDD_WHEN } from '../../src/commandTable';
 
-test('the contributed commands: Health, Restart, the built ones and the not-yet ones, each in the Durandal category', () => {
+test('the contributed commands: Health, Restart and the built ones, each in the Durandal category', () => {
   const ids = pkg.contributes.commands.map(c => c.command).sort();
-  assert.deepEqual(ids, ['durandal.restartServer', 'durandal.showHealth', ...Object.keys(BUILT), ...Object.keys(NOT_YET)].sort());
+  assert.deepEqual(ids, ['durandal.restartServer', 'durandal.showHealth', ...Object.keys(BUILT)].sort());
   assert.ok(pkg.contributes.commands.every(c => c.category === 'Durandal'));
   for (const c of pkg.contributes.commands) {
-    const want = NOT_YET[c.command] ?? BUILT[c.command];
+    const want = BUILT[c.command];
     if (want) assert.equal(c.title, want.title, c.command);
   }
-  assert.ok(!Object.keys(BUILT).some(id => id in NOT_YET), 'a built command is not also not-yet');
   for (const id of Object.keys(SERVER_NAMED)) assert.ok(!ids.includes(id), `${id} is registered, not contributed`);
 });
 
@@ -104,11 +103,10 @@ test('t, shift+t and s also work from the results document and the untitled test
 });
 
 test('M6b: files, stub and test on a step are built; p s, p t, and s and t in a plan', () => {
-  for (const id of ['durandal.plan.files', 'durandal.plan.stub', 'durandal.plan.test']) assert.ok(id in BUILT && !(id in NOT_YET), id);
+  for (const id of ['durandal.plan.files', 'durandal.plan.stub', 'durandal.plan.test']) assert.ok(id in BUILT, id);
   const keys = (id: string) => KEYS.filter(k => k.command === id).map(k => `${k.keys}|${k.when}`);
   assert.deepEqual(keys('durandal.plan.stub'), ['p s|durandal.isPlan', 's|durandal.isPlan']);
   assert.deepEqual(keys('durandal.plan.test'), ['p t|durandal.isPlan', 't|durandal.isPlan']);
-  assert.deepEqual(Object.keys(NOT_YET).sort(), ['durandal.plan.accept', 'durandal.plan.reject']);
   assert.equal(BUILT['durandal.plan.reconcile'].title, 'Plan: Reconcile');
 });
 
@@ -118,7 +116,7 @@ test('the TDD chords match durandal.nvim: t here, shift+t the file, Test All pal
   assert.deepEqual(keys('durandal.test.file'), ['shift+t']);
   assert.deepEqual(keys('durandal.test.all'), []);
   assert.equal(BUILT['durandal.test.here'].title, 'Run the Test Here');
-  for (const id of ['durandal.test.here', 'durandal.test.file', 'durandal.test.all', 'durandal.jump']) assert.ok(id in BUILT && !(id in NOT_YET), id);
+  for (const id of ['durandal.test.here', 'durandal.test.file', 'durandal.test.all', 'durandal.jump']) assert.ok(id in BUILT, id);
 });
 
 test('the webview: a second bundle and the stylesheet, both packaged; lint checks the page too (spec §2)', () => {
@@ -134,7 +132,6 @@ test('the webview: a second bundle and the stylesheet, both packaged; lint check
 
 test('M5: Plan: Review is built; the lens command is registered by its own handler', () => {
   assert.equal(BUILT['durandal.plan.review'].title, 'Plan: Review');
-  assert.ok(!('durandal.plan.review' in NOT_YET));
   assert.ok(!('olifant.plans.review' in SERVER_NAMED));
   assert.deepEqual(KEYS.find(k => k.command === 'durandal.plan.review'), { command: 'durandal.plan.review', keys: 'p r', when: 'durandal.isPlan' });
 });
@@ -195,26 +192,27 @@ test('M6a: the 13 token types with their superTypes, the 6 modifiers, a scope fo
   assert.ok(!Object.keys(scopes).some(k => k.includes('.done')), 'done maps to nothing: the folding does the work');
 });
 
-test('M6b: reviewAnswers is a boolean, false; accept and reject are milestone 7, and say so', () => {
+test('M6b: reviewAnswers is a boolean, false; M7: Plan: Accept Ghost and Plan: Reject Ghost are built on p y and p n', () => {
   const props = pkg.contributes.configuration.properties as Record<string, { type: string; default: unknown; enum?: string[] }>;
   assert.deepEqual([props['durandal.plans.reviewAnswers'].type, props['durandal.plans.reviewAnswers'].default], ['boolean', false]);
   assert.deepEqual([props['durandal.plans.reconcile'].type, props['durandal.plans.reconcile'].default, props['durandal.plans.reconcile'].enum],
     ['string', 'auto', ['auto', 'key']]);
-  assert.equal(NOT_YET['durandal.plan.accept'].milestone, 7);
-  assert.equal(NOT_YET['durandal.plan.reject'].milestone, 7);
-  assert.equal(notYet('Plan: Accept', 7), 'Durandal: Plan: Accept is not implemented yet (milestone 7)');
+  assert.equal(BUILT['durandal.plan.accept'].title, 'Plan: Accept Ghost');
+  assert.equal(BUILT['durandal.plan.reject'].title, 'Plan: Reject Ghost');
+  assert.deepEqual(KEYS.find(k => k.command === 'durandal.plan.accept'), { command: 'durandal.plan.accept', keys: 'p y', when: 'durandal.isPlan' });
+  assert.deepEqual(KEYS.find(k => k.command === 'durandal.plan.reject'), { command: 'durandal.plan.reject', keys: 'p n', when: 'durandal.isPlan' });
 });
 
 test('M6b: ask, validate, do and cancel are built; Plan: Cancel is palette-only', () => {
   for (const id of ['durandal.plan.ask', 'durandal.plan.validate', 'durandal.plan.do', 'durandal.plan.cancel']) {
-    assert.ok(id in BUILT && !(id in NOT_YET), id);
+    assert.ok(id in BUILT, id);
   }
   assert.equal(BUILT['durandal.plan.cancel'].title, 'Plan: Cancel');
   assert.ok(!KEYS.some(k => k.command === 'durandal.plan.cancel'));
 });
 
 test('M6b: new step (p enter), excerpt and toggle are built; toggle is Plan: Toggle Step', () => {
-  for (const id of ['durandal.plan.newStep', 'durandal.plan.excerpt', 'durandal.plan.toggle']) assert.ok(id in BUILT && !(id in NOT_YET), id);
+  for (const id of ['durandal.plan.newStep', 'durandal.plan.excerpt', 'durandal.plan.toggle']) assert.ok(id in BUILT, id);
   assert.equal(BUILT['durandal.plan.newStep'].title, 'Plan: New Step');
   assert.equal(BUILT['durandal.plan.toggle'].title, 'Plan: Toggle Step');
   assert.deepEqual(KEYS.find(k => k.command === 'durandal.plan.newStep'), { command: 'durandal.plan.newStep', keys: 'p enter', when: 'durandal.isPlan' });

@@ -148,6 +148,3 @@ export function landing(lines: readonly string[], facts: readonly TextEdit0[], p
   }
   return { lines: out, rows };
 }
-
-// proposalText: the blocks' lines in order, a blank line between blocks (the prompt's document)
-export const proposalText = (placed: readonly Placed[]): string => placed.map(p => p.lines.join('\n')).join('\n\n') + '\n';
