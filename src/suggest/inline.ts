@@ -6,11 +6,28 @@ import type { ClientHooks } from '../server';
 import type { Controller } from './controller';
 import { FILL, fillCommand, Fill } from './fill';
 import { early, fetchFailure, GateIn, inlineGate, snippetData } from './gate';
+import { GhostItem, ghostItem, ServedLog } from './ghostItem';
 
 const asRange = (r: Range) => new vscode.Range(r.start.line, r.start.character, r.end.line, r.end.character);
 const protoRange = (r: vscode.Range): Range => ({
   start: { line: r.start.line, character: r.start.character }, end: { line: r.end.line, character: r.end.character },
 });
+
+// asInline: a ghost's item as VS Code's. A plain string, never a snippet: a snippet with tab
+// stops turns a word-wise accept into a whole one (M7 plan checks §4).
+export const asInline = (g: GhostItem): vscode.InlineCompletionItem =>
+  new vscode.InlineCompletionItem(g.insertText, new vscode.Range(g.line, 0, g.line, g.end), g.command);
+
+// serve: a ghost's item at LINE of DOCUMENT, a plan's or a suggestion's: the line as it is now
+// becomes TEXT(the line), with COMMAND(ARG) on a full commit; none where ghostItem refuses one
+// (deviation 4). Every ask is recorded in LOG, a refusal too.
+export function serve(log: ServedLog, document: vscode.TextDocument, line: number,
+  text: (lineText: string) => string | undefined, command: string, arg: unknown): vscode.InlineCompletionItem[] {
+  const lineText = document.lineAt(line).text;
+  const g = ghostItem(line, lineText, text(lineText), command, arg);
+  log.record({ uri: document.uri.toString(), line, insertText: g?.insertText, args: arg });
+  return g ? [asInline(g)] : [];
+}
 
 // Inline is the client middleware's ghost and snippet hooks (M3 spec §3.1/3.2): the inline
 // item olifant anticipates, gated and given the fill command; the completion list's snippets

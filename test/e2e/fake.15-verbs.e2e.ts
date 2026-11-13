@@ -497,6 +497,119 @@ describe('the plan verbs (fake server)', () => {
     assert.deepEqual(a.shown.slice(from), []);
   });
 
+  // asksAt: the asks for a plan ghost's item on ROW after the count FROM; servedAt: those served
+  const asksAt = (a: Awaited<ReturnType<typeof api>>, from: number, row: number) =>
+    a.planVerbs.served.since(from).filter(s => s.uri === uriOf(PLAN) && s.line === row);
+  const servedAt = (a: Awaited<ReturnType<typeof api>>, from: number, row: number) =>
+    asksAt(a, from, row).filter(s => s.insertText !== undefined);
+
+  it('the cursor on a ghost row hands VS Code the row and its lines, mid-line; a commit (Tab) accepts them', async () => {
+    const a = await running();
+    const outcomes = sent('olifant/plans/outcome').length;
+    const from = actionLog().length;
+    const ed = await validated();
+    const n = a.planVerbs.served.count;
+    onRow(ed, 5, 4);
+    await until(() => servedAt(a, n, 5).length > 0, 'the ghost served');
+    assert.equal(servedAt(a, n, 5).at(-1)!.insertText, '- e target line\n  - ok');
+    await sleep(400);
+    const fired = a.landed.fired.length;
+    await vscode.commands.executeCommand('editor.action.inlineSuggest.commit');
+    await until(() => lines()[6] === '  - ok', 'the ghost committed');
+    assert.equal(lines()[5], '- e target line');
+    await until(() => sent('olifant/plans/outcome').length === outcomes + 1, 'the outcome');
+    assert.deepEqual(outcomeParams(outcomes), [{ textDocument: { uri: uriOf(PLAN) }, id: 'V1', block: 0, outcome: 'accepted' }]);
+    assert.deepEqual(a.landed.fired.slice(fired), ['accept']);
+    assert.deepEqual(a.planVerbs.ghosts(uriOf(PLAN)), []);
+    assert.deepEqual(a.planVerbs.markers(uriOf(PLAN)), []);
+    assert.deepEqual(events(from, 'plan-ghost-accepted').map(e => e.how), ['tab']);
+    await vscode.commands.executeCommand('undo');
+    assert.equal(docOf(PLAN)!.getText(), TEXT, 'one undo step');
+  });
+
+  it('typing on the ghost row: the item follows the row\'s text, and the commit lands under it', async () => {
+    const a = await running();
+    const ed = await validated();
+    await ed.edit(b => b.insert(new vscode.Position(5, 15), ' more'));
+    const n = a.planVerbs.served.count;
+    onRow(ed, 5, 20);
+    await until(() => servedAt(a, n, 5).length > 0, 'the ghost served');
+    assert.equal(servedAt(a, n, 5).at(-1)!.insertText, '- e target line more\n  - ok');
+    await sleep(400);
+    await vscode.commands.executeCommand('editor.action.inlineSuggest.commit');
+    await until(() => lines()[6] === '  - ok', 'committed under the typed row');
+    assert.equal(lines()[5], '- e target line more');
+  });
+
+  it('Esc on a ghost row hides it until the cursor leaves the row and comes back (spec §0.10)', async () => {
+    const a = await running();
+    const ed = await validated();
+    const n = a.planVerbs.served.count;
+    onRow(ed, 5, 2);
+    await until(() => servedAt(a, n, 5).length > 0, 'the ghost served');
+    await sleep(400);
+    await vscode.commands.executeCommand('durandal.plan.ghostEscape');
+    const m = a.planVerbs.served.count;
+    onRow(ed, 5, 6);
+    await sleep(500);
+    assert.deepEqual(a.planVerbs.served.since(m), [], 'not asked again on the row');
+    await vscode.commands.executeCommand('editor.action.inlineSuggest.commit');
+    await sleep(300);
+    assert.equal(docOf(PLAN)!.getText(), TEXT, 'nothing to commit');
+    onRow(ed, 1);
+    await sleep(200);
+    onRow(ed, 5, 6);
+    await until(() => servedAt(a, m, 5).length > 0, 'asked again on return');
+    assert.deepEqual(a.planVerbs.ghosts(uriOf(PLAN)).map(g => g.row), [5], 'Esc decides nothing');
+  });
+
+  it('p n with the ghost drawn hides it: a commit then writes nothing', async () => {
+    const a = await running();
+    const ed = await validated();
+    const n = a.planVerbs.served.count;
+    onRow(ed, 5, 3);
+    await until(() => servedAt(a, n, 5).length > 0, 'the ghost served');
+    await sleep(400);
+    await vscode.commands.executeCommand('durandal.plan.reject');
+    await vscode.commands.executeCommand('editor.action.inlineSuggest.commit');
+    await sleep(300);
+    assert.equal(docOf(PLAN)!.getText(), TEXT);
+  });
+
+  it('a do\'s step re-spelled is not drawn inline (no deletion in ghost text); its marker stays and p y writes it', async () => {
+    const a = await running();
+    reply('olifant/plans/do', {
+      id: 'D2', verb: 'do', facts: [], dropped: 0, unresolved: 0, seconds: 2, cost: null, changed: [], review: null,
+      blocks: [{ after: 8, after_text: null, lines: [{ text: '- [x] step @src/a.py:Foo', fp: null }, { text: '  - did it', fp: null }] }],
+    });
+    const ed = await at(8);
+    const n = a.planVerbs.served.count;
+    await vscode.commands.executeCommand('durandal.plan.do');
+    onRow(ed, 8, 3);
+    await until(() => asksAt(a, n, 8).length > 0, 'the ghost asked for');
+    await sleep(300);
+    assert.deepEqual(servedAt(a, n, 8), [], 'asked, and refused');
+    assert.deepEqual(a.planVerbs.markers(uriOf(PLAN)), [{ row: 8, text: 'ai · +2 lines' }]);
+    await vscode.commands.executeCommand('durandal.plan.accept');
+    assert.deepEqual(lines().slice(8, 10), ['- [x] step @src/a.py:Foo', '  - did it']);
+  });
+
+  it('a native commit from before a restart does nothing, even with a new ghost on the row', async () => {
+    const a = await running();
+    const ed = await validated();
+    const n = a.planVerbs.served.count;
+    onRow(ed, 5);
+    await until(() => servedAt(a, n, 5).length > 0, 'the ghost served');
+    const old = servedAt(a, n, 5).at(-1)!.args;
+    await restart();
+    await validated();
+    const outcomes = sent('olifant/plans/outcome').length;
+    await vscode.commands.executeCommand('durandal.plan.ghostAccepted', old);
+    await sleep(300);
+    assert.equal(sent('olifant/plans/outcome').length, outcomes);
+    assert.deepEqual(a.planVerbs.ghosts(uriOf(PLAN)), [{ row: 5, lines: ['  - ok'], marker: 'ai · +1 line' }]);
+  });
+
   // the source code actions the plan chords asked (VS Code's lightbulb asks its own, without only)
   const actionsAsked = () => sent('textDocument/codeAction')
     .filter(m => m.params.textDocument.uri === uriOf(PLAN) && (m.params.context?.only ?? []).includes('source'));

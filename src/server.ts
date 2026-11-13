@@ -35,6 +35,9 @@ export interface ClientHooks {
     completions(document: vscode.TextDocument, items: vscode.CompletionItem[]): void;
     resolved(item: vscode.CompletionItem, resolved: vscode.CompletionItem): void;
   };
+  // plan ghost blocks (M7 spec §3.2): the cursor row's ghost as an inline item; undefined when
+  // the row has no ghost (the suggestions' path then runs)
+  planGhost?: { item(document: vscode.TextDocument, position: vscode.Position): vscode.InlineCompletionItem[] | undefined };
   // olifant/suggestion: what follows the last edit, pushed (M3 spec §3.3)
   suggestion?(s: Suggestion): void;
   // the server's work-done progress, every begin, report and end the library shows (M5 spec
@@ -195,6 +198,8 @@ export class Server {
           return hints;
         },
         provideInlineCompletionItems: async (document, position, context, token, next) => {
+          const ghost = hooks.planGhost?.item(document, position);
+          if (ghost) return ghost;
           const s = hooks.suggest;
           const lc = made.lc;
           if (!s || !lc) return next(document, position, context, token);

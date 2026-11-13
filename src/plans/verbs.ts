@@ -4,15 +4,17 @@ import { errorMessage } from '../errors';
 import type { Landed } from '../landed';
 import { ErrandParams, ErrandResult, Olifant } from '../protocol';
 import { NOT_RUNNING, Say, Server } from '../server';
+import type { ServedLog } from '../suggest/ghostItem';
 import { CANCELLED } from '../tdd/flights';
 import { landing, Placed, placeBlocks, throughEdits, Verb } from './blocks';
 import { applyLineEdits, factEdits, TextEdit0 } from './facts';
 import { Ghost, Ghosts, rowLines } from './ghosts';
-import { GhostView } from './ghostView';
+import { GHOST_ACCEPTED, GhostAcceptedArgs, GhostView } from './ghostView';
 import { planHere, runningHere } from './here';
 import { linesOf, writeLines } from './lineEdits';
 import type { PlanDocs } from './planDocs';
 import { LineChange, shiftRows } from './rows';
+import { RowMarks } from './rowMarks';
 import type { PlansOptions } from './settings';
 import {
   CANCELLED_WORD, doWord, landedWord, NO_GHOST, NO_PLAN, NOT_APPLIED, NOTHING_RUNNING, nothingBack, PENDING, RUNNING_HERE,
@@ -34,6 +36,8 @@ export interface PlanVerbsApi {
   ghosts(uri: string): { row: number; lines: string[]; marker: string }[];
   // the markers drawn on a plan's visible editors now, top to bottom
   markers(uri: string): { row: number; text: string }[];
+  // every ask for a plan ghost's inline item, the item served or refused (the last ones kept)
+  served: ServedLog;
 }
 
 // Entry: a verb in the air. row follows the edits (nvim's extmark); request is the row sent; tick
@@ -63,17 +67,15 @@ export class PlanVerbs {
   private readonly flashes: { uri: string; row: number }[] = [];
   // accepting: the plans whose p y edit is in the air; another p y or p n there finds no ghost
   private readonly accepting = new Set<string>();
-  // drawn: the pending marks' texts painted on each plan's visible editors, top to bottom
-  private readonly drawn = new Map<string, string[]>();
-  private readonly pending = vscode.window.createTextEditorDecorationType({
-    after: { color: new vscode.ThemeColor('editorCodeLens.foreground') },
-  });
+  // the pending marks at the end of the running rows
+  private readonly pending = new RowMarks({ color: new vscode.ThemeColor('editorCodeLens.foreground') }, uri =>
+    [...this.entries].filter(e => e.uri === uri).sort((a, b) => a.row - b.row).map(e => ({ row: e.row, text: PENDING[e.verb] })));
   private readonly flash = vscode.window.createTextEditorDecorationType({
     isWholeLine: true, backgroundColor: new vscode.ThemeColor('diffEditor.insertedLineBackground'),
   });
 
   constructor(private readonly d: VerbsDeps) {
-    this.view = new GhostView({ ghosts: this.ghosts });
+    this.view = new GhostView({ ghosts: this.ghosts, gen: () => this.gen, busy: uri => this.accepting.has(uri) });
   }
 
   setReconcile(r: { cancel(uri: string): boolean }): void { this.reconcile = r; }
@@ -89,19 +91,21 @@ export class PlanVerbs {
       vscode.commands.registerCommand('durandal.plan.cancel', () => this.cancel()),
       vscode.commands.registerCommand('durandal.plan.accept', () => this.decide('accepted')),
       vscode.commands.registerCommand('durandal.plan.reject', () => this.decide('rejected')),
+      vscode.commands.registerCommand(GHOST_ACCEPTED, (a: GhostAcceptedArgs) => this.ghostAccepted(a)),
       vscode.workspace.onDidChangeTextDocument(e => this.moved(e)),
       vscode.workspace.onDidCloseTextDocument(doc => this.closed(doc.uri.toString())),
-      vscode.window.onDidChangeVisibleTextEditors(() => this.paintAll()),
+      vscode.window.onDidChangeVisibleTextEditors(() => this.pending.paintAll()),
     );
   }
 
   api(): PlanVerbsApi {
     return {
       running: uri => [...this.entries].filter(e => e.uri === keyOf(uri)).map(e => ({ row: e.row, verb: e.verb })),
-      pending: uri => [...(this.drawn.get(keyOf(uri)) ?? [])],
+      pending: uri => this.pending.drawnOn(keyOf(uri)).map(m => m.text),
       flashes: this.flashes,
       ghosts: uri => this.view.rows(keyOf(uri)).map(r => ({ row: r.row, lines: r.blocks.flatMap(b => b.lines), marker: r.marker })),
       markers: uri => this.view.markers(keyOf(uri)),
+      served: this.view.served,
     };
   }
 
@@ -134,7 +138,7 @@ export class PlanVerbs {
     }
     const e: Entry = { uri: key, verb, row, request: row, tick: doc.version, cts: new vscode.CancellationTokenSource(), gone: false };
     this.entries.add(e);
-    this.paint(key);
+    this.pending.paint(key);
     const p: ErrandParams = { textDocument: { uri: key }, line: row, ...params };
     try {
       let r: ErrandResult | null;
@@ -207,7 +211,7 @@ export class PlanVerbs {
   private hold(uri: string, verb: Verb, placed: readonly Placed[], id: string | undefined): void {
     this.ghosts.add(uri, verb, id, placed);
     this.d.log.write({ event: 'plan-ghost-shown', verb, blocks: placed.length });
-    this.view.paint(uri);
+    this.view.shown(uri);
   }
 
   // decide: p y / p n on the active plan's cursor row, for every ghost block there (spec §3.3,
@@ -246,9 +250,28 @@ export class PlanVerbs {
       }
       this.flashRow(doc, h.row + after.length - 1);
     }
-    // a server stop or a close while the edit was in the air took them without an outcome
-    const taken = this.ghosts.takeKeys(h.uri, keys);
-    if (taken.length > 0) this.decided(h.uri, taken, outcome, 'chord');
+    this.settle(h.uri, keys, outcome, 'chord');
+  }
+
+  // item: the inline middleware's plan ghost at POSITION (ClientHooks.planGhost)
+  item(document: vscode.TextDocument, position: vscode.Position): vscode.InlineCompletionItem[] | undefined {
+    return this.view.item(document, position);
+  }
+
+  // ghostAccepted: VS Code wrote a row's ghost itself (Tab, the hover toolbar's Accept): its
+  // blocks are decided as by p y's, once written (spec §3.3). From an older server start: nothing.
+  // The item is not served while a p y writes the plan (busy), and whichever of the two takes
+  // the blocks first decides them.
+  private ghostAccepted(a: GhostAcceptedArgs): void {
+    if (a.gen !== this.gen) return;
+    this.settle(a.uri, a.keys, 'accepted', 'tab');
+  }
+
+  // settle: the blocks named by KEYS, written (accepted) or not (rejected), decided: those still
+  // in the store (a server stop, a close or the other accept took the rest without an outcome)
+  private settle(uri: string, keys: readonly number[], outcome: 'accepted' | 'rejected', how: 'chord' | 'tab'): void {
+    const taken = this.ghosts.takeKeys(uri, keys);
+    if (taken.length > 0) this.decided(uri, taken, outcome, how);
   }
 
   // decided: BLOCKS (taken from the store) are decided: each one's outcome to the server, the
@@ -257,7 +280,7 @@ export class PlanVerbs {
     this.outcomes(uri, blocks, outcome);
     this.d.log.write({ event: outcome === 'accepted' ? 'plan-ghost-accepted' : 'plan-ghost-rejected', verb: blocks[0].verb, blocks: blocks.length, how });
     if (outcome === 'accepted') this.d.landed.fire('accept');
-    this.view.paint(uri);
+    this.view.settled(uri);
   }
 
   // writeBlocks: DOC's LINES (read just now, no await since) with FACTS and the PLACED blocks
@@ -314,8 +337,8 @@ export class PlanVerbs {
       this.drop(e);
     }
     this.ghosts.clear();
-    this.paintAll();
-    this.view.paintAll();
+    this.pending.paintAll();
+    this.view.settled();
   }
 
   // a closed plan's verbs land nothing and say nothing; its ghosts go without an outcome
@@ -332,7 +355,7 @@ export class PlanVerbs {
   private drop(e: Entry): void {
     if (!this.entries.delete(e)) return;
     e.cts.dispose();
-    this.paint(e.uri);
+    this.pending.paint(e.uri);
   }
 
   // moved: the rows in the air and the ghosts' rows follow the plan's edits
@@ -349,30 +372,8 @@ export class PlanVerbs {
       e.row = shiftRows(e.row, cs);
       any = true;
     }
-    if (any) this.paint(uri);
+    if (any) this.pending.paint(uri);
     if (this.ghosts.shift(uri, cs)) this.view.paint(uri);
-  }
-
-  // paint: the pending marks at the end of the running rows, in every editor on URI
-  private paint(uri: string): void {
-    this.drawn.delete(uri);
-    for (const ed of vscode.window.visibleTextEditors) if (ed.document.uri.toString() === uri) this.paintEditor(ed);
-  }
-
-  private paintAll(): void {
-    this.drawn.clear();
-    for (const ed of vscode.window.visibleTextEditors) this.paintEditor(ed);
-  }
-
-  private paintEditor(ed: vscode.TextEditor): void {
-    const doc = ed.document;
-    const uri = doc.uri.toString();
-    const marks = [...this.entries].filter(e => e.uri === uri && e.row < doc.lineCount).sort((a, b) => a.row - b.row);
-    ed.setDecorations(this.pending, marks.map(e => {
-      const end = doc.lineAt(e.row).range.end;
-      return { range: new vscode.Range(end, end), renderOptions: { after: { contentText: PENDING[e.verb] } } };
-    }));
-    if (marks.length > 0) this.drawn.set(uri, marks.map(e => PENDING[e.verb]));
   }
 
   // flashRow: the landed row for 300 ms (plans.lua flash)

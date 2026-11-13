@@ -137,7 +137,7 @@ test('M5: Plan: Review is built; the lens command is registered by its own handl
 });
 
 // the context keys the extension sets (spec §8); pauseOpen is informational, nothing binds it
-const KNOWN_KEYS = ['inProject', 'isPlan', 'pauseOpen', 'formOpen', 'ghostVisible', 'ghostKind', 'ghostBand'];
+const KNOWN_KEYS = ['inProject', 'isPlan', 'pauseOpen', 'formOpen', 'ghostVisible', 'ghostKind', 'ghostBand', 'planGhostRow'];
 
 test('M5: the when keys: each one the manifest reads is known and set; isPlan and pauseOpen among them (spec §8)', () => {
   const clauses = [
@@ -152,6 +152,16 @@ test('M5: the when keys: each one the manifest reads is known and set; isPlan an
   const files = (readdirSync(src, { recursive: true }) as string[]).filter(f => f.endsWith('.ts'));
   const text = files.map(f => readFileSync(join(src, f), 'utf8')).join('\n');
   for (const k of KNOWN_KEYS) assert.ok(text.includes(`'setContext', 'durandal.${k}'`), `durandal.${k} is never set`);
+});
+
+test('M7: Esc on a plan ghost row hides the ghost until the cursor leaves the row; the command is registered, not contributed', () => {
+  assert.deepEqual(SUGGEST_KEYS.find(k => k.command === 'durandal.plan.ghostEscape'), {
+    command: 'durandal.plan.ghostEscape', key: 'escape',
+    when: 'inlineSuggestionVisible && durandal.planGhostRow && editorTextFocus && !suggestWidgetVisible',
+  });
+  for (const id of ['durandal.plan.ghostEscape', 'durandal.plan.ghostAccepted']) {
+    assert.ok(!pkg.contributes.commands.some(c => c.command === id), `${id} is registered, not contributed`);
+  }
 });
 
 test('M6a: the plan settings and their defaults (spec §3.1, §0.7)', () => {

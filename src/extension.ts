@@ -190,6 +190,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   const verbs = new PlanVerbs({ server: s, say, planDocs, options: () => plansOptions, landed, log });
   planHold.verbs = verbs;
   verbs.register(context);
+  hooks.planGhost = verbs;
   // new step, excerpt and toggle: the server's source actions (spec §4.4)
   new PlanActions({ server: s, say, planDocs, layer }).register(context);
   // files, and stub and test on a step (spec §4.4)

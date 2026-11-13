@@ -50,6 +50,8 @@ export const SUGGEST_KEYS: { command: string; key: string; when: string }[] = [
   { command: 'durandal.suggest.accept', key: 'tab', when: "durandal.ghostVisible && durandal.ghostKind != 'snippet' && durandal.ghostBand != 'hint' && editorTextFocus && !inlineSuggestionVisible && !suggestWidgetVisible && !inSnippetMode && !editorReadonly" },
   { command: 'durandal.suggest.dismiss', key: 'escape', when: "inlineSuggestionVisible && durandal.ghostVisible && durandal.ghostKind == 'snippet'" },
   { command: 'durandal.suggest.dismiss', key: 'escape', when: "durandal.ghostVisible && durandal.ghostKind != 'snippet' && durandal.ghostBand != 'hint' && editorTextFocus && !inlineSuggestionVisible && !suggestWidgetVisible && !editorHasSelection && !editorHasMultipleSelections && !findWidgetVisible && !parameterHintsVisible && !inSnippetMode && !renameInputVisible" },
+  // Esc on a plan ghost row (M7 spec §0.10): hidden until the cursor leaves the row
+  { command: 'durandal.plan.ghostEscape', key: 'escape', when: 'inlineSuggestionVisible && durandal.planGhostRow && editorTextFocus && !suggestWidgetVisible' },
 ];
 
 // Commands the server names in its inlay hints (⚡) and code lenses: registered so a click
