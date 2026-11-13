@@ -57,7 +57,9 @@ durandal.nvim writes). `durandal.actionLog` turns it off.
   snippets by choice; picking one fills its holes the same way.
 - **Follow-ups**: after an edit settles, what follows from it (the match arms for a new failure,
   a test for a new command) shows at the end of the line as `⚡ Tab: review <name> (<summary>)`;
-  a multi-line block as `⚡ Tab: <name> (+N lines)`. `Tab` opens the review window on the plan;
+  a multi-line block as `⚡ Tab: <name> (+N lines)`, its lines shown under the line when the
+  block goes there. Accepting those lines from VS Code's hover toolbar inserts them as they
+  stand, holes unfilled. `Tab` opens the review window on the plan;
   Apply plans it again with the model and applies it. `Esc` dismisses it on that line.
 - **Recognitions**: code written your own way that a convention covers shows as
   `⚡ <name> — Tab: review` (an offer), `⚡ <name> or a <other> — Tab: choose` (two fit: pick
@@ -155,8 +157,9 @@ says:
   validates it, `P D` does the step. The row shows `⋯ asking` while it runs; `Durandal: Plan:
   Cancel` stops it. An ask's answer goes straight in, fingerprints stamped, and one undo takes
   it back (`durandal.plans.reviewAnswers` makes it wait). A validate's blocks, and a do's in a
-  project without git, open beside the plan behind Accept all / Reject all. A do in a git
-  project opens its review.
+  project without git, wait under their row as a ghost: the row ends in `ai · +N lines` (hover
+  it to read them), the lines show under the row while the cursor is on it, `P Y` (or `Tab`)
+  writes them and `P N` drops them. A do in a git project opens its review.
 - **Steps.** `P Enter` adds a step under the row, `P E` shows the step's code (or folds an
   excerpt), `P X` ticks or reopens a step, `P F` lists the plan's files, and `S` / `T` (or `P S`
   / `P T`) stub and run the step's tests.
@@ -185,7 +188,7 @@ says:
 - `durandal.plans.conceal`: plan glyphs (off by default).
 - `durandal.plans.glyphs`: glyph overrides by name.
 - `durandal.plans.foldDone`: close done work on entry, not only excerpts (on by default).
-- `durandal.plans.reviewAnswers`: an ask's answer waits for Accept all / Reject all (off by default).
+- `durandal.plans.reviewAnswers`: an ask's answer waits as a ghost under its row (off by default).
 - `durandal.plans.reconcile`: `"auto"` (default) reconciles on entry, landings and saves elsewhere; `"key"` only on Plan: Reconcile.
 - `durandal.trace.server`: LSP traffic into the Durandal output channel.
 
