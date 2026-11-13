@@ -10,8 +10,9 @@ const TRIGGER = 'editor.action.inlineSuggest.trigger';
 const HIDE = 'editor.action.inlineSuggest.hide';
 
 // GhostAcceptedArgs: the native commit's argument: the blocks it wrote by key (VS Code's own
-// edit may move the row before the command runs), and the server start they came from
-export interface GhostAcceptedArgs { uri: string; gen: number; keys: number[] }
+// edit may move the row before the command runs), the server start they came from, and the
+// last row the commit writes (its flash)
+export interface GhostAcceptedArgs { uri: string; gen: number; keys: number[]; last: number }
 
 // GhostView draws the ghost rows (M7 spec §3.2): each one ends in `ai · +N lines`, in VS Code's
 // ghost-text colour, and its hover shows the row's proposal, so every ghost can be read without
@@ -60,12 +61,12 @@ export class GhostView implements vscode.Disposable {
   // paint: the markers of URI's ghost rows, in every editor on it
   paint(uri: string): void {
     this.marks.paint(uri);
-    this.key(this.cursor());
+    this.key(this.cursor(vscode.window.activeTextEditor));
   }
 
   paintAll(): void {
     this.marks.paintAll();
-    this.key(this.cursor());
+    this.key(this.cursor(vscode.window.activeTextEditor));
   }
 
   forget(uri: string): void { this.marks.forget(uri); }
@@ -88,8 +89,10 @@ export class GhostView implements vscode.Disposable {
     const blocks = this.d.ghosts.at(uri, position.line);
     if (blocks.length === 0) return undefined;
     if (this.d.busy(uri)) return [];
-    const args: GhostAcceptedArgs = { uri, gen: this.d.gen(), keys: blocks.map(b => b.key) };
-    return serve(this.served, document, position.line, text => rowLines(text, blocks).join('\n'), GHOST_ACCEPTED, args);
+    const row = position.line;
+    const landed = rowLines(document.lineAt(row).text, blocks);
+    const args: GhostAcceptedArgs = { uri, gen: this.d.gen(), keys: blocks.map(b => b.key), last: row + landed.length - 1 };
+    return serve(this.served, document, row, () => landed.join('\n'), GHOST_ACCEPTED, args);
   }
 
   // shown: a new ghost on URI: drawn, Esc's memory of it forgotten, shown if the cursor is there
@@ -104,14 +107,14 @@ export class GhostView implements vscode.Disposable {
   // on the row asks; after an Esc there, not until the cursor has left the row.
   private selected(ed: vscode.TextEditor | undefined): void {
     if (ed && ed !== vscode.window.activeTextEditor) return;
-    const at = this.cursor(ed);
+    const at = this.cursor(ed ?? vscode.window.activeTextEditor);
     if (this.escaped && (!at || at.uri !== this.escaped.uri || at.row !== this.escaped.row)) this.escaped = undefined;
     this.key(at);
     if (at && !this.escaped) void vscode.commands.executeCommand(TRIGGER);
   }
 
   // cursor: the active editor's cursor (its primary selection) when it is on a ghost row
-  private cursor(ed = vscode.window.activeTextEditor): { uri: string; row: number } | undefined {
+  private cursor(ed: vscode.TextEditor | undefined): { uri: string; row: number } | undefined {
     if (!ed) return undefined;
     const uri = ed.document.uri.toString();
     const row = ed.selection.active.line;
@@ -125,9 +128,15 @@ export class GhostView implements vscode.Disposable {
     void vscode.commands.executeCommand('setContext', 'durandal.planGhostRow', on);
   }
 
+  // hide: the ghost text VS Code shows now hidden; once it resolves, a commit VS Code made before
+  // it has run its command (the edit, the command and this answer come in that order)
+  async hide(): Promise<void> {
+    await vscode.commands.executeCommand(HIDE);
+  }
+
   // escape: Esc on a ghost row: hidden, and the row remembered
   private async escape(): Promise<void> {
-    this.escaped = this.cursor();
+    this.escaped = this.cursor(vscode.window.activeTextEditor);
     await vscode.commands.executeCommand(HIDE);
   }
 

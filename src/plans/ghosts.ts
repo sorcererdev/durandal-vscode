@@ -30,6 +30,11 @@ export class Ghosts {
     return [...new Set((this.m.get(uri) ?? []).map(g => g.row))].sort((a, b) => a - b);
   }
 
+  // has: whether any block named by KEYS is still here
+  has(uri: string, keys: readonly number[]): boolean {
+    return (this.m.get(uri) ?? []).some(g => keys.includes(g.key));
+  }
+
   // takeKeys: the blocks named by KEYS that are still here, removed
   takeKeys(uri: string, keys: readonly number[]): Ghost[] {
     return this.remove(uri, g => keys.includes(g.key));

@@ -231,26 +231,32 @@ export class PlanVerbs {
       return;
     }
     const keys = blocks.map(b => b.key);
-    if (outcome === 'accepted') {
+    if (outcome === 'rejected') {
+      this.settle(h.uri, keys, outcome, 'chord');
+      return;
+    }
+    this.accepting.add(h.uri);
+    try {
+      // the row's ghost text hidden first, so no Tab writes a second copy while this edit is in
+      // the air; a commit VS Code made before the hide has decided the blocks by now
+      await this.view.hide();
+      // the blocks where they are now (typing during the hide moves them)
+      const row = this.ghosts.rows(h.uri).find(r => this.ghosts.at(h.uri, r).some(b => keys.includes(b.key)));
+      if (row === undefined) return;
+      const now = this.ghosts.at(h.uri, row).filter(b => keys.includes(b.key));
       const doc = h.editor.document;
       // read, compute and write with no await between
       const lines = linesOf(doc);
-      const after = rowLines(lines[h.row] ?? '', blocks);
-      this.accepting.add(h.uri);
-      let wrote: boolean;
-      try {
-        wrote = await writeLines(doc, lines, [...lines.slice(0, h.row), ...after, ...lines.slice(h.row + 1)]);
-      } finally {
-        this.accepting.delete(h.uri);
-      }
-      if (!wrote) {
-        // nothing was written: the ghosts stay
-        void this.d.say('error', NOT_APPLIED);
+      const after = rowLines(lines[row] ?? '', now);
+      if (!(await writeLines(doc, lines, [...lines.slice(0, row), ...after, ...lines.slice(row + 1)]))) {
+        // nothing was written: the ghosts stay (unless something else decided them meanwhile)
+        if (this.ghosts.has(h.uri, now.map(b => b.key))) void this.d.say('error', NOT_APPLIED);
         return;
       }
-      this.flashRow(doc, h.row + after.length - 1);
+      this.settle(h.uri, now.map(b => b.key), outcome, 'chord', row + after.length - 1);
+    } finally {
+      this.accepting.delete(h.uri);
     }
-    this.settle(h.uri, keys, outcome, 'chord');
   }
 
   // item: the inline middleware's plan ghost at POSITION (ClientHooks.planGhost)
@@ -264,12 +270,17 @@ export class PlanVerbs {
   // the blocks first decides them.
   private ghostAccepted(a: GhostAcceptedArgs): void {
     if (a.gen !== this.gen) return;
-    this.settle(a.uri, a.keys, 'accepted', 'tab');
+    this.settle(a.uri, a.keys, 'accepted', 'tab', a.last);
   }
 
-  // settle: the blocks named by KEYS, written (accepted) or not (rejected), decided: those still
-  // in the store (a server stop, a close or the other accept took the rest without an outcome)
-  private settle(uri: string, keys: readonly number[], outcome: 'accepted' | 'rejected', how: 'chord' | 'tab'): void {
+  // settle: the blocks named by KEYS, written (accepted, LAST the last row written, flashed) or
+  // not (rejected), decided: those still in the store (a server stop, a close or the other
+  // accept took the rest without an outcome)
+  private settle(uri: string, keys: readonly number[], outcome: 'accepted' | 'rejected', how: 'chord' | 'tab', last?: number): void {
+    if (last !== undefined) {
+      const doc = openDoc(uri);
+      if (doc) this.flashRow(doc, last);
+    }
     const taken = this.ghosts.takeKeys(uri, keys);
     if (taken.length > 0) this.decided(uri, taken, outcome, how);
   }

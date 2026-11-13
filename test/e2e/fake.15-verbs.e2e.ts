@@ -448,11 +448,18 @@ describe('the plan verbs (fake server)', () => {
     const ed = await validated();
     const outcomes = sent('olifant/plans/outcome').length;
     const from = actionLog().length;
-    onRow(ed, 5);
-    // typed while p y reads the plan: its edit is made at the older version and VS Code refuses it
-    const typed = ed.edit(b => b.insert(new vscode.Position(0, 0), 'typed\n'));
-    await vscode.commands.executeCommand('durandal.plan.accept');
-    await typed;
+    await ed.edit(b => b.insert(new vscode.Position(0, 0), 'typed\n'));
+    onRow(ed, 6);
+    // VS Code refuses p y's edit: applyEdit answers false once (the extension shares this API
+    // object). Typing while p y runs no longer races its edit: p y hides the ghost text and
+    // reads the plan only after the hide's answer, which follows the typing's change.
+    const applyEdit = vscode.workspace.applyEdit;
+    (vscode.workspace as { applyEdit: unknown }).applyEdit = async () => false;
+    try {
+      await vscode.commands.executeCommand('durandal.plan.accept');
+    } finally {
+      (vscode.workspace as { applyEdit: unknown }).applyEdit = applyEdit;
+    }
     assert.deepEqual([a.shown.at(-1)!.level, a.shown.at(-1)!.text], ['error', 'VS Code did not apply the edit']);
     assert.equal(docOf(PLAN)!.getText(), 'typed\n' + TEXT);
     assert.deepEqual(a.planVerbs.ghosts(uriOf(PLAN)), [{ row: 6, lines: ['  - ok'], marker: 'ai · +1 line' }]);
@@ -523,8 +530,31 @@ describe('the plan verbs (fake server)', () => {
     assert.deepEqual(a.planVerbs.ghosts(uriOf(PLAN)), []);
     assert.deepEqual(a.planVerbs.markers(uriOf(PLAN)), []);
     assert.deepEqual(events(from, 'plan-ghost-accepted').map(e => e.how), ['tab']);
+    assert.deepEqual(a.planVerbs.flashes.at(-1), { uri: uriOf(PLAN), row: 6 }, 'the last row written flashed, as by p y');
     await vscode.commands.executeCommand('undo');
     assert.equal(docOf(PLAN)!.getText(), TEXT, 'one undo step');
+  });
+
+  it('Tab while p y writes the row: the lines land once, decided once, nothing said but the landing', async () => {
+    const a = await running();
+    const outcomes = sent('olifant/plans/outcome').length;
+    const from = actionLog().length;
+    const ed = await validated();
+    const n = a.planVerbs.served.count;
+    onRow(ed, 5, 4);
+    await until(() => servedAt(a, n, 5).length > 0, 'the ghost served');
+    await sleep(400);
+    const said = a.shown.length;
+    // p y starts first (its edit goes out after the hide); VS Code's commit comes while it runs
+    await Promise.all([
+      vscode.commands.executeCommand('durandal.plan.accept'),
+      vscode.commands.executeCommand('editor.action.inlineSuggest.commit'),
+    ]);
+    await sleep(400);
+    assert.deepEqual(lines().slice(5, 8), ['- e target line', '  - ok', '- f']);
+    assert.equal(sent('olifant/plans/outcome').length, outcomes + 1, 'one outcome');
+    assert.equal(events(from, 'plan-ghost-accepted').length, 1);
+    assert.deepEqual(a.shown.slice(said).filter(s => s.level !== 'info'), []);
   });
 
   it('typing on the ghost row: the item follows the row\'s text, and the commit lands under it', async () => {

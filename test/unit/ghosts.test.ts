@@ -46,6 +46,16 @@ test('takeKeys removes and returns the blocks named that are still here', () => 
   assert.deepEqual(g.rows(U), []);
 });
 
+test('has: whether any block named is still here, wherever its row went', () => {
+  const g = new Ghosts();
+  g.add(U, 'validate', 'V1', [p(0, 5, ['a'])]);
+  const k = g.at(U, 5)[0].key;
+  g.shift(U, [{ startLine: 0, startChar: 0, endLine: 0, newLines: 1 }]);
+  assert.equal(g.has(U, [9999, k]), true);
+  g.takeKeys(U, [k]);
+  assert.equal(g.has(U, [k]), false);
+});
+
 // the rows follow the edits as M6b's verbs' rows do (rows.ts, nvim's extmarks without invalidate)
 test('shift: typed above or at column 0 moves the row; a line break inside it does not; a deleted row\'s ghost takes the next row\'s place', () => {
   const g = new Ghosts();
