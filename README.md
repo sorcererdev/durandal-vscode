@@ -26,7 +26,7 @@ own conventions; a project's file opened from outside the workspace joins it.
 
 ## Actions and generators
 
-- **Actions here** (`Ctrl+Alt+D A`, `Cmd+Alt+D A` on macOS): the server's actions at the cursor,
+- **Actions here** (`Ctrl+Alt+D A`): the server's actions at the cursor,
   a rule's fixes first. Pick one: it asks what it still needs, then shows the plan in the review
   window (notes, then each file's diff beside); Enter applies it. With nothing at the cursor it
   says why, or lists the actions elsewhere in the file to jump to.
@@ -71,7 +71,7 @@ durandal.nvim writes). `durandal.actionLog` turns it off.
 
 ## The TDD loop
 
-The chord is Ctrl+Alt+D (Cmd+Alt+D on macOS) followed by a letter.
+The chord is Ctrl+Alt+D (also on macOS) followed by a letter.
 
 | Chord | Command | What it does |
 |---|---|---|
@@ -115,12 +115,12 @@ shows the run, and the next pause or the landing.
 | `q`, `Esc` | Close the tab; the pause stays. |
 | `?` | The keys; any key closes them. |
 
-Closing the tab keeps the pause: `Cmd+Alt+D C` (`Ctrl+Alt+D C`) inside the unit reopens it, and a
+Closing the tab keeps the pause: `Ctrl+Alt+D C` inside the unit reopens it, and a
 note at the end of the unit's last line says so. Editing the file drops the pause, as the server
 does; a conjure elsewhere in the file forgets it. A pause lives ten minutes on the server.
 
 The same tab reviews a plan's do, a past do, and a reconcile's readings. A do's review opens by
-itself when the do ends; the plan's lenses and `Cmd+Alt+D P R` (`Ctrl+Alt+D P R`) on a plan open
+itself when the do ends; the plan's lenses and `Ctrl+Alt+D P R` on a plan open
 any review waiting there. A do review: `a` keeps the change, `r` reverts it, `t` runs the step's
 tests, `p` allows the tools the do was refused, `o` reopens its thread with what to change,
 `[` `]` move between its files. A reconcile: `a` applies the selected reading, `r` leaves it, a
@@ -151,7 +151,7 @@ says:
 - **Claim checks.** Opening or saving a plan, and a second after typing stops in it (triage
   only: olifant sorts the plan's sentences), can start an olifant claim pass that runs paid
   model checks; `[plans] pass_cost = 0` in `.olifant/config.toml` turns it off.
-- **Verbs.** On a plan row, `Cmd+Alt+D P Q` (`Ctrl+Alt+D P Q`) asks the model about it, `P V`
+- **Verbs.** On a plan row, `Ctrl+Alt+D P Q` asks the model about it, `P V`
   validates it, `P D` does the step. The row shows `⋯ asking` while it runs; `Durandal: Plan:
   Cancel` stops it. An ask's answer goes straight in, fingerprints stamped, and one undo takes
   it back (`durandal.plans.reviewAnswers` makes it wait). A validate's blocks, and a do's in a
@@ -162,13 +162,13 @@ says:
   / `P T`) stub and run the step's tests.
 - **The loop.** A plan reconciles with the code when you enter it, when something lands (a
   test run, a stub, a conjure, a do, accepted blocks, a review answered done), and a second
-  after a file elsewhere is saved (only the plans shown in an editor). `Cmd+Alt+D P C`
-  (`Ctrl+Alt+D P C`) reconciles at once and opens the review when readings wait;
+  after a file elsewhere is saved (only the plans shown in an editor). `Ctrl+Alt+D P C`
+  reconciles at once and opens the review when readings wait;
   `durandal.plans.reconcile: "key"` leaves only that. `Durandal: Plan: Cancel` also stops a
   reconcile.
 - **Past dos.** `P O` on a journal line opens the do behind it, read-only, in the review
   window. A step's `N delegations` lens lists its past dos. An excerpt's lens folds it.
-- **Claim checks from the menu.** In a plan, `Cmd+Alt+D A` lists the server's actions on the
+- **Claim checks from the menu.** In a plan, `Ctrl+Alt+D A` lists the server's actions on the
   line: `Check this (~$…)` checks the claim, `Show why` and `Show the code here` open what the
   check found, and plan edits such as `Re-fingerprint this claim` apply directly.
 

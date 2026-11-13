@@ -57,7 +57,7 @@ User rulings (2026-11-09):
    and folds are always on; `reconcile: "auto"`; `foldDone: true`; `reviewAnswers: false`. There
    is no idle setting: idle is the claim pass, always sent; the README names `[plans] pass_cost =
    0` as the off switch and says a pass can cost money.
-8. **Chords** keep the nvim letters under `ctrl+alt+d p` (`cmd+alt+d` on macOS): `q v d y n f c e
+8. **Chords** keep the nvim letters under `ctrl+alt+d p` (also on macOS): `q v d y n f c e
    r x` as in `commandTable.ts` today, plus `p enter` New Step, `p s` Stub, `p t` Test (in a plan
    they shadow the global TDD chords, as nvim's do), `p o` Open Past Do (nvim's `gd` / Enter on a
    journal line; Enter is not remappable in VS Code and Go to Definition stays the server's).

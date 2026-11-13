@@ -11,10 +11,11 @@ export function settingsFrom(get: (key: string, fallback: unknown) => unknown): 
   };
 }
 
-// chordLabel is how a chord reads on this platform; the server prints it in its lenses
+// chordLabel is how a chord reads (the same on every platform: cmd+alt+d is macOS's Dock-hide
+// shortcut, so macOS uses ctrl too); the server prints it in its lenses
 // ("looks done · tick? Ctrl+Alt+D P R").
 export function chordLabel(platform: string, rest: string): string {
-  return `${platform === 'darwin' ? 'Cmd' : 'Ctrl'}+Alt+D ${rest}`;
+  return `Ctrl+Alt+D ${rest}`;
 }
 
 export interface InitOptions {

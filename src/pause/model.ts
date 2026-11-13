@@ -807,7 +807,7 @@ export function conjureLegend(o: { narrow: boolean; proposal: boolean; running: 
 }
 
 // The one table of keys (pause.lua M.keys :1095-1126), as the page names them; CHORD is the
-// reopen chord's label (`Cmd+Alt+D C`).
+// reopen chord's label (`Ctrl+Alt+D C`).
 export function conjureKeys(chord: string): KeyHelp[] {
   return [
     { keys: ['c'], help: 'continue: more rounds with this model' },

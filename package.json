@@ -305,145 +305,145 @@
       {
         "command": "durandal.actions",
         "key": "ctrl+alt+d a",
-        "mac": "cmd+alt+d a",
+        "mac": "ctrl+alt+d a",
         "when": "durandal.inProject"
       },
       {
         "command": "durandal.generate",
         "key": "ctrl+alt+d g",
-        "mac": "cmd+alt+d g",
+        "mac": "ctrl+alt+d g",
         "when": "durandal.inProject"
       },
       {
         "command": "durandal.test.here",
         "key": "ctrl+alt+d t",
-        "mac": "cmd+alt+d t",
+        "mac": "ctrl+alt+d t",
         "when": "(durandal.inProject || resourceScheme == durandal-doc || resourceScheme == untitled) && !durandal.isPlan"
       },
       {
         "command": "durandal.test.file",
         "key": "ctrl+alt+d shift+t",
-        "mac": "cmd+alt+d shift+t",
+        "mac": "ctrl+alt+d shift+t",
         "when": "durandal.inProject || resourceScheme == durandal-doc || resourceScheme == untitled"
       },
       {
         "command": "durandal.jump",
         "key": "ctrl+alt+d j",
-        "mac": "cmd+alt+d j",
+        "mac": "ctrl+alt+d j",
         "when": "durandal.inProject"
       },
       {
         "command": "durandal.stub",
         "key": "ctrl+alt+d s",
-        "mac": "cmd+alt+d s",
+        "mac": "ctrl+alt+d s",
         "when": "(durandal.inProject || resourceScheme == durandal-doc || resourceScheme == untitled) && !durandal.isPlan"
       },
       {
         "command": "durandal.conjure",
         "key": "ctrl+alt+d c",
-        "mac": "cmd+alt+d c",
+        "mac": "ctrl+alt+d c",
         "when": "durandal.inProject"
       },
       {
         "command": "durandal.mutate",
         "key": "ctrl+alt+d m",
-        "mac": "cmd+alt+d m",
+        "mac": "ctrl+alt+d m",
         "when": "durandal.inProject"
       },
       {
         "command": "durandal.plan.ask",
         "key": "ctrl+alt+d p q",
-        "mac": "cmd+alt+d p q",
+        "mac": "ctrl+alt+d p q",
         "when": "durandal.isPlan"
       },
       {
         "command": "durandal.plan.validate",
         "key": "ctrl+alt+d p v",
-        "mac": "cmd+alt+d p v",
+        "mac": "ctrl+alt+d p v",
         "when": "durandal.isPlan"
       },
       {
         "command": "durandal.plan.do",
         "key": "ctrl+alt+d p d",
-        "mac": "cmd+alt+d p d",
+        "mac": "ctrl+alt+d p d",
         "when": "durandal.isPlan"
       },
       {
         "command": "durandal.plan.accept",
         "key": "ctrl+alt+d p y",
-        "mac": "cmd+alt+d p y",
+        "mac": "ctrl+alt+d p y",
         "when": "durandal.isPlan"
       },
       {
         "command": "durandal.plan.reject",
         "key": "ctrl+alt+d p n",
-        "mac": "cmd+alt+d p n",
+        "mac": "ctrl+alt+d p n",
         "when": "durandal.isPlan"
       },
       {
         "command": "durandal.plan.files",
         "key": "ctrl+alt+d p f",
-        "mac": "cmd+alt+d p f",
+        "mac": "ctrl+alt+d p f",
         "when": "durandal.isPlan"
       },
       {
         "command": "durandal.plan.reconcile",
         "key": "ctrl+alt+d p c",
-        "mac": "cmd+alt+d p c",
+        "mac": "ctrl+alt+d p c",
         "when": "durandal.isPlan"
       },
       {
         "command": "durandal.plan.errand",
         "key": "ctrl+alt+d p o",
-        "mac": "cmd+alt+d p o",
+        "mac": "ctrl+alt+d p o",
         "when": "durandal.isPlan"
       },
       {
         "command": "durandal.plan.excerpt",
         "key": "ctrl+alt+d p e",
-        "mac": "cmd+alt+d p e",
+        "mac": "ctrl+alt+d p e",
         "when": "durandal.isPlan"
       },
       {
         "command": "durandal.plan.review",
         "key": "ctrl+alt+d p r",
-        "mac": "cmd+alt+d p r",
+        "mac": "ctrl+alt+d p r",
         "when": "durandal.isPlan"
       },
       {
         "command": "durandal.plan.toggle",
         "key": "ctrl+alt+d p x",
-        "mac": "cmd+alt+d p x",
+        "mac": "ctrl+alt+d p x",
         "when": "durandal.isPlan"
       },
       {
         "command": "durandal.plan.newStep",
         "key": "ctrl+alt+d p enter",
-        "mac": "cmd+alt+d p enter",
+        "mac": "ctrl+alt+d p enter",
         "when": "durandal.isPlan"
       },
       {
         "command": "durandal.plan.stub",
         "key": "ctrl+alt+d p s",
-        "mac": "cmd+alt+d p s",
+        "mac": "ctrl+alt+d p s",
         "when": "durandal.isPlan"
       },
       {
         "command": "durandal.plan.test",
         "key": "ctrl+alt+d p t",
-        "mac": "cmd+alt+d p t",
+        "mac": "ctrl+alt+d p t",
         "when": "durandal.isPlan"
       },
       {
         "command": "durandal.plan.stub",
         "key": "ctrl+alt+d s",
-        "mac": "cmd+alt+d s",
+        "mac": "ctrl+alt+d s",
         "when": "durandal.isPlan"
       },
       {
         "command": "durandal.plan.test",
         "key": "ctrl+alt+d t",
-        "mac": "cmd+alt+d t",
+        "mac": "ctrl+alt+d t",
         "when": "durandal.isPlan"
       },
       {

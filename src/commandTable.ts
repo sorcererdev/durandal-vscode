@@ -72,7 +72,7 @@ export const SERVER_NAMED: Record<string, { title: string; milestone: number }> 
 export const notYet = (title: string, milestone: number) => `Durandal: ${title} is not implemented yet (milestone ${milestone})`;
 
 // The chord prefix, then durandal.nvim's letters (spec §4).
-export const PREFIX = { key: 'ctrl+alt+d', mac: 'cmd+alt+d' } as const;
+export const PREFIX = { key: 'ctrl+alt+d', mac: 'ctrl+alt+d' } as const;
 
 // TDD_WHEN: the test and stub chords also work from the results document (durandal-doc: t and
 // shift+t run the last run again) and the untitled test file the jump opens (s stubs there).

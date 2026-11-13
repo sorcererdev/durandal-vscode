@@ -79,7 +79,7 @@ webview beyond the one named in §4.
 ## 4. UI conventions
 
 - Commands `durandal.<area>.<verb>`, titles "Durandal: …". Chord prefix `ctrl+alt+d`
-  (`cmd+alt+d` on macOS) then the nvim letter: `a` actions, `g` generate, `t` test file,
+  (the same on macOS: `cmd+alt+d` is the Dock-hide shortcut) then the nvim letter: `a` actions, `g` generate, `t` test file,
   `shift+t` test all, `j` jump, `s` stub, `c` conjure, `m` mutate, `p` then `q v d y n f c e r
   x` for the plan verbs. `when` clauses use `durandal.inProject`, `durandal.isPlan`,
   `durandal.ghostVisible`, `durandal.pauseOpen`, and alder's `formOpen && inQuickOpen` pattern
