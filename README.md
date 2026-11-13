@@ -58,9 +58,9 @@ durandal.nvim writes). `durandal.actionLog` turns it off.
 - **Follow-ups**: after an edit settles, what follows from it (the match arms for a new failure,
   a test for a new command) shows at the end of the line as `⚡ Tab: review <name> (<summary>)`;
   a multi-line block as `⚡ Tab: <name> (+N lines)`, its lines shown under the line when the
-  block goes there. Accepting those lines from VS Code's hover toolbar inserts them as they
-  stand, holes unfilled. `Tab` opens the review window on the plan;
-  Apply plans it again with the model and applies it. `Esc` dismisses it on that line.
+  block goes there. `Tab` opens the review window on the plan; Apply plans it again with the
+  model and applies it. `Esc` dismisses it on that line. Accepting the lines shown under the
+  line from VS Code's hover toolbar instead inserts them as they stand, holes unfilled.
 - **Recognitions**: code written your own way that a convention covers shows as
   `⚡ <name> — Tab: review` (an offer), `⚡ <name> or a <other> — Tab: choose` (two fit: pick
   one, then answer its inputs) or a quiet `⚡ <name>` (no Tab; it leads the ⚡ menu, where
