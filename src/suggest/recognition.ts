@@ -19,8 +19,15 @@ export function followupOf(s: Suggestion, plan?: Plan): Offer {
 }
 
 export function ghostOf(s: Suggestion): Offer {
-  return { kind: 'ghost', generator: s.label, name: s.label, sets: {}, lines: Array.isArray(s.lines) ? s.lines : [], planId: s.planId };
+  return {
+    kind: 'ghost', generator: s.label, name: s.label, sets: {}, lines: Array.isArray(s.lines) ? s.lines : [], planId: s.planId,
+    below: typeof s.line === 'number' && typeof s.at === 'number' && s.line === s.at + 1,
+  };
 }
+
+// inlineGhost: a ghost whose block goes under the cursor line: its lines are drawn as VS Code
+// ghost text (M7 spec §4); one going above keeps the band only (decision 8)
+export const inlineGhost = (o: Offer): boolean => o.kind === 'ghost' && o.below === true;
 
 // recognitionText: an offer, a choice of two, or a quiet hint (nvim :88-92)
 export function recognitionText(o: Offer): string {

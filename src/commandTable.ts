@@ -42,16 +42,20 @@ export const FORM_KEYS: { command: string; key: string; mac: string; when: strin
   { command: 'durandal.generate.review', key: 'ctrl+o', mac: 'ctrl+o', when: 'durandal.formOpen && inQuickOpen' },
 ];
 
-// The keys of a suggestion (M3 spec §4): Esc dismisses the snippet ghost while VS Code shows
-// it and it is Durandal's (VS Code's own Esc hides it; ours also remembers the line), and a
-// decoration (⚡ at the line's end) wherever Esc means nothing else. Tab on the snippet ghost
-// is VS Code's own (editor.action.inlineSuggest.commit).
+// The keys of a suggestion (M3 spec §4, M7 spec §4): Esc dismisses the snippet ghost while VS
+// Code shows it and it is Durandal's (VS Code's own Esc hides it; ours also remembers the line),
+// and a decoration (⚡ at the line's end) wherever Esc means nothing else. Tab on the snippet
+// ghost is VS Code's own (editor.action.inlineSuggest.commit). While a ghost's lines are VS
+// Code's inline suggestion from our item (durandal.ghostInline), Tab and Esc are ours: Tab
+// reviews and fills, Esc dismisses. Esc on a plan ghost row hides it until the cursor leaves the row.
 export const SUGGEST_KEYS: { command: string; key: string; when: string }[] = [
   { command: 'durandal.suggest.accept', key: 'tab', when: "durandal.ghostVisible && durandal.ghostKind != 'snippet' && durandal.ghostBand != 'hint' && editorTextFocus && !inlineSuggestionVisible && !suggestWidgetVisible && !inSnippetMode && !editorReadonly" },
   { command: 'durandal.suggest.dismiss', key: 'escape', when: "inlineSuggestionVisible && durandal.ghostVisible && durandal.ghostKind == 'snippet'" },
   { command: 'durandal.suggest.dismiss', key: 'escape', when: "durandal.ghostVisible && durandal.ghostKind != 'snippet' && durandal.ghostBand != 'hint' && editorTextFocus && !inlineSuggestionVisible && !suggestWidgetVisible && !editorHasSelection && !editorHasMultipleSelections && !findWidgetVisible && !parameterHintsVisible && !inSnippetMode && !renameInputVisible" },
   // Esc on a plan ghost row (M7 spec §0.10): hidden until the cursor leaves the row
   { command: 'durandal.plan.ghostEscape', key: 'escape', when: 'inlineSuggestionVisible && durandal.planGhostRow && editorTextFocus && !suggestWidgetVisible' },
+  { command: 'durandal.suggest.accept', key: 'tab', when: 'inlineSuggestionVisible && durandal.ghostVisible && durandal.ghostInline && editorTextFocus && !suggestWidgetVisible && !inSnippetMode' },
+  { command: 'durandal.suggest.dismiss', key: 'escape', when: 'inlineSuggestionVisible && durandal.ghostVisible && durandal.ghostInline && editorTextFocus && !suggestWidgetVisible && !inSnippetMode && !editorHasSelection && !editorHasMultipleSelections && !findWidgetVisible && !parameterHintsVisible && !renameInputVisible' },
 ];
 
 // Commands the server names in its inlay hints (⚡) and code lenses: registered so a click

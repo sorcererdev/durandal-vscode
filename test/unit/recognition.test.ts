@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Plan, Suggestion } from '../../src/protocol';
-import { acceptWay, decorationText, followupOf, ghostOf, recognitionOf } from '../../src/suggest/recognition';
+import { acceptWay, decorationText, followupOf, ghostOf, inlineGhost, recognitionOf } from '../../src/suggest/recognition';
 
 const base: Suggestion = { uri: 'u', version: 1, kind: 'recognition', label: 'Command', summary: 'a command', line: 2, lines: null, at: 2, planId: 9, generator: 'p/command', sets: { command: 'x' } };
 const plan: Plan = { files: [], conflicts: [], warnings: [], holes: [], snippet: null };
@@ -38,4 +38,16 @@ test('the accept way: a follow-up, a ghost and a planned offer review; a choice,
   assert.equal(acceptWay(recognitionOf({ ...base, band: 'offer', or: 'p/q' }, plan)), 'choose');
   assert.equal(acceptWay(recognitionOf({ ...base, band: 'hint' })), 'choose');
   assert.equal(acceptWay({ kind: 'snippet', generator: 'g', name: 'g', sets: {} }), 'none');
+});
+
+// M7 spec §4, decision 8: server lines are 1-based; a block at at + 1 goes under the cursor line
+test('a ghost knows whether its block goes under the cursor line; only then is it drawn inline', () => {
+  const below = ghostOf({ ...base, kind: 'ghost', label: 'Arms', lines: ['a'], line: 3, at: 2 });
+  assert.equal(below.below, true);
+  assert.equal(inlineGhost(below), true);
+  const above = ghostOf({ ...base, kind: 'ghost', label: 'Arms', lines: ['a'], line: 2, at: 2 });
+  assert.equal(above.below, false);
+  assert.equal(inlineGhost(above), false);
+  assert.equal(ghostOf({ ...base, kind: 'ghost', lines: ['a'], line: null, at: 2 }).below, false);
+  assert.equal(inlineGhost(followupOf({ ...base, kind: 'followup', line: 3, at: 2 })), false);
 });

@@ -12,6 +12,9 @@ const pushFile = join(mkdtempSync(join(tmpdir(), 'durandal-push-')), 'suggestion
 // push sets what the fake pushes after every edit (FAKE_LSP_SUGGEST: its uri and version filled)
 const push = (s: Record<string, unknown>) => writeFileSync(pushFile, JSON.stringify(s));
 const FOLLOWUP = { kind: 'followup', label: 'Failure arms', summary: '1 file', line: 1, lines: null, at: 1, planId: 7, generator: null, sets: {} };
+// a ghost going under line 0 (at 1, line 2: server lines are 1-based)
+const GHOST = { ...FOLLOWUP, kind: 'ghost', label: 'Arms', lines: ['case A():', '    return x'], line: 2, at: 1 };
+const GHOST_TEXT = 'x = 10\ncase A():\n    return x';
 const plans = () => log().filter(m => m.method === 'olifant/plan');
 const events = (from: number, name: string) => actionLog().slice(from).filter(e => e.event === name);
 
@@ -135,7 +138,11 @@ describe('pushed and pulled suggestions (fake server)', () => {
     assert.equal(events(from, 'followup-applied').length, 1);
   });
 
-  it('a ghost block likewise: reviewed first, Apply lands the filled plan', async () => {
+  // asks: the asks on a suggestion ghost's line 0 after the count FROM; served: those served
+  const asks = (a: Awaited<ReturnType<typeof api>>, from: number) => a.suggest.served.since(from).filter(s => s.uri === uri() && s.line === 0);
+  const served = (a: Awaited<ReturnType<typeof api>>, from: number) => asks(a, from).filter(s => s.insertText !== undefined);
+
+  it('a ghost going above the line: the band only, reviewed first, Apply lands the filled plan (decision 8)', async () => {
     push({ ...FOLLOWUP, kind: 'ghost', label: 'Arms', lines: ['case A():', '    return x'] });
     reply('olifant/plan', planned('x = 10\n', 'x = 12\n'));
     const a = await api();
@@ -143,10 +150,68 @@ describe('pushed and pulled suggestions (fake server)', () => {
     ui.onReview = () => ({ kind: 'apply' });
     a.setUi(ui);
     const ed = await edited();
+    const n = a.suggest.served.count;
     await until(async () => (await shownKind()) === 'ghost', 'the ghost block shown');
+    assert.equal(a.suggest.decorated(uri()), '⚡ Tab: Arms (+2 lines)');
+    await vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+    await until(() => asks(a, n).length > 0, 'the inline provider asked on the ghost\'s line');
+    await sleep(300);
+    assert.deepEqual(served(a, n), [], 'no ghost lines served');
     await vscode.commands.executeCommand('durandal.suggest.accept');
     await until(() => ed.document.getText() === 'x = 12\n', 'landed');
     assert.ok(ui.log.includes('review Arms'));
+  });
+
+  it('a ghost going under the line: its lines served under it; Tab (ghostInline) hides them, reviews, Apply fills', async () => {
+    push(GHOST);
+    reply('olifant/plan', planned('x = 10\n', 'x = 12\n'));
+    const a = await api();
+    const ui = new FakeUi();
+    ui.onReview = () => ({ kind: 'apply' });
+    a.setUi(ui);
+    const n = a.suggest.served.count;
+    const ed = await edited();
+    await until(() => served(a, n).some(s => s.insertText === GHOST_TEXT), 'the ghost lines served');
+    assert.equal(a.suggest.decorated(uri()), '⚡ Tab: Arms (+2 lines)', 'the band stays');
+    const before = plans().length;
+    await vscode.commands.executeCommand('durandal.suggest.accept');
+    await until(() => ed.document.getText() === 'x = 12\n', 'landed');
+    assert.deepEqual(plans().slice(before).find(m => m.params.fill === true)!.params, { planId: 7, fill: true });
+    assert.ok(ui.log.includes('review Arms'));
+  });
+
+  it('the hover toolbar\'s Accept (a commit) inserts the lines as they stand: ghost-inserted, the band gone, no fill', async () => {
+    push(GHOST);
+    const a = await api();
+    const from = actionLog().length;
+    const n = a.suggest.served.count;
+    const ed = await edited();
+    await until(() => served(a, n).some(s => s.insertText === GHOST_TEXT), 'the ghost lines served');
+    await sleep(400);
+    const before = plans().length;
+    await vscode.commands.executeCommand('editor.action.inlineSuggest.commit');
+    await until(() => ed.document.getText() === GHOST_TEXT + '\n', 'inserted');
+    await until(() => events(from, 'ghost-inserted').length === 1, 'logged');
+    assert.equal(events(from, 'ghost-inserted')[0].generator, 'Arms');
+    await until(async () => (await shownKind()) !== 'ghost', 'the band gone');
+    await sleep(300);
+    assert.ok(!plans().slice(before).some(m => m.params.fill === true), 'no fill');
+  });
+
+  it('Esc (ghostInline) on the ghost lines hides them and dismisses the ghost on that line', async () => {
+    push(GHOST);
+    const a = await api();
+    const from = actionLog().length;
+    const n = a.suggest.served.count;
+    const ed = await edited();
+    await until(() => served(a, n).some(s => s.insertText === GHOST_TEXT), 'the ghost lines served');
+    await sleep(400);
+    await vscode.commands.executeCommand('durandal.suggest.dismiss');
+    assert.equal(await shownKind(), undefined);
+    assert.equal(events(from, 'ghost-dismissed').length, 1);
+    await vscode.commands.executeCommand('editor.action.inlineSuggest.commit');
+    await sleep(300);
+    assert.equal(ed.document.getText(), 'x = 10\n', 'nothing left to commit');
   });
 
   const REC = { ...FOLLOWUP, kind: 'recognition', label: 'Command', generator: 'p/command', sets: { command: 'x' }, band: 'offer', or: null, reasons: ['the name fits'], score: 0.8, planId: 8 };

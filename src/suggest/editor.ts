@@ -11,10 +11,16 @@ import { Accept } from './accept';
 import { Controller } from './controller';
 import { Decorations } from './decorate';
 import { Fill, FillOutcome } from './fill';
+import { GHOST_INSERTED, ServedLog } from './ghostItem';
 import { Inline } from './inline';
+import { inlineGhost } from './recognition';
 import type { Shown, SuggestKind } from './types';
 
 const HIDE_INLINE = 'editor.action.inlineSuggest.hide';
+
+// GhostInsertedArgs: the ghost lines' item command's argument (a full commit: Tab is ours, so
+// this is the hover toolbar's Accept)
+export interface GhostInsertedArgs { uri: string; key: string; generator: string }
 
 // Suggest is ghost text and snippets in VS Code (durandal.nvim suggest.lua, M3 spec): the
 // controller fed by the active editor, the context keys, durandal.ghosts and its toggle
@@ -88,6 +94,8 @@ export class Suggest {
 
   state(uri: string): Shown | undefined { return this.controller.state(uri); }
   get fills(): FillOutcome[] { return this.fill.outcomes; }
+  // served: the asks on a suggestion ghost's line (the e2e tests read them)
+  get served(): ServedLog { return this.inline.served; }
   // decorated: the ⚡ text drawn at the end of uri's suggestion line (the e2e tests read it)
   decorated(uri: string): string | undefined { return this.decorations.drawn.get(uri); }
 
@@ -99,15 +107,20 @@ export class Suggest {
         const ed = vscode.window.activeTextEditor;
         if (!ed) return;
         const uri = ed.document.uri.toString();
-        const kind = this.controller.state(uri)?.kind;
+        const st = this.controller.state(uri);
+        // the ghost lines first: they are VS Code's inline suggestion (M7 spec §4)
+        if (st && inlineGhost(st)) await vscode.commands.executeCommand(HIDE_INLINE);
         this.controller.dismiss(uri);
-        if (kind === 'snippet') await vscode.commands.executeCommand(HIDE_INLINE);
+        if (st?.kind === 'snippet') await vscode.commands.executeCommand(HIDE_INLINE);
       }),
       vscode.commands.registerCommand('durandal.suggest.accept', async () => {
         const ed = vscode.window.activeTextEditor;
         const st = ed && this.controller.state(ed.document.uri.toString());
-        if (st) await this.accept.run(st);
+        if (!st) return;
+        if (inlineGhost(st)) await vscode.commands.executeCommand(HIDE_INLINE);
+        await this.accept.run(st);
       }),
+      vscode.commands.registerCommand(GHOST_INSERTED, (a: GhostInsertedArgs) => this.inserted(a)),
       vscode.window.onDidChangeTextEditorSelection(e => this.moved(e.textEditor)),
       vscode.workspace.onDidChangeTextDocument(e => {
         const ed = vscode.window.activeTextEditor;
@@ -137,7 +150,15 @@ export class Suggest {
     this.controller.schedule();
   }
 
-  private keys(k: { visible: boolean; kind?: SuggestKind; band?: string }): void {
+  // inserted: the ghost lines inserted as they stand (the hover toolbar's Accept, decision 9):
+  // logged, the band cleared if the insert has not cleared it already; no fill
+  private inserted(a: GhostInsertedArgs): void {
+    this.d.log.write({ event: 'ghost-inserted', generator: a.generator });
+    if (this.controller.state(a.uri)?.key === a.key) this.controller.clear(a.uri);
+  }
+
+  private keys(k: { visible: boolean; kind?: SuggestKind; band?: string; inline?: true }): void {
+    void vscode.commands.executeCommand('setContext', 'durandal.ghostInline', k.inline === true);
     void vscode.commands.executeCommand('setContext', 'durandal.ghostVisible', k.visible);
     void vscode.commands.executeCommand('setContext', 'durandal.ghostKind', k.kind ?? '');
     void vscode.commands.executeCommand('setContext', 'durandal.ghostBand', k.band ?? '');

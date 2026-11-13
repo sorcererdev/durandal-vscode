@@ -6,7 +6,9 @@ import type { ClientHooks } from '../server';
 import type { Controller } from './controller';
 import { FILL, fillCommand, Fill } from './fill';
 import { early, fetchFailure, GateIn, inlineGate, snippetData } from './gate';
-import { GhostItem, ghostItem, ServedLog } from './ghostItem';
+import type { GhostInsertedArgs } from './editor';
+import { GHOST_INSERTED, GhostItem, ghostItem, ServedLog, suggestionText } from './ghostItem';
+import type { Shown } from './types';
 
 const asRange = (r: Range) => new vscode.Range(r.start.line, r.start.character, r.end.line, r.end.character);
 const protoRange = (r: vscode.Range): Range => ({
@@ -33,11 +35,16 @@ export function serve(log: ServedLog, document: vscode.TextDocument, line: numbe
 // item olifant anticipates, gated and given the fill command; the completion list's snippets
 // given the same command; resolved items' bodies stashed for the fill.
 export class Inline implements NonNullable<ClientHooks['suggest']> {
+  // served: every ask on a suggestion ghost's line, served or refused (the e2e tests read them)
+  readonly served = new ServedLog();
+
   constructor(private readonly d: { controller: Controller; fill: Fill; enabled(): boolean; warn(m: string): void }) {}
 
   async inline(document: vscode.TextDocument, position: vscode.Position, context: vscode.InlineCompletionContext,
     token: vscode.CancellationToken, fetch: () => Promise<InlineItem[]>): Promise<vscode.InlineCompletionItem[]> {
     const uri = document.uri.toString();
+    const st = this.d.controller.state(uri);
+    if (st?.kind === 'ghost' && st.line === position.line) return this.ghost(document, st, context);
     const g: GateIn = {
       enabled: this.d.enabled(),
       inProject: document.uri.scheme === 'file' && !!(await findRoot(document.uri.fsPath)),
@@ -76,6 +83,20 @@ export class Inline implements NonNullable<ClientHooks['suggest']> {
       fillCommand({ uri, range: raw.range, body: r.body, data: r.data }));
     if (raw.filterText !== undefined) item.filterText = raw.filterText;
     return [item];
+  }
+
+  // ghost: the item of a suggestion ghost on this line (M7 spec §4): the line and its lines
+  // under it, drawn by VS Code, for a ghost going under the line; none for one going above it
+  // (decision 8), while the completion list is open, or with ghosts off. A full commit inserts
+  // them as they stand (decision 9). The controller hears whether ours is drawn.
+  private ghost(document: vscode.TextDocument, st: Shown, context: vscode.InlineCompletionContext): vscode.InlineCompletionItem[] {
+    const uri = document.uri.toString();
+    const drawn = !!this.d.controller.ghostAt(uri, st.line) && !context.selectedCompletionInfo && this.d.enabled();
+    const args: GhostInsertedArgs = { uri, key: st.key, generator: st.generator };
+    const items = serve(this.served, document, st.line,
+      t => (drawn && t === st.lineText ? suggestionText(t, st.lines ?? []) : undefined), GHOST_INSERTED, args);
+    this.d.controller.inlineServed(uri, st.key, items.length > 0);
+    return items;
   }
 
   // completions gives the list's snippets (olifant's Snippet items with action data) the fill

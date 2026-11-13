@@ -109,7 +109,7 @@ const flush = async () => { for (let i = 0; i < 5; i++) await new Promise(r => s
 
 function considering(o: { cursor?: Cursor } = {}) {
   const logged: ActionEvent[] = [];
-  const keys: { visible: boolean; kind?: string; band?: string }[] = [];
+  const keys: { visible: boolean; kind?: string; band?: string; inline?: true }[] = [];
   const shown: Shown[] = [];
   const hidden: string[] = [];
   let inlineHidden = 0;
@@ -339,6 +339,84 @@ test('a pushed ghost is shown with its lines, no plan asked', async () => {
   await flush();
   assert.equal(st.plans.length, 0);
   assert.deepEqual(c.state('file:///p/a.py')?.lines, ['a', 'b']);
+});
+
+// M7 spec §4: a ghost going under the line (server line === at + 1; the cursor is line 6, at 7)
+const BELOW: Partial<Suggestion> = { kind: 'ghost', label: 'Arms', lines: ['a', 'b'], line: 8, at: 7 };
+
+test('a pushed ghost going under the line: ghostAt finds it and the inline ghost is asked for; ghostInline waits for the item', async () => {
+  const { c, st, lastKeys } = considering();
+  c.pushed(sug(BELOW));
+  await flush();
+  const g = c.ghostAt('file:///p/a.py', 6);
+  assert.equal(g?.generator, 'Arms');
+  assert.equal(c.ghostAt('file:///p/a.py', 5), undefined);
+  assert.deepEqual(lastKeys(), { visible: true, kind: 'ghost', band: undefined });
+  assert.equal(st.triggered, 1);
+  c.inlineServed('file:///p/a.py', g!.key, true);
+  assert.deepEqual(lastKeys(), { visible: true, kind: 'ghost', band: undefined, inline: true });
+});
+
+test('durandal.ghostInline is ours only while our item is served: a refusal, or another key, leaves it off (spec §4)', async () => {
+  const { c, lastKeys } = considering();
+  c.pushed(sug(BELOW));
+  await flush();
+  const key = c.ghostAt('file:///p/a.py', 6)!.key;
+  c.inlineServed('file:///p/a.py', 'another', true);
+  assert.equal(lastKeys().inline, undefined);
+  c.inlineServed('file:///p/a.py', key, true);
+  assert.equal(lastKeys().inline, true);
+  c.inlineServed('file:///p/a.py', key, false);
+  assert.deepEqual(lastKeys(), { visible: true, kind: 'ghost', band: undefined });
+  c.inlineServed('file:///p/a.py', key, true);
+  c.moved('file:///p/a.py', 5, 'x');
+  assert.deepEqual(lastKeys(), { visible: false });
+  c.inlineServed('file:///p/a.py', key, true);
+  assert.deepEqual(lastKeys(), { visible: false }, 'nothing shown: nothing served of ours');
+});
+
+test('a ghost going above the line: band only, no ghostAt, no ghostInline, nothing triggered (decision 8)', async () => {
+  const { c, st, lastKeys } = considering();
+  c.pushed(sug({ ...BELOW, line: 7 }));
+  await flush();
+  const s = c.state('file:///p/a.py');
+  assert.equal(s?.kind, 'ghost');
+  assert.equal(c.ghostAt('file:///p/a.py', 6), undefined);
+  c.inlineServed('file:///p/a.py', s!.key, true);
+  assert.deepEqual(lastKeys(), { visible: true, kind: 'ghost', band: undefined });
+  assert.equal(st.triggered, 0);
+});
+
+test('each cursor move on the ghost\'s line asks for the inline ghost again, once; off the line it goes', async () => {
+  const { c, st } = considering();
+  c.pushed(sug(BELOW));
+  await flush();
+  const n = st.triggered;
+  c.moved('file:///p/a.py', 6, 'class Cancelled:');
+  c.schedule();
+  assert.equal(st.triggered, n + 1, 'once per move (the editor calls moved, then schedule)');
+  st.cursor = { uri: 'file:///p/a.py', version: 4, line: 5, lineText: 'x', inProject: true };
+  c.moved('file:///p/a.py', 5, 'x');
+  c.schedule();
+  assert.equal(c.state('file:///p/a.py'), undefined);
+  assert.equal(st.triggered, n + 1);
+});
+
+test('Esc on a ghost going under the line: dismissed wherever its block goes, ghostInline off (M7 spec §2)', async () => {
+  const { c, st, logged, lastKeys } = considering();
+  c.pushed(sug(BELOW));
+  await flush();
+  c.inlineServed('file:///p/a.py', c.ghostAt('file:///p/a.py', 6)!.key, true);
+  c.dismiss('file:///p/a.py');
+  assert.equal(logged.at(-1)?.event, 'ghost-dismissed');
+  assert.deepEqual(lastKeys(), { visible: false });
+  c.pushed(sug({ ...BELOW, line: 7 }));
+  await flush();
+  assert.equal(c.state('file:///p/a.py'), undefined, 'the same ghost going above is dismissed too');
+  c.pushed(sug(BELOW));
+  await flush();
+  assert.equal(c.state('file:///p/a.py'), undefined);
+  assert.equal(st.triggered, 1, 'a dismissed ghost is not asked for');
 });
 
 test('no such plan falls through to the pull, and the push is forgotten', async () => {

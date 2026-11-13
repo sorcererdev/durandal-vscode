@@ -137,7 +137,7 @@ test('M5: Plan: Review is built; the lens command is registered by its own handl
 });
 
 // the context keys the extension sets (spec §8); pauseOpen is informational, nothing binds it
-const KNOWN_KEYS = ['inProject', 'isPlan', 'pauseOpen', 'formOpen', 'ghostVisible', 'ghostKind', 'ghostBand', 'planGhostRow'];
+const KNOWN_KEYS = ['inProject', 'isPlan', 'pauseOpen', 'formOpen', 'ghostVisible', 'ghostKind', 'ghostBand', 'planGhostRow', 'ghostInline'];
 
 test('M5: the when keys: each one the manifest reads is known and set; isPlan and pauseOpen among them (spec §8)', () => {
   const clauses = [
@@ -232,4 +232,15 @@ test('Plan: Open Past Do is built on p o in a plan; no server-named command is l
   assert.equal(BUILT['durandal.plan.errand'].title, 'Plan: Open Past Do');
   assert.ok(KEYS.some(k => k.command === 'durandal.plan.errand' && k.keys === 'p o' && k.when === 'durandal.isPlan'));
   assert.deepEqual(Object.keys(SERVER_NAMED), []);
+});
+
+test('M7: Tab and Esc on a suggestion\'s ghost lines are ours only while they are shown (spec §4)', () => {
+  assert.deepEqual(SUGGEST_KEYS.filter(k => k.when.includes('durandal.ghostInline')), [
+    { command: 'durandal.suggest.accept', key: 'tab',
+      when: 'inlineSuggestionVisible && durandal.ghostVisible && durandal.ghostInline && editorTextFocus && !suggestWidgetVisible && !inSnippetMode' },
+    { command: 'durandal.suggest.dismiss', key: 'escape',
+      when: 'inlineSuggestionVisible && durandal.ghostVisible && durandal.ghostInline && editorTextFocus && !suggestWidgetVisible && !inSnippetMode && !editorHasSelection && !editorHasMultipleSelections && !findWidgetVisible && !parameterHintsVisible && !renameInputVisible' },
+  ]);
+  // the decoration's Tab and Esc stay where no inline suggestion is shown
+  for (const k of SUGGEST_KEYS.filter(k => k.when.startsWith('durandal.ghostVisible'))) assert.ok(k.when.includes('!inlineSuggestionVisible'), k.when);
 });

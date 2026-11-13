@@ -477,6 +477,16 @@
         "command": "durandal.plan.ghostEscape",
         "key": "escape",
         "when": "inlineSuggestionVisible && durandal.planGhostRow && editorTextFocus && !suggestWidgetVisible"
+      },
+      {
+        "command": "durandal.suggest.accept",
+        "key": "tab",
+        "when": "inlineSuggestionVisible && durandal.ghostVisible && durandal.ghostInline && editorTextFocus && !suggestWidgetVisible && !inSnippetMode"
+      },
+      {
+        "command": "durandal.suggest.dismiss",
+        "key": "escape",
+        "when": "inlineSuggestionVisible && durandal.ghostVisible && durandal.ghostInline && editorTextFocus && !suggestWidgetVisible && !inSnippetMode && !editorHasSelection && !editorHasMultipleSelections && !findWidgetVisible && !parameterHintsVisible && !renameInputVisible"
       }
     ],
     "semanticTokenTypes": [

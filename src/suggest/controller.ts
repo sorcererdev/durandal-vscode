@@ -4,14 +4,15 @@ import type { ActionEvent } from '../actionLog';
 import { errorMessage } from '../errors';
 import type { Plan, PlanResult, SuggestResult, Suggestion } from '../protocol';
 import { keyOf, recognitionKey } from './keys';
-import { followupOf, ghostOf, recognitionOf } from './recognition';
+import { followupOf, ghostOf, inlineGhost, recognitionOf } from './recognition';
 import { Pushed, Store } from './store';
 import type { Offer, Shown, SuggestKind } from './types';
 
 // View is what the controller changes on screen: the context keys for the active editor's
-// suggestion and (milestone 3b) the ⚡ decoration of a non-inline kind.
+// suggestion and (milestone 3b) the ⚡ decoration of a non-inline kind. inline: the active
+// suggestion is a ghost whose lines VS Code draws from our item (durandal.ghostInline).
 export interface View {
-  keys(k: { visible: boolean; kind?: SuggestKind; band?: string }): void;
+  keys(k: { visible: boolean; kind?: SuggestKind; band?: string; inline?: true }): void;
   show?(st: Shown): void;
   hide?(uri: string): void;
   // hideInline: editor.action.inlineSuggest.hide, when a decoration replaces the snippet ghost
@@ -47,6 +48,8 @@ export const noSuchPlan = (err: unknown): boolean => errorMessage(err).startsWit
 export class Controller {
   protected readonly states = new Map<string, Shown>();
   private readonly dismissed = new Map<string, Set<string>>();
+  // drawn: per document, the key of the ghost whose lines our inline item is drawing
+  private readonly drawn = new Map<string, string>();
   private active: string | undefined;
   readonly store = new Store();
   private c: ConsiderDeps | undefined;
@@ -62,6 +65,24 @@ export class Controller {
   nonInline(uri: string, line: number): boolean {
     const s = this.states.get(uri);
     return !!s && s.kind !== 'snippet' && s.line === line;
+  }
+
+  // ghostAt: the ghost drawn as ghost lines under this line (M7 spec §4), if any
+  ghostAt(uri: string, line: number): Shown | undefined {
+    const s = this.states.get(uri);
+    return s && s.line === line && inlineGhost(s) ? s : undefined;
+  }
+
+  // inlineServed: the inline provider served (or refused) the item of the ghost KEY. Only a
+  // served item of the ghost shown here turns durandal.ghostInline on (spec §4: "only true for
+  // ours"); a refusal leaves another provider's suggestion its own Tab and Esc.
+  inlineServed(uri: string, key: string, served: boolean): void {
+    const s = this.states.get(uri);
+    const on = served && !!s && s.key === key && inlineGhost(s);
+    if (on === (this.drawn.get(uri) === key)) return;
+    if (on) this.drawn.set(uri, key);
+    else this.drawn.delete(uri);
+    this.keys();
   }
 
   focus(uri: string | undefined): void {
@@ -90,6 +111,9 @@ export class Controller {
       ...(hint ? { model: (st.reasons ?? []).includes('the model agrees') } : {}),
     });
     this.keys();
+    // its lines are VS Code's inline suggestion: asked for now (the push can land after VS
+    // Code's own request for the keystroke)
+    if (inlineGhost(st)) this.c?.triggerInline();
   }
 
   // moved: the cursor or its line's text changed. Off the suggestion's line, or its text
@@ -103,6 +127,7 @@ export class Controller {
     const s = this.states.get(uri);
     if (!s) return;
     this.states.delete(uri);
+    this.drawn.delete(uri);
     if (s.kind !== 'snippet') this.d.view.hide?.(uri);
     this.keys();
   }
@@ -150,7 +175,10 @@ export class Controller {
   // keys: durandal.ghostBand is offer | hint | choice (spec §4)
   private keys(): void {
     const s = this.active ? this.states.get(this.active) : undefined;
-    this.d.view.keys(s ? { visible: true, kind: s.kind, band: s.choice ? 'choice' : s.band } : { visible: false });
+    const inline = !!s && this.drawn.get(s.uri) === s.key;
+    this.d.view.keys(s
+      ? { visible: true, kind: s.kind, band: s.choice ? 'choice' : s.band, ...(inline ? { inline: true as const } : {}) }
+      : { visible: false });
   }
 
   attach(c: ConsiderDeps): void { this.c = c; }
@@ -162,6 +190,10 @@ export class Controller {
     const at = c?.cursor();
     if (!c || !at) return;
     this.moved(at.uri, at.line, at.lineText);
+    // VS Code hides an inline suggestion on every cursor move and does not ask again (M7 plan
+    // checks §2): the ghost lines are asked for again while the cursor stays on their line.
+    // Here and not in moved, which the editor also calls for the same move.
+    if (this.ghostAt(at.uri, at.line)) c.triggerInline();
     if (this.timerHandle !== undefined) c.timer.clear(this.timerHandle);
     this.timerHandle = c.timer.set(() => {
       this.timerHandle = undefined;
