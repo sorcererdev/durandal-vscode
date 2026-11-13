@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Placed } from '../../src/plans/blocks';
+import { applyLineEdits, factEdits, hunks, type TextEdit0 } from '../../src/plans/facts';
 import { Ghosts, hoverText, lineCount, markerText, rowLines } from '../../src/plans/ghosts';
+import type { LineChange } from '../../src/plans/rows';
 
 const U = 'file:///w/one/plans/v.md';
 const p = (index: number, row: number, lines: string[], replace = false): Placed => ({ index, row, replace, lines });
@@ -109,4 +111,28 @@ test('hoverText: the row\'s lines fenced as markdown, the fence longer than any 
   assert.equal(hoverText(g.at(U, 5)), '```markdown\n  - one\n  - two\n```');
   g.add(U, 'validate', 'V2', [p(0, 7, ['  - see ```code``` here'])]);
   assert.equal(hoverText(g.at(U, 7)), '````markdown\n  - see ```code``` here\n````');
+  // blocks with no lines (an answer whose lines were all dropped): no empty fence
+  g.add(U, 'validate', 'V3', [p(0, 9, [])]);
+  assert.equal(hoverText(g.at(U, 9)), '_no lines to add_');
+  g.add(U, 'validate', 'V4', [p(0, 9, ['  - late'])]);
+  assert.equal(hoverText(g.at(U, 9)), '```markdown\n  - late\n```');
+});
+
+// the change VS Code reports for one of lineEdits' edits (rows [start, end) replaced by its
+// lines, each ending in a line break), bottom-up as in one event
+const changes = (es: readonly TextEdit0[]): LineChange[] =>
+  [...es].sort((x, y) => y.start - x.start).map(e => ({ startLine: e.start, startChar: 0, endLine: e.end, newLines: e.lines.length }));
+
+// final review Important 1: a landing whose facts straddle a ghost row
+test('a plan write with changes above and below a ghost row (hunks) leaves the ghost on its row', () => {
+  const lines = ['# T', '- a', '- b', '- c', '- d', '- e target line', '- f', '## Next', '- [ ] step', ''];
+  const after = applyLineEdits(lines, factEdits(lines, [{ row: 1, text: '- a ✓' }, { row: 8, text: '- [x] step' }]));
+  const g = new Ghosts();
+  g.add(U, 'validate', 'V1', [p(0, 5, ['  - ok'])]);
+  g.shift(U, changes(hunks(lines, after)));
+  assert.deepEqual(g.rows(U), [5]);
+  // lines added above and taken below: the ghost moves by what was added above it only
+  const more = applyLineEdits(lines, factEdits(lines, [{ after: 1, lines: ['  - x', '  - y'] }, { from: 7, to: 8, lines: ['## N'] }]));
+  g.shift(U, changes(hunks(lines, more)));
+  assert.deepEqual(g.rows(U), [7]);
 });

@@ -20,11 +20,11 @@ export interface GhostAcceptedArgs { uri: string; gen: number; keys: number[]; l
 // row's ghost as an inline item (§3.2), asks again on every cursor move on the row, and
 // remembers an Esc there until the cursor leaves.
 export class GhostView implements vscode.Disposable {
-  // the markers; a row whose blocks have no lines gets none (there is nothing to show as
-  // `+0 lines`); its chords still decide it
+  // the markers: every ghost row has one, a row whose blocks have no lines too (`ai · +0
+  // lines`, as nvim's "ai" sign), so no row is decided by chords the eye cannot find
   private readonly marks = new RowMarks(
     { color: new vscode.ThemeColor('editorGhostText.foreground'), margin: '0 0 0 1.5em' },
-    uri => this.rows(uri).filter(r => lineCount(r.blocks) > 0).map(r => ({ row: r.row, text: r.marker, hover: hoverText(r.blocks) })),
+    uri => this.rows(uri).map(r => ({ row: r.row, text: r.marker, hover: hoverText(r.blocks) })),
   );
   // served: every ask for a plan ghost's item, the last ones kept (the e2e tests read them)
   readonly served = new ServedLog();

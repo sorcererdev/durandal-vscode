@@ -120,7 +120,7 @@ export class Suggest {
         if (inlineGhost(st)) await vscode.commands.executeCommand(HIDE_INLINE);
         await this.accept.run(st);
       }),
-      vscode.commands.registerCommand(GHOST_INSERTED, (a: GhostInsertedArgs) => this.inserted(a)),
+      vscode.commands.registerCommand(GHOST_INSERTED, (a: GhostInsertedArgs | undefined) => this.inserted(a)),
       vscode.window.onDidChangeTextEditorSelection(e => this.moved(e.textEditor)),
       vscode.workspace.onDidChangeTextDocument(e => {
         const ed = vscode.window.activeTextEditor;
@@ -152,7 +152,8 @@ export class Suggest {
 
   // inserted: the ghost lines inserted as they stand (the hover toolbar's Accept, decision 9):
   // logged, the band cleared if the insert has not cleared it already; no fill
-  private inserted(a: GhostInsertedArgs): void {
+  private inserted(a: GhostInsertedArgs | undefined): void {
+    if (!a) return;
     this.d.log.write({ event: 'ghost-inserted', generator: a.generator });
     if (this.controller.state(a.uri)?.key === a.key) this.controller.clear(a.uri);
   }

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { Fact } from '../protocol';
-import { applyLineEdits, factEdits, span, TextEdit0 } from './facts';
+import { applyLineEdits, factEdits, hunks, TextEdit0 } from './facts';
 
 // Line edits of a plan as VS Code edits (the review's facts, the verbs' landings). A landing reads
 // the lines and writes them with no await between: typing cannot slip in, and VS Code refuses an
@@ -30,12 +30,13 @@ export function lineEdits(doc: vscode.TextDocument, edits: readonly TextEdit0[])
   return we;
 }
 
-// writeLines: DOC's lines BEFORE (read just now) become AFTER in one edit, one undo step; true
-// when it was written or there was nothing to write
+// writeLines: DOC's lines BEFORE (read just now) become AFTER in one edit, one undo step, as
+// one change per run of differing rows (hunks), so a row between two changes (a ghost's, a
+// running verb's) stays where it is; true when it was written or there was nothing to write
 export async function writeLines(doc: vscode.TextDocument, before: readonly string[], after: readonly string[]): Promise<boolean> {
-  const e = span(before, after);
-  if (!e) return true;
-  return vscode.workspace.applyEdit(lineEdits(doc, [e]));
+  const es = hunks(before, after);
+  if (es.length === 0) return true;
+  return vscode.workspace.applyEdit(lineEdits(doc, es));
 }
 
 // writeFacts: the engine's facts over DOC as it is now, in one edit

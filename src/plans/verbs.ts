@@ -91,7 +91,7 @@ export class PlanVerbs {
       vscode.commands.registerCommand('durandal.plan.cancel', () => this.cancel()),
       vscode.commands.registerCommand('durandal.plan.accept', () => this.decide('accepted')),
       vscode.commands.registerCommand('durandal.plan.reject', () => this.decide('rejected')),
-      vscode.commands.registerCommand(GHOST_ACCEPTED, (a: GhostAcceptedArgs) => this.ghostAccepted(a)),
+      vscode.commands.registerCommand(GHOST_ACCEPTED, (a: GhostAcceptedArgs | undefined) => this.ghostAccepted(a)),
       vscode.workspace.onDidChangeTextDocument(e => this.moved(e)),
       vscode.workspace.onDidCloseTextDocument(doc => this.closed(doc.uri.toString())),
       vscode.window.onDidChangeVisibleTextEditors(() => this.pending.paintAll()),
@@ -268,21 +268,23 @@ export class PlanVerbs {
   // blocks are decided as by p y's, once written (spec §3.3). From an older server start: nothing.
   // The item is not served while a p y writes the plan (busy), and whichever of the two takes
   // the blocks first decides them.
-  private ghostAccepted(a: GhostAcceptedArgs): void {
-    if (a.gen !== this.gen) return;
+  // Called without arguments (a keybinding, a macro): nothing.
+  private ghostAccepted(a: GhostAcceptedArgs | undefined): void {
+    if (!a || a.gen !== this.gen) return;
     this.settle(a.uri, a.keys, 'accepted', 'tab', a.last);
   }
 
   // settle: the blocks named by KEYS, written (accepted, LAST the last row written, flashed) or
   // not (rejected), decided: those still in the store (a server stop, a close or the other
-  // accept took the rest without an outcome)
+  // accept took the rest without an outcome). Nothing taken: nothing flashed either.
   private settle(uri: string, keys: readonly number[], outcome: 'accepted' | 'rejected', how: 'chord' | 'tab', last?: number): void {
+    const taken = this.ghosts.takeKeys(uri, keys);
+    if (taken.length === 0) return;
     if (last !== undefined) {
       const doc = openDoc(uri);
       if (doc) this.flashRow(doc, last);
     }
-    const taken = this.ghosts.takeKeys(uri, keys);
-    if (taken.length > 0) this.decided(uri, taken, outcome, how);
+    this.decided(uri, taken, outcome, how);
   }
 
   // decided: BLOCKS (taken from the store) are decided: each one's outcome to the server, the

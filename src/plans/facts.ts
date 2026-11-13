@@ -93,3 +93,46 @@ export function span(before: readonly string[], after: readonly string[]): TextE
   if (!d) return undefined;
   return { start: d.top, end: before.length - d.bottom, lines: after.slice(d.top, after.length - d.bottom) };
 }
+
+// hunks: the edits, in rows of BEFORE, that turn BEFORE into AFTER: one per run of rows that
+// differ, top to bottom, none touching (a line diff over the longest common subsequence of
+// rows); [] when they are equal. Each hunk alone moves the rows it does not touch only by the
+// lines it adds or takes, as nvim's per-fact writes do. Past MAX_CELLS the differing middle is
+// one edit (span's).
+const MAX_CELLS = 1_000_000;
+export function hunks(before: readonly string[], after: readonly string[]): TextEdit0[] {
+  const d = differingRows(before, after);
+  if (!d) return [];
+  const a = before.slice(d.top, before.length - d.bottom);
+  const b = after.slice(d.top, after.length - d.bottom);
+  const n = a.length;
+  const m = b.length;
+  if (n === 0 || m === 0 || n * m > MAX_CELLS) return [{ start: d.top, end: d.top + n, lines: b }];
+  // L[i * w + j]: the length of the longest common subsequence of a[i..] and b[j..]
+  const w = m + 1;
+  const L = new Uint32Array((n + 1) * w);
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      L[i * w + j] = a[i] === b[j] ? L[(i + 1) * w + j + 1] + 1 : Math.max(L[(i + 1) * w + j], L[i * w + j + 1]);
+    }
+  }
+  const out: TextEdit0[] = [];
+  let cur: TextEdit0 | undefined;
+  let i = 0;
+  let j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && a[i] === b[j]) {
+      cur = undefined;
+      i++;
+      j++;
+      continue;
+    }
+    if (!cur) {
+      cur = { start: d.top + i, end: d.top + i, lines: [] };
+      out.push(cur);
+    }
+    if (j < m && (i === n || L[i * w + j + 1] >= L[(i + 1) * w + j])) cur.lines.push(b[j++]);
+    else cur.end = d.top + ++i;
+  }
+  return out;
+}

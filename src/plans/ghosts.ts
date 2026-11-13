@@ -74,9 +74,10 @@ export const lineCount = (blocks: readonly Ghost[]): number => blocks.reduce((k,
 export const markerText = (n: number): string => `ai · +${n} ${n === 1 ? 'line' : 'lines'}`;
 
 // hoverText: the row's proposal, its blocks' lines in order, as a fenced markdown block; the
-// fence is longer than any run of backticks in the lines
+// fence is longer than any run of backticks in the lines. Blocks with no lines say so.
 export function hoverText(blocks: readonly Ghost[]): string {
   const lines = blocks.flatMap(b => b.lines);
+  if (lines.length === 0) return '_no lines to add_';
   const runs = lines.flatMap(l => [...l.matchAll(/`+/g)].map(m => m[0].length));
   const fence = '`'.repeat(Math.max(2, ...runs) + 1);
   return `${fence}markdown\n${lines.join('\n')}\n${fence}`;

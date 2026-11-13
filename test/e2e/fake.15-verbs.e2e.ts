@@ -44,8 +44,9 @@ describe('the plan verbs (fake server)', () => {
     const a = await api();
     a.setUi(undefined);
     for (const m of REPLIES) reply(m, null);
-    const ed = vscode.window.activeTextEditor;
-    if (ed && ed.document.uri.toString() === uriOf(PLAN)) {
+    // ghosts a test left (wherever it ended): rejected from the plan, so the next test starts clean
+    if (a.planVerbs.ghosts(uriOf(PLAN)).length > 0) {
+      const ed = await at(0);
       for (const g of a.planVerbs.ghosts(uriOf(PLAN))) {
         ed.selection = new vscode.Selection(g.row, 0, g.row, 0);
         await vscode.commands.executeCommand('durandal.plan.reject');
@@ -360,6 +361,29 @@ describe('the plan verbs (fake server)', () => {
     assert.deepEqual(outcomeParams(outcomes).map(p => [p.id, p.block, p.outcome]), [['V1', 0, 'accepted'], ['V1', 1, 'accepted']]);
   });
 
+  it('a landing whose facts stamp rows above and below a ghost row leaves the ghost on its row; p y writes under it', async () => {
+    const a = await running();
+    await validated();
+    reply('olifant/plans/validate', {
+      ...VALIDATE, id: 'V2', blocks: [], delay: 1,
+      facts: [{ row: 1, text: '- a ✓' }, { row: 8, text: '- [x] step @src/a.py:Foo' }],
+    });
+    await at(3);
+    const p = vscode.commands.executeCommand('durandal.plan.validate');
+    await until(() => a.planVerbs.running(uriOf(PLAN)).length === 1, 'the validate in the air');
+    // another editor active when it lands: VS Code then applies the edit as given (with the
+    // plan's editor active it narrows a whole-span edit itself, which hid the bug)
+    await open(file('one/main.py'));
+    await p;
+    const ed = await at(5);
+    assert.deepEqual(lines().slice(0, 9), ['# T', '- a ✓', ...LINES.slice(2, 8), '- [x] step @src/a.py:Foo']);
+    assert.deepEqual(a.planVerbs.ghosts(uriOf(PLAN)), [{ row: 5, lines: ['  - ok'], marker: 'ai · +1 line' }]);
+    assert.deepEqual(a.planVerbs.markers(uriOf(PLAN)), [{ row: 5, text: 'ai · +1 line' }]);
+    onRow(ed, 5);
+    await vscode.commands.executeCommand('durandal.plan.accept');
+    assert.deepEqual(lines().slice(5, 8), ['- e target line', '  - ok', '- f']);
+  });
+
   it('a second answer on a ghost row goes after the first; p y writes both, each outcome against its own answer', async () => {
     const a = await running();
     const outcomes = sent('olifant/plans/outcome').length;
@@ -390,12 +414,14 @@ describe('the plan verbs (fake server)', () => {
     assert.deepEqual(a.landed.fired.slice(fired), ['do', 'accept']);
   });
 
-  it('a block with no lines: held but not marked; p y writes nothing and still sends accepted and lands', async () => {
+  it('a block with no lines: held and marked +0 lines; p y writes nothing and still sends accepted and lands', async () => {
     const a = await running();
     const outcomes = sent('olifant/plans/outcome').length;
+    const from = actionLog().length;
     const ed = await validated(3, { ...VALIDATE, blocks: [{ after: 3, after_text: null, lines: [] }] });
     assert.deepEqual(a.planVerbs.ghosts(uriOf(PLAN)), [{ row: 3, lines: [], marker: 'ai · +0 lines' }]);
-    assert.deepEqual(a.planVerbs.markers(uriOf(PLAN)), [], 'no "+0 lines" marker is drawn');
+    assert.deepEqual(a.planVerbs.markers(uriOf(PLAN)), [{ row: 3, text: 'ai · +0 lines' }], 'every ghost row carries its marker (spec §3.2)');
+    assert.deepEqual(events(from, 'plan-ghost-shown').map(e => [e.verb, e.blocks]), [['validate', 1]], 'shown, as drawn');
     const fired = a.landed.fired.length;
     onRow(ed, 3);
     await vscode.commands.executeCommand('durandal.plan.accept');
@@ -630,14 +656,41 @@ describe('the plan verbs (fake server)', () => {
     const n = a.planVerbs.served.count;
     onRow(ed, 5);
     await until(() => servedAt(a, n, 5).length > 0, 'the ghost served');
-    const old = servedAt(a, n, 5).at(-1)!.args;
+    const old = servedAt(a, n, 5).at(-1)!.args as { gen: number };
     await restart();
-    await validated();
+    const ed2 = await validated();
+    const m = a.planVerbs.served.count;
+    onRow(ed2, 5, 1);
+    await until(() => servedAt(a, m, 5).length > 0, 'the new ghost served');
+    // the new ghost's own keys with the old start's gen: only the gen check refuses it
+    const stale = { ...(servedAt(a, m, 5).at(-1)!.args as object), gen: old.gen };
     const outcomes = sent('olifant/plans/outcome').length;
+    const flashes = a.planVerbs.flashes.length;
     await vscode.commands.executeCommand('durandal.plan.ghostAccepted', old);
+    await vscode.commands.executeCommand('durandal.plan.ghostAccepted', stale);
+    // without arguments (a keybinding, a macro): nothing, no throw
+    await vscode.commands.executeCommand('durandal.plan.ghostAccepted');
     await sleep(300);
     assert.equal(sent('olifant/plans/outcome').length, outcomes);
+    assert.equal(a.planVerbs.flashes.length, flashes, 'nothing decided, nothing flashed');
     assert.deepEqual(a.planVerbs.ghosts(uriOf(PLAN)), [{ row: 5, lines: ['  - ok'], marker: 'ai · +1 line' }]);
+  });
+
+  it('a native commit whose blocks were already decided flashes nothing', async () => {
+    const a = await running();
+    const ed = await validated();
+    const n = a.planVerbs.served.count;
+    onRow(ed, 5, 1);
+    await until(() => servedAt(a, n, 5).length > 0, 'the ghost served');
+    const args = servedAt(a, n, 5).at(-1)!.args;
+    const outcomes = sent('olifant/plans/outcome').length;
+    await vscode.commands.executeCommand('durandal.plan.reject');
+    const flashes = a.planVerbs.flashes.length;
+    await vscode.commands.executeCommand('durandal.plan.ghostAccepted', args);
+    await sleep(300);
+    assert.deepEqual(a.planVerbs.flashes.slice(flashes), []);
+    assert.deepEqual(outcomeParams(outcomes).map(p => p.outcome), ['rejected'], 'decided once, by p n');
+    assert.equal(docOf(PLAN)!.getText(), TEXT);
   });
 
   // the source code actions the plan chords asked (VS Code's lightbulb asks its own, without only)

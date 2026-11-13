@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Fact } from '../../src/protocol';
-import { applyLineEdits, factEdits, span, type TextEdit0 } from '../../src/plans/facts';
+import { applyLineEdits, factEdits, hunks, span, type TextEdit0 } from '../../src/plans/facts';
 
 const PLAN = ['# T', '', '- [ ] add a label @src/a.py:Table.label', '- [ ] next'];
 
@@ -95,4 +95,29 @@ test('span is the one edit from the first row that differs to the last; none whe
   const before = ['# T', '- a', '- b', '', '- c'];
   const after = ['# T', '- a fact', '  - early', '- b', '', '- c', '  - so'];
   assert.deepEqual(applyLineEdits(before, [span(before, after)!]), after);
+});
+
+test('hunks is one edit per run of differing rows, top to bottom; none when equal', () => {
+  assert.deepEqual(hunks(['a', 'b'], ['a', 'b']), []);
+  assert.deepEqual(hunks(['a', 'b', 'c'], ['a', 'x', 'b', 'c']), [{ start: 1, end: 1, lines: ['x'] }]);
+  assert.deepEqual(hunks(['a', 'b', 'c', 'd'], ['A', 'b', 'c', 'D']), [{ start: 0, end: 1, lines: ['A'] }, { start: 3, end: 4, lines: ['D'] }]);
+  assert.deepEqual(hunks(['a', 'b', 'c'], ['a', 'c']), [{ start: 1, end: 2, lines: [] }]);
+  assert.deepEqual(hunks(['a', 'b', 'c', 'd', 'e'], ['x', 'a', 'B', 'c', 'e', 'y']),
+    [{ start: 0, end: 0, lines: ['x'] }, { start: 1, end: 2, lines: ['B'] }, { start: 3, end: 4, lines: [] }, { start: 5, end: 5, lines: ['y'] }]);
+  assert.deepEqual(hunks([], ['a']), [{ start: 0, end: 0, lines: ['a'] }]);
+  assert.deepEqual(hunks(['a'], []), [{ start: 0, end: 1, lines: [] }]);
+});
+
+test('hunks never touch, and applied bottom-up (or as one workspace edit) give AFTER', () => {
+  const cases: [string[], string[]][] = [
+    [['# T', '- a', '- b', '', '- c'], ['# T', '- a fact', '  - early', '- b', '', '- c', '  - so']],
+    [['x', 'y', 'x', 'y', 'x'], ['y', 'x', 'y', 'x', 'y']],
+    [['a', '', 'b', '', 'c', ''], ['', 'a', '', 'B', '', 'c', '', 'd', '']],
+    [['p', 'q', 'r'], ['s', 't']],
+  ];
+  for (const [before, after] of cases) {
+    const es = hunks(before, after);
+    for (let k = 1; k < es.length; k++) assert.ok(es[k - 1].end < es[k].start, 'a common row between two hunks');
+    assert.deepEqual(applyLineEdits(before, [...es].reverse()), after);
+  }
 });
