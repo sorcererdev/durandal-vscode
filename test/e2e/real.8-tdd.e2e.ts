@@ -71,8 +71,10 @@ describe('the TDD loop against olifant lsp (python-htmx)', () => {
     const ds = await until(() => (errorsOn(TEST).length > 0 ? errorsOn(TEST) : undefined), 'the failure marked');
     assert.equal(ds.length, 1);
     assert.equal(ds[0].range.start.line, row);
-    const results = vscode.workspace.textDocuments.find(d => d.uri.path === '/tests/results.txt');
-    assert.ok(results?.getText().includes('✗ test_a_booked_slot_is_taken'));
+    // the results document opens beside after the notice (show does not wait for VS Code to
+    // open it): waited for, as fake.11 waits for its tab (run 43638780607: not open yet)
+    await until(() => vscode.workspace.textDocuments.find(d => d.uri.path === '/tests/results.txt')
+      ?.getText().includes('✗ test_a_booked_slot_is_taken'), 'the failure in the results document');
   });
 
   it('the test under the cursor runs alone; test file runs the whole file', async () => {
