@@ -82,7 +82,7 @@ gates, and the one commit that turns `0.0.1` into `0.1.0`.
     the checkout step, so the cabal build, cache and test steps have never run; the first green
     run of the release branch measures them against the 90-minute limit (M1 flagged it).
 
-### B. Left to the user (each with the recommended answer)
+### B. Left to the user (answered 2026-11-14: both as recommended)
 
 1. **Public release of a public repo?** `sorcererdev/durandal-vscode` is already public
    (verified; the memory's "private for now" is wrong), as is olifant. Recommended: keep it
