@@ -51,3 +51,16 @@ export function appliedMessage(label: string | undefined, saved: string[], unsav
   if (names.length === 0) return undefined;
   return `${label && label.trim() !== '' ? label : 'Olifant'}: ${names.join(', ')}`;
 }
+
+// boundedSave: a save's answer, or 'stalled' when it has not settled within ms. VS Code's own
+// write can stall for minutes (M8 CI notes, "Save hang"), and a server edit's save must not hold
+// every later edit behind it.
+export async function boundedSave(save: () => PromiseLike<boolean>, ms: number): Promise<boolean | 'stalled'> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const stalled = new Promise<'stalled'>(r => { timer = setTimeout(() => r('stalled'), ms); });
+  try {
+    return await Promise.race([Promise.resolve(save()), stalled]);
+  } finally {
+    clearTimeout(timer);
+  }
+}

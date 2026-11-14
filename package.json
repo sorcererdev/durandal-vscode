@@ -3,12 +3,16 @@
   "displayName": "Durandal",
   "description": "Olifant in VS Code: conventions, generators, the TDD loop and plans over olifant lsp",
   "publisher": "sorcererdev",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/sorcererdev/durandal-vscode"
   },
+  "bugs": {
+    "url": "https://github.com/sorcererdev/durandal-vscode/issues"
+  },
+  "homepage": "https://github.com/sorcererdev/durandal-vscode#readme",
   "engines": {
     "vscode": "^1.91.0"
   },
@@ -82,19 +86,58 @@
           "default": {},
           "additionalProperties": false,
           "properties": {
-            "todo": { "type": "string", "description": "An open step's marker `- [ ]` (default ☐)." },
-            "done": { "type": "string", "description": "A ticked step's marker `- [x]` (default ☑)." },
-            "question": { "type": "string", "description": "A question's marker `- ?` (default ?)." },
-            "test": { "type": "string", "description": "A test child's marker `- test:` (default ·)." },
-            "also": { "type": "string", "description": "An also child's marker `- also` (default +)." },
-            "dash": { "type": "string", "description": "Any other line's `- ` (default: hidden)." },
-            "path": { "type": "string", "description": "An anchor's `@path:` (default: hidden)." },
-            "hex": { "type": "string", "description": "A fingerprint (default: hidden)." },
-            "queued": { "type": "string", "description": "Margin: a claim waiting for a check (default ○)." },
-            "checking": { "type": "string", "description": "Margin: a claim being checked (default …)." },
-            "right": { "type": "string", "description": "Margin: a claim checked right (default ✓)." },
-            "wrong": { "type": "string", "description": "Margin: a claim checked wrong (default ✗)." },
-            "unsure": { "type": "string", "description": "Margin: a claim the check could not tell (default ?)." }
+            "todo": {
+              "type": "string",
+              "description": "An open step's marker `- [ ]` (default ☐)."
+            },
+            "done": {
+              "type": "string",
+              "description": "A ticked step's marker `- [x]` (default ☑)."
+            },
+            "question": {
+              "type": "string",
+              "description": "A question's marker `- ?` (default ?)."
+            },
+            "test": {
+              "type": "string",
+              "description": "A test child's marker `- test:` (default ·)."
+            },
+            "also": {
+              "type": "string",
+              "description": "An also child's marker `- also` (default +)."
+            },
+            "dash": {
+              "type": "string",
+              "description": "Any other line's `- ` (default: hidden)."
+            },
+            "path": {
+              "type": "string",
+              "description": "An anchor's `@path:` (default: hidden)."
+            },
+            "hex": {
+              "type": "string",
+              "description": "A fingerprint (default: hidden)."
+            },
+            "queued": {
+              "type": "string",
+              "description": "Margin: a claim waiting for a check (default ○)."
+            },
+            "checking": {
+              "type": "string",
+              "description": "Margin: a claim being checked (default …)."
+            },
+            "right": {
+              "type": "string",
+              "description": "Margin: a claim checked right (default ✓)."
+            },
+            "wrong": {
+              "type": "string",
+              "description": "Margin: a claim checked wrong (default ✗)."
+            },
+            "unsure": {
+              "type": "string",
+              "description": "Margin: a claim the check could not tell (default ?)."
+            }
           },
           "markdownDescription": "Overrides of the plan glyphs, by name. An empty string hides the text and shows nothing."
         },
@@ -110,7 +153,10 @@
         },
         "durandal.plans.reconcile": {
           "type": "string",
-          "enum": ["auto", "key"],
+          "enum": [
+            "auto",
+            "key"
+          ],
           "default": "auto",
           "enumDescriptions": [
             "Reconcile a plan when it is entered, when something lands, and a second after a file elsewhere is saved.",
@@ -490,45 +536,143 @@
       }
     ],
     "semanticTokenTypes": [
-      { "id": "planMarker", "superType": "string", "description": "A plan line's marker: `- [ ]`, `- [x]`, `- ?`, `- test:`, `- also`, `- `." },
-      { "id": "planStep", "superType": "string", "description": "An open step's text." },
-      { "id": "planStepDone", "superType": "string", "description": "A ticked step's text." },
-      { "id": "planQuestion", "superType": "class", "description": "A question's text." },
-      { "id": "planEvidence", "superType": "comment", "description": "Evidence under a claim or question." },
-      { "id": "planClaim", "superType": "string", "description": "A claim's text." },
-      { "id": "planTest", "superType": "string", "description": "A step's test sentence." },
-      { "id": "planAlso", "superType": "comment", "description": "An also child of a step." },
-      { "id": "planJournal", "superType": "comment", "description": "A journal line of a past do." },
-      { "id": "planAnchorPath", "superType": "number", "description": "An anchor's `@path:`." },
-      { "id": "planAnchorUnit", "superType": "variable", "description": "An anchor's unit." },
-      { "id": "planVerdict", "superType": "number", "description": "A verdict mark: ✓, ✗, ○, ●, `? not found`." },
-      { "id": "planFingerprint", "superType": "number", "description": "A verified anchor's fingerprint." }
+      {
+        "id": "planMarker",
+        "superType": "string",
+        "description": "A plan line's marker: `- [ ]`, `- [x]`, `- ?`, `- test:`, `- also`, `- `."
+      },
+      {
+        "id": "planStep",
+        "superType": "string",
+        "description": "An open step's text."
+      },
+      {
+        "id": "planStepDone",
+        "superType": "string",
+        "description": "A ticked step's text."
+      },
+      {
+        "id": "planQuestion",
+        "superType": "class",
+        "description": "A question's text."
+      },
+      {
+        "id": "planEvidence",
+        "superType": "comment",
+        "description": "Evidence under a claim or question."
+      },
+      {
+        "id": "planClaim",
+        "superType": "string",
+        "description": "A claim's text."
+      },
+      {
+        "id": "planTest",
+        "superType": "string",
+        "description": "A step's test sentence."
+      },
+      {
+        "id": "planAlso",
+        "superType": "comment",
+        "description": "An also child of a step."
+      },
+      {
+        "id": "planJournal",
+        "superType": "comment",
+        "description": "A journal line of a past do."
+      },
+      {
+        "id": "planAnchorPath",
+        "superType": "number",
+        "description": "An anchor's `@path:`."
+      },
+      {
+        "id": "planAnchorUnit",
+        "superType": "variable",
+        "description": "An anchor's unit."
+      },
+      {
+        "id": "planVerdict",
+        "superType": "number",
+        "description": "A verdict mark: ✓, ✗, ○, ●, `? not found`."
+      },
+      {
+        "id": "planFingerprint",
+        "superType": "number",
+        "description": "A verified anchor's fingerprint."
+      }
     ],
     "semanticTokenModifiers": [
-      { "id": "done", "description": "Under a ticked step." },
-      { "id": "stale", "description": "A fingerprint the unit no longer has." },
-      { "id": "notFound", "description": "An anchor's unit the server cannot find." },
-      { "id": "checked", "description": "A claim a check found right." },
-      { "id": "wrong", "description": "A claim a check found wrong." },
-      { "id": "resolved", "description": "No longer given by the server; kept for its legend." }
+      {
+        "id": "done",
+        "description": "Under a ticked step."
+      },
+      {
+        "id": "stale",
+        "description": "A fingerprint the unit no longer has."
+      },
+      {
+        "id": "notFound",
+        "description": "An anchor's unit the server cannot find."
+      },
+      {
+        "id": "checked",
+        "description": "A claim a check found right."
+      },
+      {
+        "id": "wrong",
+        "description": "A claim a check found wrong."
+      },
+      {
+        "id": "resolved",
+        "description": "No longer given by the server; kept for its legend."
+      }
     ],
     "semanticTokenScopes": [
       {
         "scopes": {
-          "planMarker": ["punctuation.definition.list.begin.markdown"],
-          "planStep": ["string"],
-          "planStepDone": ["string"],
-          "planQuestion": ["markup.heading"],
-          "planEvidence": ["comment"],
-          "planClaim": ["string"],
-          "planTest": ["string"],
-          "planAlso": ["comment"],
-          "planJournal": ["comment"],
-          "planAnchorPath": ["constant.numeric"],
-          "planAnchorUnit": ["variable"],
-          "planVerdict": ["constant.numeric"],
-          "planFingerprint": ["constant.numeric"],
-          "*.stale": ["comment"]
+          "planMarker": [
+            "punctuation.definition.list.begin.markdown"
+          ],
+          "planStep": [
+            "string"
+          ],
+          "planStepDone": [
+            "string"
+          ],
+          "planQuestion": [
+            "markup.heading"
+          ],
+          "planEvidence": [
+            "comment"
+          ],
+          "planClaim": [
+            "string"
+          ],
+          "planTest": [
+            "string"
+          ],
+          "planAlso": [
+            "comment"
+          ],
+          "planJournal": [
+            "comment"
+          ],
+          "planAnchorPath": [
+            "constant.numeric"
+          ],
+          "planAnchorUnit": [
+            "variable"
+          ],
+          "planVerdict": [
+            "constant.numeric"
+          ],
+          "planFingerprint": [
+            "constant.numeric"
+          ],
+          "*.stale": [
+            "comment"
+          ]
         }
       }
     ]

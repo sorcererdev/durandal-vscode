@@ -24,12 +24,22 @@ const testMarks = (rel: string) => vscode.languages.getDiagnostics(file(rel)).fi
 const resultsTabs = () => tabsUnder('/' + RESULTS_PATH);
 
 // said executes a TDD command and waits for the notice it says (from the shown list's end)
+// ran: the last command said() ran, until its handler returns (a notice can come before the
+// command's last steps, such as stub's cursor on the new test)
+let ran: Thenable<unknown> = Promise.resolve();
+
 async function said(command: string, want: (text: string) => boolean): Promise<string> {
   const a = await api();
   const from = a.shown.length;
-  void vscode.commands.executeCommand(command);
-  const s = await until(() => a.shown.slice(from).find(x => want(x.text)), `a notice after ${command}`);
-  return s.text;
+  ran = vscode.commands.executeCommand(command);
+  try {
+    const s = await until(() => a.shown.slice(from).find(x => want(x.text)), `a notice after ${command}`);
+    return s.text;
+  } catch (err) {
+    // what was said instead, and where (CI-only timeouts, run 43606856671)
+    const other = a.shown.slice(from).map(x => `${x.level}: ${x.text}`);
+    throw new Error(`${(err as Error).message}; said instead: ${JSON.stringify(other)}; active: ${vscode.window.activeTextEditor?.document.uri.toString()}`);
+  }
 }
 
 describe('the TDD loop (fake server)', () => {
@@ -230,8 +240,11 @@ describe('the TDD loop (fake server)', () => {
     assert.equal(a.landed.fired.length, fired + 1);
     assert.equal(a.landed.fired.at(-1), 'stub');
     assert.ok(disk(TEST).endsWith('\n\n\ndef test_main_2():\n    ...\n'));
-    const ed = vscode.window.activeTextEditor!;
-    assert.equal(ed.document.uri.toString(), uriOf(TEST));
+    // the test file opens after the landing fires, and the cursor is put after showTextDocument
+    // resolves: VS Code reports the new active editor (cursor at 0:0) before that, so the stub
+    // has to have finished (run 43622964717, macOS: [0, 0])
+    await ran;
+    const ed = await until(() => { const e = vscode.window.activeTextEditor; return e?.document.uri.toString() === uriOf(TEST) ? e : undefined; }, 'the test file active');
     assert.deepEqual([ed.selection.active.line, ed.selection.active.character], [8, 4]);
     await settle(TEST, TEST_TEXT);
   });

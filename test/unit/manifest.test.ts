@@ -244,3 +244,12 @@ test('M7: Tab and Esc on a suggestion\'s ghost lines are ours only while they ar
   // the decoration's Tab and Esc stay where no inline suggestion is shown
   for (const k of SUGGEST_KEYS.filter(k => k.when.startsWith('durandal.ghostVisible'))) assert.ok(k.when.includes('!inlineSuggestionVisible'), k.when);
 });
+
+test('the release manifest: 0.1.0, Apache-2.0, bugs and homepage on the public repo', () => {
+  const p = pkg as typeof pkg & { bugs?: { url: string }; homepage?: string };
+  assert.equal(p.version, '0.1.0');
+  assert.equal(p.license, 'Apache-2.0');
+  assert.equal(p.publisher, 'sorcererdev');
+  assert.deepEqual(p.bugs, { url: 'https://github.com/sorcererdev/durandal-vscode/issues' });
+  assert.equal(p.homepage, 'https://github.com/sorcererdev/durandal-vscode#readme');
+});

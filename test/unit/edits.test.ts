@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { WorkspaceEdit } from 'vscode-languageserver-protocol';
-import { appliedMessage, editedUris, fileName, stripAnnotations, versionConflict } from '../../src/edits';
+import { appliedMessage, boundedSave, editedUris, fileName, stripAnnotations, versionConflict } from '../../src/edits';
 
 const R = { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
 
@@ -47,4 +47,14 @@ test('appliedMessage names saved files, then the unsaved ones', () => {
   assert.equal(appliedMessage(undefined, ['a.py'], []), 'Olifant: a.py');
   assert.equal(appliedMessage('  ', [], ['a.py']), 'Olifant: a.py (unsaved)');
   assert.equal(appliedMessage('x', [], []), undefined);
+});
+
+test('boundedSave: the save\'s answer when it settles in time; stalled when it does not; a failure passes through', async () => {
+  assert.equal(await boundedSave(() => Promise.resolve(true), 50), true);
+  assert.equal(await boundedSave(() => Promise.resolve(false), 50), false);
+  // a save that never settles (VS Code's stalled write) gives up after ms
+  const started = Date.now();
+  assert.equal(await boundedSave(() => new Promise<boolean>(() => undefined), 30), 'stalled');
+  assert.ok(Date.now() - started < 1000);
+  await assert.rejects(boundedSave(() => Promise.reject(new Error('no space')), 50), /no space/);
 });

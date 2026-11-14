@@ -12,5 +12,5 @@
     "skipLibCheck": true,
     "sourceMap": true
   },
-  "include": ["src", "test", "webview/render.ts"]
+  "include": ["src", "test", "scripts", "webview/render.ts"]
 }

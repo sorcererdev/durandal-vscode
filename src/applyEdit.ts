@@ -1,7 +1,7 @@
 import { basename } from 'node:path';
 import * as vscode from 'vscode';
 import type { ApplyWorkspaceEditParams, ApplyWorkspaceEditResult, LanguageClient } from 'vscode-languageclient/node';
-import { appliedMessage, editedUris, stripAnnotations, versionConflict } from './edits';
+import { appliedMessage, boundedSave, editedUris, stripAnnotations, versionConflict } from './edits';
 import { errorMessage } from './errors';
 import { readPlansOptions } from './plans/options';
 import { isPlanFile } from './root';
@@ -12,6 +12,8 @@ const openDoc = (k: string) => vscode.workspace.textDocuments.find(d => d.uri.to
 
 // lock runs the server's edits one after another, whole (the library's workspaceEditLock).
 let lock: Promise<unknown> = Promise.resolve();
+// SAVE_MS bounds each save inside the lock (boundedSave)
+const SAVE_MS = 5000;
 
 // applyServerEdit is durandal.nvim's workspace/applyEdit: refused whole if an open document
 // moved past the version the edit was made at; applied without its annotations; then each
@@ -70,7 +72,11 @@ async function applyNow(
     // an edit to a file that was not open leaves it open, unsaved, in VS Code's documents
     const doc = openDoc(uri.toString()) ?? await vscode.workspace.openTextDocument(uri).then(d => d, () => undefined);
     if (!doc || !doc.isDirty) continue;
-    (await doc.save() ? saved : unsaved).push(basename(uri.fsPath));
+    const name = basename(uri.fsPath);
+    const ok = await boundedSave(() => doc.save(), SAVE_MS);
+    // a stalled save is left to VS Code and the edits after go on; VS Code may then show the document clean with the disk stale, so the warning claims neither
+    if (ok === 'stalled') void vscode.window.showWarningMessage(`Durandal: saving ${name} did not finish in ${SAVE_MS / 1000} s; Durandal went on without it. Check the file on disk (File: Revert File, or make an edit and save)`);
+    (ok === true ? saved : unsaved).push(name);
   }
   const text = word(saved, unsaved, kept);
   if (text) say(text);

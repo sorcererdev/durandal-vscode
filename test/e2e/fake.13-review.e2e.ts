@@ -5,7 +5,7 @@ import { Olifant } from '../../src/protocol';
 import { plain } from '../../src/pause/viewModel';
 import { FakeUi } from '../fakeUi';
 import { reviewFixture, wrapped } from '../pauseFixtures';
-import { api, file, log, open, reply, revert, running, settle, tabsUnder, until } from './helpers';
+import { api, file, hidden, log, open, reply, revert, running, settle, tabsUnder, until, windowGone, windowTab } from './helpers';
 
 // The review sources over the fake server (M5 spec §5, §8): the push after a do, the lens, the
 // chord, choose and its answers, reopen, durandal.isPlan.
@@ -20,12 +20,13 @@ const planEdit = (text: string, version: number | null = null) => ({ documentCha
   { range: { start: { line: 3, character: 0 }, end: { line: 3, character: 0 } }, newText: text },
 ] }] });
 
-// showing: open the review the lens names and wait for its window
+// showing: open the review the lens names and wait for its window, up in the workbench (windowTab)
 async function showing(review: DoReview | ReconcileReview, entry?: string): Promise<void> {
   const a = await api();
   reply('olifant/plans/review', review);
   await vscode.commands.executeCommand('olifant.plans.review', review.id, uriOf(PLAN), ...(entry ? [entry] : []));
   await until(() => a.pause.source() === review.kind, `the ${review.kind} window`);
+  await until(windowTab, 'the window in the workbench');
 }
 
 describe('the review window (fake server)', () => {
@@ -42,7 +43,7 @@ describe('the review window (fake server)', () => {
   afterEach(async () => {
     const a = await api();
     a.setUi(undefined);
-    if (a.pause.view()) await a.pause.press('q');
+    await windowGone();
     for (const m of ['olifant/plans/review', 'olifant/plans/reviews', 'olifant/plans/review/choose', 'olifant/plans/do', 'olifant/conjure']) reply(m, null);
     const d = vscode.workspace.textDocuments.find(x => x.uri.toString() === uriOf(PLAN));
     if (d?.isDirty) await revert(d);
@@ -59,7 +60,10 @@ describe('the review window (fake server)', () => {
     });
     await a.server.request(Olifant.plansDo, { textDocument: { uri: uriOf(PLAN) }, line: 2 });
     await until(() => a.pause.source() === 'do', 'the do window');
-    assert.ok(plain(a.pause.view()!.title).startsWith('do · step 1 · Table.label · ◆ answered'));
+    // the tab, not the title: the title is cut to the pane's last measured width, which the
+    // window before this one reported (on CI a narrow pane cuts it; run 43622964717, 1.91.0)
+    assert.equal(a.pause.view()!.tab, 'do · step 1 · Table.label', plain(a.pause.view()!.title));
+    assert.equal(a.pause.view()!.state, 'review');
     assert.deepEqual(sent('olifant/plans/review').at(-1)!.params, { textDocument: { uri: uriOf(PLAN) }, id: 'R1' });
     assert.ok(!vscode.window.visibleTextEditors.some(e => e.document.uri.toString() === uriOf(PLAN)));
   });
@@ -152,7 +156,7 @@ describe('the review window (fake server)', () => {
     await vscode.commands.executeCommand('durandal.plan.review');
     await until(() => a.pause.source() === 'do', 'the do window');
     assert.equal(sent('olifant/plans/review').at(-1)!.params.id, 'R1');
-    await a.pause.press('q');
+    await hidden();
     // the closed tab's focus goes back to an editor on its own time: the plan active first
     await open(file(PLAN));
     await until(() => vscode.window.activeTextEditor?.document.uri.toString() === uriOf(PLAN), 'the plan active');
@@ -284,7 +288,7 @@ describe('the review window (fake server)', () => {
     await vscode.commands.executeCommand('durandal.conjure');
     await until(() => a.pause.source() === 'conjure', 'the pause again');
     assert.equal(sent('olifant/conjure').length, n);
-    await a.pause.press('q');
+    await hidden();
     await settle(MAIN, 'x = 1\n');
   });
 
