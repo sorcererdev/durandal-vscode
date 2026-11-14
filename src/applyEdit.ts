@@ -74,8 +74,8 @@ async function applyNow(
     if (!doc || !doc.isDirty) continue;
     const name = basename(uri.fsPath);
     const ok = await boundedSave(() => doc.save(), SAVE_MS);
-    // a stalled save is left to VS Code: the file stays unsaved here, and the edits after go on
-    if (ok === 'stalled') void vscode.window.showWarningMessage(`Durandal: saving ${name} did not finish in ${SAVE_MS / 1000} s; it is left unsaved`);
+    // a stalled save is left to VS Code and the edits after go on; VS Code may then show the document clean with the disk stale, so the warning claims neither
+    if (ok === 'stalled') void vscode.window.showWarningMessage(`Durandal: saving ${name} did not finish in ${SAVE_MS / 1000} s; Durandal went on without it. Check the file on disk (File: Revert File, or make an edit and save)`);
     (ok === true ? saved : unsaved).push(name);
   }
   const text = word(saved, unsaved, kept);
