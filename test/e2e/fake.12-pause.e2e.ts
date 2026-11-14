@@ -368,7 +368,8 @@ describe('the pause window (fake server)', () => {
     // the press took the pause before its request went
     assert.ok(!a.pause.stored(uriOf(MAIN)));
     await until(() => a.pause.stored(uriOf(MAIN)), 'the next pause');
-    assert.ok(plain(a.pause.view()!.title).includes('● paused'));
+    // the state, not the title: a narrow pane (a small window, as on CI) cuts the title before its badge
+    assert.equal(a.pause.view()!.state, 'paused', plain(a.pause.view()!.title));
     const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs).filter(t => t.input instanceof vscode.TabInputWebview);
     assert.equal(tabs.length, 1);
     reply('olifant/conjure', landed({ edits: null, summary: 'nothing landed' }));
