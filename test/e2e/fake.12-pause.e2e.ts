@@ -77,7 +77,8 @@ describe('the pause window (fake server)', () => {
   after(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     await settle(MAIN, 'x = 1\n');
-    await settle(OTHER, null);
+    // other.py is run.ts's fixture: back as written there (the plan verbs stub into it)
+    await settle(OTHER, 'y = 2\n');
   });
 
   afterEach(async () => {
