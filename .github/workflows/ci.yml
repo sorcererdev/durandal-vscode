@@ -48,10 +48,13 @@ jobs:
             olifant/dist-newstyle
           key: cabal-${{ runner.os }}-ghc${{ env.GHC }}-${{ steps.ref.outputs.sha }}
           restore-keys: cabal-${{ runner.os }}-ghc${{ env.GHC }}-
+      # On glibc, olifant's -std=c11 (cc-options) hides le16toh and fdopen from its vendored
+      # tree-sitter; _DEFAULT_SOURCE brings them back (tree-sitter's own build defines it).
       - name: olifant
         working-directory: olifant
         run: |
-          cabal build -v1 exe:olifant
+          if [ "$RUNNER_OS" = Linux ]; then cflags=--ghc-options=-optc-D_DEFAULT_SOURCE; else cflags=; fi
+          cabal build -v1 $cflags exe:olifant
           echo "OLIFANT_BIN=$(cabal list-bin exe:olifant)" >> "$GITHUB_ENV"
           echo "OLIFANT_REPO=$PWD" >> "$GITHUB_ENV"
       - uses: actions/cache/save@v4
