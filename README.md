@@ -230,3 +230,4 @@ section, merge, then tag the merge commit and push the tag:
 workflow runs CI and attaches the `.vsix` with that section as the notes; a tag that does not
 match `package.json`, a tag off main, or a missing section fails before anything is published.
 A tag with a `-` (`v0.2.0-rc.1`) is a prerelease.
+If a CI cell of the tag's run fails on the known save stall, use "Re-run failed jobs" on that run; never move or re-push the tag.
