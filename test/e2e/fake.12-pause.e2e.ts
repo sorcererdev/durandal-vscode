@@ -18,6 +18,12 @@ const uriOf = (rel: string) => file(rel).toString();
 const abs = (rel: string) => join(ws(), rel);
 const conjures = () => log().filter(m => m.method === 'olifant/conjure');
 const resumes = () => conjures().map(m => m.params.resume).filter(Boolean);
+// windowTab: the window's tab is up in the workbench. It opens (and closes) there about 100 ms
+// after the controller has drawn (or dropped) it, in a group of its own that takes the focus,
+// and an editor opened meanwhile goes into that group. Run 43622964717 (1.91.0): afterEach's
+// revert of main.py failed there with "Could NOT open editor". Tests open editors only while
+// the window is fully up or fully closed.
+const windowTab = () => vscode.window.tabGroups.all.some(g => g.tabs.some(t => t.input instanceof vscode.TabInputWebview));
 
 // a fixture whose unit is lines 3-5 of main.py (1-based), as the server would send for it
 function paused(name: 'plain' | 'wired' | 'steps' | 'check' = 'plain'): ConjurePaused {
@@ -56,6 +62,23 @@ async function conjureAt(line: number, answer: unknown, rel = MAIN): Promise<voi
   await until(() => a.pause.view(), 'the pause window');
   // the previous run's running view can still be up: wait for this pause to be held
   await until(() => a.pause.stored(uriOf(rel)), 'the pause held');
+  await until(windowTab, 'the window in the workbench');
+}
+
+// hidden: q, then the window closed in the workbench, before the test opens an editor (windowTab)
+async function hidden(): Promise<void> {
+  const a = await api();
+  await a.pause.press('q');
+  await until(() => !windowTab(), 'the window closed');
+}
+
+// typed: text put at the top of rel's open document, without showing it: while the window has
+// the focus an editor opened goes into the window's group, and on 1.91.0 a second editor of
+// main.py there leaves activeTextEditor on the first one (a later conjure reads its cursor)
+async function typed(rel: string, text: string): Promise<void> {
+  const e = new vscode.WorkspaceEdit();
+  e.insert(file(rel), new vscode.Position(0, 0), text);
+  assert.ok(await vscode.workspace.applyEdit(e));
 }
 
 // pressed: a key, then the resume it sent
@@ -84,7 +107,13 @@ describe('the pause window (fake server)', () => {
   afterEach(async () => {
     const a = await api();
     a.setUi(undefined);
-    if (a.pause.view()) await a.pause.press('q');
+    if (a.pause.view()) {
+      // up in the workbench before q closes it, so the close is the last one in flight
+      await until(windowTab, 'the window in the workbench');
+      await hidden();
+    }
+    // a landing's close can be in flight too
+    await until(() => !windowTab(), 'the window closed');
     // q keeps the pause; an edit drops it, else the next test's conjure reopens it
     for (const rel of [MAIN, OTHER]) {
       if (!a.pause.stored(uriOf(rel))) continue;
@@ -228,7 +257,7 @@ describe('the pause window (fake server)', () => {
     await conjureAt(3, paused());
     await a.pause.press('[');
     const sel = a.pause.view()!.selected;
-    await a.pause.press('q');
+    await hidden();
     assert.equal(a.pause.view(), undefined);
     assert.ok(a.pause.stored(uriOf(MAIN)));
     assert.equal(a.pause.reminders(uriOf(MAIN)), 1);
@@ -245,8 +274,7 @@ describe('the pause window (fake server)', () => {
     const a = await running();
     const from = a.shown.length;
     await conjureAt(3, paused());
-    const ed = await open(file(MAIN));
-    await ed.edit(b => b.insert(new vscode.Position(0, 0), '# '));
+    await typed(MAIN, '# ');
     await until(() => !a.pause.stored(uriOf(MAIN)), 'the pause dropped');
     assert.equal(a.pause.reminders(uriOf(MAIN)), 0);
     assert.equal(a.pause.view(), undefined);
@@ -257,7 +285,7 @@ describe('the pause window (fake server)', () => {
     const a = await running();
     const from = a.shown.length;
     await conjureAt(3, paused());
-    await a.pause.press('q');
+    await hidden();
     reply('olifant/conjure', landed({ edits: null, stopped: false, summary: 'green: already passes', green: true }));
     const n = conjures().length;
     const ed = await open(file(MAIN));
@@ -295,7 +323,7 @@ describe('the pause window (fake server)', () => {
     assert.equal(resumes().length, n + 1);
     const id = conjures().at(-1)!.id;
     // hidden, a conjure in the unit's file brings the running view back and sends nothing
-    await a.pause.press('q');
+    await hidden();
     assert.equal(a.pause.view(), undefined);
     const c = conjures().length;
     const ed = await open(file(MAIN));
@@ -320,7 +348,7 @@ describe('the pause window (fake server)', () => {
     await a.pause.press('c');
     await until(() => resumes().length > n, 'the resume in main.py');
     const id = conjures().at(-1)!.id;
-    await a.pause.press('q');
+    await hidden();
     // the run in main.py goes on; a conjure in other.py pauses
     const other = paused();
     other.paused.token = 'conjure-7';
@@ -350,8 +378,7 @@ describe('the pause window (fake server)', () => {
     const n = resumes().length;
     void a.pause.press('h');
     await until(() => ui.texts.length === 1, 'the hint asked');
-    const ed = await open(file(MAIN));
-    await ed.edit(b => b.insert(new vscode.Position(0, 0), '# '));
+    await typed(MAIN, '# ');
     await until(() => !a.pause.stored(uriOf(MAIN)), 'the pause dropped');
     ui.texts[0].finish('use the repository');
     await new Promise(r => setTimeout(r, 300));
@@ -433,7 +460,7 @@ describe('the pause window (fake server)', () => {
     reply('olifant/conjure', { delay: 1.5, ...next });
     const n = resumes().length;
     await a.pause.press('c');
-    await a.pause.press('q');
+    await hidden();
     assert.equal(a.pause.view(), undefined);
     await until(() => a.pause.stored(uriOf(MAIN)), 'the next pause', 10_000);
     await until(() => a.pause.view(), 'the window again');
@@ -447,7 +474,7 @@ describe('the pause window (fake server)', () => {
     await conjureAt(3, paused());
     reply('olifant/conjure', { delay: 1.5, ...landed() });
     await a.pause.press('a');
-    await a.pause.press('q');
+    await hidden();
     await keptAndSaved(from, 10_000);
     assert.equal(a.pause.view(), undefined);
     assert.ok(!a.pause.stored(uriOf(MAIN)));
