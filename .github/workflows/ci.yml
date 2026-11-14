@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 permissions:
   contents: read
 env:
@@ -25,13 +26,11 @@ jobs:
       - name: olifant ref
         id: ref
         run: echo "sha=$(cat .olifant-ref)" >> "$GITHUB_OUTPUT"
-      # olifant is private: a fine-grained PAT with read-only Contents on sorcererdev/olifant
       - uses: actions/checkout@v4
         with:
           repository: sorcererdev/olifant
           ref: ${{ steps.ref.outputs.sha }}
           path: olifant
-          token: ${{ secrets.OLIFANT_TOKEN }}
           persist-credentials: false
       - uses: haskell-actions/setup@v2
         id: haskell
@@ -87,7 +86,9 @@ jobs:
           VSCODE_VERSION: ${{ matrix.vscode }}
       - name: package
         if: matrix.package
-        run: npm run package
+        run: |
+          npm run package
+          node out/scripts/release.js check-vsix "durandal-$(node -p 'require("./package.json").version').vsix"
       - uses: actions/upload-artifact@v4
         if: matrix.package
         with:
