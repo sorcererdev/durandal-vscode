@@ -59,7 +59,10 @@ describe('the review window (fake server)', () => {
     });
     await a.server.request(Olifant.plansDo, { textDocument: { uri: uriOf(PLAN) }, line: 2 });
     await until(() => a.pause.source() === 'do', 'the do window');
-    assert.ok(plain(a.pause.view()!.title).startsWith('do · step 1 · Table.label · ◆ answered'));
+    // the tab, not the title: the title is cut to the pane's last measured width, which the
+    // window before this one reported (on CI a narrow pane cuts it; run 43622964717, 1.91.0)
+    assert.equal(a.pause.view()!.tab, 'do · step 1 · Table.label', plain(a.pause.view()!.title));
+    assert.equal(a.pause.view()!.state, 'review');
     assert.deepEqual(sent('olifant/plans/review').at(-1)!.params, { textDocument: { uri: uriOf(PLAN) }, id: 'R1' });
     assert.ok(!vscode.window.visibleTextEditors.some(e => e.document.uri.toString() === uriOf(PLAN)));
   });
