@@ -67,6 +67,28 @@ export async function revert(doc: vscode.TextDocument): Promise<void> {
   await vscode.commands.executeCommand('workbench.action.files.revert');
 }
 
+// windowTab: the pause / review window's tab is up in the workbench. It opens (and closes) there
+// about 100 ms after the controller has drawn (or dropped) it, in a group of its own that takes
+// the focus, and an editor opened meanwhile goes into that group. Runs 43622964717 (pause) and
+// 43636253604 (review), 1.91.0: an after-each revert failed there with "Could NOT open editor".
+// Tests open editors only while the window is fully up or fully closed.
+export const windowTab = () => vscode.window.tabGroups.all.some(g => g.tabs.some(t => t.input instanceof vscode.TabInputWebview));
+
+// hidden: once the window is up in the workbench, q, then the window closed there
+export async function hidden(): Promise<void> {
+  const a = await api();
+  await until(windowTab, 'the window in the workbench');
+  await a.pause.press('q');
+  await until(() => !windowTab(), 'the window closed');
+}
+
+// windowGone (after each): the window hidden if drawn, and any close in flight (a landing's) done
+export async function windowGone(): Promise<void> {
+  const a = await api();
+  if (a.pause.view()) await hidden();
+  await until(() => !windowTab(), 'the window closed');
+}
+
 // docOf is the open document of a workspace file, if any.
 export const docOf = (rel: string) => vscode.workspace.textDocuments.find(d => d.uri.toString() === file(rel).toString());
 

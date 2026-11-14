@@ -5,7 +5,7 @@ import type { ConjurePaused } from '../../src/protocol';
 import { plain } from '../../src/pause/viewModel';
 import { FakeUi } from '../fakeUi';
 import { wrapped } from '../pauseFixtures';
-import { api, file, log, open, reply, revert, running, settle, tabsUnder, until, ws } from './helpers';
+import { api, file, hidden, log, open, reply, revert, running, settle, tabsUnder, until, windowGone, windowTab, ws } from './helpers';
 
 // The pause window over the fake server (M5 spec §3, §4, §8): the fixtures' paused answers,
 // the resumes they send, the keys, the drops. The fake answers each method with one reply, so a
@@ -18,12 +18,6 @@ const uriOf = (rel: string) => file(rel).toString();
 const abs = (rel: string) => join(ws(), rel);
 const conjures = () => log().filter(m => m.method === 'olifant/conjure');
 const resumes = () => conjures().map(m => m.params.resume).filter(Boolean);
-// windowTab: the window's tab is up in the workbench. It opens (and closes) there about 100 ms
-// after the controller has drawn (or dropped) it, in a group of its own that takes the focus,
-// and an editor opened meanwhile goes into that group. Run 43622964717 (1.91.0): afterEach's
-// revert of main.py failed there with "Could NOT open editor". Tests open editors only while
-// the window is fully up or fully closed.
-const windowTab = () => vscode.window.tabGroups.all.some(g => g.tabs.some(t => t.input instanceof vscode.TabInputWebview));
 
 // a fixture whose unit is lines 3-5 of main.py (1-based), as the server would send for it
 function paused(name: 'plain' | 'wired' | 'steps' | 'check' = 'plain'): ConjurePaused {
@@ -65,13 +59,6 @@ async function conjureAt(line: number, answer: unknown, rel = MAIN): Promise<voi
   await until(windowTab, 'the window in the workbench');
 }
 
-// hidden: q, then the window closed in the workbench, before the test opens an editor (windowTab)
-async function hidden(): Promise<void> {
-  const a = await api();
-  await a.pause.press('q');
-  await until(() => !windowTab(), 'the window closed');
-}
-
 // typed: text put at the top of rel's open document, without showing it: while the window has
 // the focus an editor opened goes into the window's group, and on 1.91.0 a second editor of
 // main.py there leaves activeTextEditor on the first one (a later conjure reads its cursor)
@@ -107,13 +94,7 @@ describe('the pause window (fake server)', () => {
   afterEach(async () => {
     const a = await api();
     a.setUi(undefined);
-    if (a.pause.view()) {
-      // up in the workbench before q closes it, so the close is the last one in flight
-      await until(windowTab, 'the window in the workbench');
-      await hidden();
-    }
-    // a landing's close can be in flight too
-    await until(() => !windowTab(), 'the window closed');
+    await windowGone();
     // q keeps the pause; an edit drops it, else the next test's conjure reopens it
     for (const rel of [MAIN, OTHER]) {
       if (!a.pause.stored(uriOf(rel))) continue;
