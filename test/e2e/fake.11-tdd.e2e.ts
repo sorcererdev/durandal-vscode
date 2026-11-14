@@ -28,8 +28,14 @@ async function said(command: string, want: (text: string) => boolean): Promise<s
   const a = await api();
   const from = a.shown.length;
   void vscode.commands.executeCommand(command);
-  const s = await until(() => a.shown.slice(from).find(x => want(x.text)), `a notice after ${command}`);
-  return s.text;
+  try {
+    const s = await until(() => a.shown.slice(from).find(x => want(x.text)), `a notice after ${command}`);
+    return s.text;
+  } catch (err) {
+    // what was said instead, and where (CI-only timeouts, run 43606856671)
+    const other = a.shown.slice(from).map(x => `${x.level}: ${x.text}`);
+    throw new Error(`${(err as Error).message}; said instead: ${JSON.stringify(other)}; active: ${vscode.window.activeTextEditor?.document.uri.toString()}`);
+  }
 }
 
 describe('the TDD loop (fake server)', () => {
@@ -230,8 +236,8 @@ describe('the TDD loop (fake server)', () => {
     assert.equal(a.landed.fired.length, fired + 1);
     assert.equal(a.landed.fired.at(-1), 'stub');
     assert.ok(disk(TEST).endsWith('\n\n\ndef test_main_2():\n    ...\n'));
-    const ed = vscode.window.activeTextEditor!;
-    assert.equal(ed.document.uri.toString(), uriOf(TEST));
+    // the test file opens after the landing fires (stub.ts awaits showTextDocument)
+    const ed = await until(() => { const e = vscode.window.activeTextEditor; return e?.document.uri.toString() === uriOf(TEST) ? e : undefined; }, 'the test file active');
     assert.deepEqual([ed.selection.active.line, ed.selection.active.character], [8, 4]);
     await settle(TEST, TEST_TEXT);
   });
