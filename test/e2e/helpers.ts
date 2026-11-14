@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DidChangeWatchedFilesNotification, FileChangeType } from 'vscode-languageserver-protocol';
 import * as vscode from 'vscode';
@@ -102,9 +102,16 @@ export function log(): Msg[] {
   return readFileSync(p, 'utf8').split('\n').filter(l => l !== '').map(l => JSON.parse(l) as Msg);
 }
 
+// writeWhole replaces a file the fake reads in one step (a rename): a plain write truncates it
+// first, and a fake reading it then gets no JSON and exits (CI run 43611435012).
+export function writeWhole(path: string, text: string): void {
+  writeFileSync(`${path}.tmp`, text);
+  renameSync(`${path}.tmp`, path);
+}
+
 // reply sets the fake's answer to a request method.
 export function reply(method: string, value: unknown): void {
-  writeFileSync(join(process.env.FAKE_LSP_REPLIES!, `${method.replace(/\//g, '_')}.json`), JSON.stringify(value));
+  writeWhole(join(process.env.FAKE_LSP_REPLIES!, `${method.replace(/\//g, '_')}.json`), JSON.stringify(value));
 }
 
 // added are the folders the client added, in order, from msgs (default: the whole log).

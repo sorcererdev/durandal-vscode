@@ -1,16 +1,16 @@
 import * as assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { FakeUi } from '../fakeUi';
-import { actionLog, api, file, log, open, reply, restart, revert, settle, sleep, until } from './helpers';
+import { actionLog, api, file, log, open, reply, restart, revert, settle, sleep, until, writeWhole } from './helpers';
 
 const MAIN = 'one/main.py';
 const uri = () => file(MAIN).toString();
 const pushFile = join(mkdtempSync(join(tmpdir(), 'durandal-push-')), 'suggestion.json');
 // push sets what the fake pushes after every edit (FAKE_LSP_SUGGEST: its uri and version filled)
-const push = (s: Record<string, unknown>) => writeFileSync(pushFile, JSON.stringify(s));
+const push = (s: Record<string, unknown>) => writeWhole(pushFile, JSON.stringify(s));
 const FOLLOWUP = { kind: 'followup', label: 'Failure arms', summary: '1 file', line: 1, lines: null, at: 1, planId: 7, generator: null, sets: {} };
 // a ghost going under line 0 (at 1, line 2: server lines are 1-based)
 const GHOST = { ...FOLLOWUP, kind: 'ghost', label: 'Arms', lines: ['case A():', '    return x'], line: 2, at: 1 };
