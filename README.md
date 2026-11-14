@@ -2,17 +2,20 @@
 
 Olifant's conventions, generators and TDD loop in VS Code, over the `olifant lsp` language
 server: rule findings and their fixes, regions kept on save, actions and generators with a
-live preview, ⚡ hints, the migration report, and (in later releases) ghost text, the TDD loop
-and plans. The Neovim plugin is
-[durandal.nvim](https://github.com/sorcererdev/durandal.nvim).
+live preview, ⚡ hints, the migration report, ghost text, the TDD loop, the pause window and
+plans. It is a port of durandal.nvim, the Neovim plugin.
 
 Requires an `olifant` binary with the `lsp` command. Build one from a checkout of
-sorcererdev/olifant: `cabal build && scripts/install-olifant.sh` (installs `~/.local/bin/olifant`).
+[sorcererdev/olifant](https://github.com/sorcererdev/olifant): `cabal build &&
+scripts/install-olifant.sh` (installs `~/.local/bin/olifant`).
 
 ## Install
 
-Until a release: download `durandal-<version>.vsix` from a CI run's `vsix` artifact and run
-`code --install-extension durandal-<version>.vsix`.
+Download `durandal-<version>.vsix` from the
+[latest release](https://github.com/sorcererdev/durandal-vscode/releases/latest) (or
+`gh release download -R sorcererdev/durandal-vscode -p '*.vsix'`) and run
+`code --install-extension durandal-<version>.vsix`. The extension is not on the Marketplace or
+Open VSX yet.
 
 ## Requirements
 
@@ -20,6 +23,9 @@ An `olifant` binary with the `lsp` command. The extension looks at the `durandal
 then `PATH`, `~/.local/bin`, `~/.cabal/bin` and `~/bin` (VS Code started from the Dock sees a
 shorter `PATH` than your shell). `Durandal: Show Health` says what it found, and runs
 `olifant doctor` for the project of the file you are in.
+
+This release was tested against olifant `48f38ab` (the commit in `.olifant-ref`); a newer
+olifant whose `--help` lists `lsp` is found too, but only that commit is tested.
 
 One `olifant lsp` serves the window. Every folder holding `.olifant/` is a project and keeps its
 own conventions; a project's file opened from outside the workspace joins it.
@@ -70,6 +76,8 @@ durandal.nvim writes). `durandal.actionLog` turns it off.
 - `durandal.ghosts` or `Durandal: Toggle Ghost Text` turns the ghost text off (the completion
   list keeps its snippets). While VS Code's completion list, another extension's ghost text, or
   a snippet you are filling in has Tab, Tab is theirs.
+- Ghost text is VS Code's inline suggestion: `editor.inlineSuggest.enabled` must stay on (it is
+  by default), or nothing is shown.
 
 ## The TDD loop
 
@@ -198,5 +206,27 @@ A change to the first four takes effect after `Durandal: Restart Server`.
 
 `npm ci`, then `npm run test:unit`. `npm run test:e2e` runs the contract suite against the
 vendored fake server (Python 3); with `OLIFANT_BIN` (an olifant built at `.olifant-ref`) and
-`OLIFANT_REPO` (that checkout) it then runs the smoke suite against olifant lsp. CI needs the
-`OLIFANT_TOKEN` secret: a fine-grained token with read-only Contents on sorcererdev/olifant.
+`OLIFANT_REPO` (that checkout) it then runs the smoke suite against olifant lsp. CI builds olifant at `.olifant-ref` from the public repo.
+
+To run the real suite locally, build the pinned olifant in its own worktree:
+
+```sh
+git -C ~/projects/olifant worktree add ~/projects/olifant-$(cut -c1-7 .olifant-ref) $(cat .olifant-ref)
+(cd ~/projects/olifant-$(cut -c1-7 .olifant-ref) && cabal build exe:olifant)
+OLIFANT_BIN=$(cd ~/projects/olifant-$(cut -c1-7 .olifant-ref) && cabal list-bin exe:olifant) \
+OLIFANT_REPO=~/projects/olifant-$(cut -c1-7 .olifant-ref) npm run test:e2e
+```
+
+The conjure in `real.8` and the ask in `real.9` call a model and run only with
+`DURANDAL_E2E_MODEL=<name>`, a backend under `[model.backends.<name>]` in
+`~/.config/olifant/config.toml` (the test sandboxes have no `[model]` of their own). CI has no
+model, so run them before a release.
+
+### Releasing
+
+Set the version (`npm version <x.y.z> --no-git-tag-version`), give CHANGELOG.md a `## <x.y.z>`
+section, merge, then tag the merge commit and push the tag:
+`git tag -a v<x.y.z> -m 'durandal-vscode <x.y.z>' && git push origin v<x.y.z>`. The release
+workflow runs CI and attaches the `.vsix` with that section as the notes; a tag that does not
+match `package.json`, a tag off main, or a missing section fails before anything is published.
+A tag with a `-` (`v0.2.0-rc.1`) is a prerelease.

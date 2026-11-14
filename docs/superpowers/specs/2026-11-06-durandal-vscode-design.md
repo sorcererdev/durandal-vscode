@@ -11,7 +11,7 @@ A VS Code extension with full parity to durandal.nvim, for people who use VS Cod
 uses Neovim and will not dogfood it daily, so automated tests and per-milestone manual
 checklists carry the quality, not daily use.
 
-durandal.nvim is ~7.5k lines of Lua UI over `olifant lsp` (Haskell, private,
+durandal.nvim is ~7.5k lines of Lua UI over `olifant lsp` (Haskell, public,
 `sorcererdev/olifant`). Nothing client-side parses or decides; the port is a UI rebuild on
 `vscode-languageclient`. The wire contract is standard LSP plus the `olifant/*` methods in book
 ch. 16, 18, 19 and internals ch. 3. Olifant is not changed by this work unless a milestone spec
@@ -23,8 +23,8 @@ webview beyond the one named in §4.
 
 ## 2. Repo, tooling, CI
 
-- Repo `sorcererdev/durandal-vscode`, private for now (same org as olifant and durandal.nvim;
-  flips public with them). Extension id `durandal`, display name "Durandal". Activation:
+- Repo `sorcererdev/durandal-vscode`, public (verified 2026-11-13; olifant is public too, durandal.nvim
+  private). Extension id `durandal`, display name "Durandal". Activation:
   `workspaceContains:**/.olifant/config.toml` and `onCommand:durandal.*`.
 - Tooling copied from alder-vscode, not shared: TypeScript, `vscode-languageclient` ^11, engines
   `^1.91.0`, Node 22, eslint, mocha ^11 unit tests, `@vscode/test-electron` e2e on 1.91.0 and
@@ -34,8 +34,8 @@ webview beyond the one named in §4.
 - Code sharing: copy `src/generate/*`, `virtualDocs.ts`, `health.ts`, `root.ts`, `client.ts`
   from alder-vscode and adapt. If the copies diverge less than expected after milestone 2,
   extracting a package becomes a later issue.
-- CI (`ci.yml`): checks out `sorcererdev/olifant` at `.olifant-ref` with a fine-grained PAT
-  (`OLIFANT_TOKEN`, contents read-only), builds with cabal, caches `~/.cabal` and
+- CI (`ci.yml`): checks out `sorcererdev/olifant` at `.olifant-ref`
+  without a token (olifant is public; amended at M8), builds with cabal, caches `~/.cabal` and
   `dist-newstyle` keyed on the ref and GHC version. Matrix: ubuntu stable, macOS stable, ubuntu
   1.91.0. Each cell runs unit, fake-lsp e2e and real-server e2e. Engine toolchains for the
   sandboxes the real-server specs use (ast-grep, python/uv, cargo) are installed in CI only
@@ -78,7 +78,7 @@ webview beyond the one named in §4.
 
 ## 4. UI conventions
 
-- Commands `durandal.<area>.<verb>`, titles "Durandal: …". Chord prefix `ctrl+alt+d`
+- Commands `durandal.<verb>`, with a sub-namespace where a surface has several (`durandal.plan.*`, `durandal.generate.*`, `durandal.test.*`, `*.toggle`, `durandal.suggest.*`); the shipped ids are the public ones from `0.1.0` (amended at M8), titles "Durandal: …". Chord prefix `ctrl+alt+d`
   (the same on macOS: `cmd+alt+d` is the Dock-hide shortcut) then the nvim letter: `a` actions, `g` generate, `t` test file,
   `shift+t` test all, `j` jump, `s` stub, `c` conjure, `m` mutate, `p` then `q v d y n f c e r
   x` for the plan verbs. `when` clauses use `durandal.inProject`, `durandal.isPlan`,
@@ -144,7 +144,6 @@ it.
 
 - The Haskell build in CI: slow on a cold cache; mitigated by caching on the ref, and the ref
   bumps rarely.
-- `olifant lsp` is private: contributors without access can still run unit and fake-lsp e2e.
 - VS Code has no virtual lines, no conceal, no custom fold text: milestones 6 and 7 own these;
   the fallbacks (token colours without glyphs, CodeLens without inline text) are acceptable
   first versions.
