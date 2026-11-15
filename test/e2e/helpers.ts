@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { DidChangeWatchedFilesNotification, FileChangeType } from 'vscode-languageserver-protocol';
 import * as vscode from 'vscode';
 import type { Api } from '../../src/extension';
@@ -12,6 +12,13 @@ export const ws = () => process.env.DURANDAL_E2E_WS!;
 export const file = (rel: string) => vscode.Uri.file(join(ws(), rel));
 // disk is a workspace file's text on disk (not VS Code's document).
 export const disk = (rel: string) => readFileSync(join(ws(), rel), 'utf8');
+
+// exthostLog: the extension host's log of this window, beside the extension's own log directory
+// (Api.logUri); '' while VS Code has not written it
+export function exthostLog(a: Api): string {
+  const f = join(dirname(a.logUri.fsPath), 'exthost.log');
+  return existsSync(f) ? readFileSync(f, 'utf8') : '';
+}
 
 export async function api(): Promise<Api> {
   const ext = vscode.extensions.getExtension<Api>('sorcererdev.durandal');

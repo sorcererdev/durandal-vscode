@@ -70,6 +70,9 @@ export interface Api {
   health(): Promise<string[]>;
   // every notification the extension showed, in order (the e2e tests read it)
   shown: { level: string; text: string }[];
+  // the extension's log directory (context.logUri): the extension host's exthost.log is in its
+  // parent (the e2e tests scan it for this extension's listener throws, #23)
+  logUri: vscode.Uri;
   inProject(): boolean;
   // the e2e suites answer the quick inputs with a fake; undefined puts VS Code's back
   setUi(ui: Ui | undefined): void;
@@ -281,7 +284,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     for (const r of await discover()) await s.addRoot(r);
     if (s.roots().length > 0) await s.start();
   })();
-  return { server: s, health, shown, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest, tdd, pause, isPlan: plansTracked.isPlan, planView: layer.api(), landed, planVerbs: verbs.api(), planReconcile: reconcile.api() };
+  return { server: s, health, shown, logUri: context.logUri, inProject: projects.inProject, setUi: u => { testUi = u; }, ui, plans, suggest, tdd, pause, isPlan: plansTracked.isPlan, planView: layer.api(), landed, planVerbs: verbs.api(), planReconcile: reconcile.api() };
 }
 
 export async function deactivate(): Promise<void> {

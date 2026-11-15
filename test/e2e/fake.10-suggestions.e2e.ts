@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { FakeUi } from '../fakeUi';
-import { actionLog, api, file, log, open, reply, restart, revert, settle, sleep, until, writeWhole } from './helpers';
+import { actionLog, api, exthostLog, file, log, open, reply, restart, revert, settle, sleep, until, writeWhole } from './helpers';
 
 const MAIN = 'one/main.py';
 const uri = () => file(MAIN).toString();
@@ -15,6 +15,9 @@ const FOLLOWUP = { kind: 'followup', label: 'Failure arms', summary: '1 file', l
 // a ghost going under line 0 (at 1, line 2: server lines are 1-based)
 const GHOST = { ...FOLLOWUP, kind: 'ghost', label: 'Arms', lines: ['case A():', '    return x'], line: 2, at: 1 };
 const GHOST_TEXT = 'x = 10\ncase A():\n    return x';
+// VS Code logs a listener's throw and goes on: only its log shows it (#23)
+const FAILED = /Extension 'sorcererdev\.durandal' FAILED to handle event/;
+const failures = (text: string) => text.split('\n').filter(l => FAILED.test(l));
 const plans = () => log().filter(m => m.method === 'olifant/plan');
 const events = (from: number, name: string) => actionLog().slice(from).filter(e => e.event === name);
 
@@ -282,5 +285,21 @@ describe('pushed and pulled suggestions (fake server)', () => {
     assert.deepEqual(menu, ['⚡ Command  (the name fits)', 'Show recognitions for command again']);
     await until(() => feedback().length > n, 'reset said');
     assert.equal(feedback().at(-1), 'reset');
+  });
+  it('a document shrunk past the cursor line: no listener throws (#23)', async () => {
+    const a = await api();
+    await settle(MAIN, Array.from({ length: 30 }, (_, i) => `x${i} = ${i}`).join('\n') + '\n');
+    const ed = await open(file(MAIN));
+    ed.selection = new vscode.Selection(25, 0, 25, 0);
+    const before = failures(exthostLog(a)).length;
+    // VS Code reports the model change before it moves the selection: inside the change event
+    // the cursor is still on line 25 of a 2-line document
+    const e = new vscode.WorkspaceEdit();
+    e.replace(file(MAIN), new vscode.Range(0, 0, ed.document.lineCount, 0), 'x = 1\ny = 2\n');
+    assert.ok(await vscode.workspace.applyEdit(e));
+    // the log is written asynchronously
+    await sleep(1000);
+    assert.deepEqual(failures(exthostLog(a)).slice(before), []);
+    await settle(MAIN, 'x = 1\n');
   });
 });
