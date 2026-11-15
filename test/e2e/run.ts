@@ -19,6 +19,11 @@ function settings(ws: string, olifant: string): void {
     'security.workspace.trust.enabled': false,
     // the chat view's input editor otherwise keeps the text focus
     'chat.disableAIFeatures': true,
+    // #22: Local History copies a file right after each save (fs.copyFile). On macOS that copy
+    // spins, holding VS Code's lock on the file, when a test truncates the file and writes it
+    // back shorter mid-copy; every later save of the file then waits until the file grows back
+    // past its old size.
+    'workbench.localHistory.enabled': false,
   }, null, 2));
 }
 
