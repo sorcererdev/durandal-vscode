@@ -354,11 +354,15 @@ export class PlanVerbs {
     this.view.settled();
   }
 
-  // a closed plan's verbs land nothing and say nothing; its ghosts go without an outcome
+  // a closed plan's verbs land nothing and say nothing; its ghosts go without an outcome. An ask
+  // or a validate is cancelled: the server runs them read-only, so no work is lost (#14). A do runs
+  // to its end: cancelling kills its runner mid-edit with no review to revert it; its review is
+  // pushed and says the plan changed (#11)
   private closed(uri: string): void {
     for (const e of [...this.entries]) {
       if (e.uri !== uri) continue;
       e.gone = true;
+      if (e.verb !== 'do') e.cts.cancel();
       this.drop(e);
     }
     this.ghosts.drop(uri);

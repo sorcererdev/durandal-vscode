@@ -167,7 +167,9 @@ says:
   it back (`durandal.plans.reviewAnswers` makes it wait). A validate's blocks, and a do's in a
   project without git, wait under their row as a ghost: the row ends in `ai · +N lines` (hover
   it to read them), the lines show under the row while the cursor is on it, `P Y` (or `Tab`)
-  writes them and `P N` drops them. A do in a git project opens its review.
+  writes them and `P N` drops them. Accept the whole ghost: accepting only part of it (Accept
+  Word, Accept Line) inserts the text without writing the block and hides the ghost until the
+  cursor comes back to the row. A do in a git project opens its review.
 - **Steps.** `P Enter` adds a step under the row, `P E` shows the step's code (or folds an
   excerpt), `P X` ticks or reopens a step, `P F` lists the plan's files, and `S` / `T` (or `P S`
   / `P T`) stub and run the step's tests.

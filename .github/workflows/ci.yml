@@ -50,11 +50,25 @@ jobs:
           restore-keys: cabal-${{ runner.os }}-ghc${{ env.GHC }}-
       # On glibc, olifant's -std=c11 (cc-options) hides le16toh and fdopen from its vendored
       # tree-sitter; _DEFAULT_SOURCE brings them back (tree-sitter's own build defines it).
+      # When cabal cannot download a tarball (Hackage's dream.io mirror answers 403 to everything,
+      # and cabal reports its last mirror), fetch it from hackage.haskell.org into cabal's package
+      # cache and build again.
       - name: olifant
         working-directory: olifant
         run: |
           if [ "$RUNNER_OS" = Linux ]; then cflags=--ghc-options=-optc-D_DEFAULT_SOURCE; else cflags=; fi
-          cabal build -v1 $cflags exe:olifant
+          cache=$(cabal path --remote-repo-cache)/hackage.haskell.org
+          for attempt in 1 2 3 4 5; do
+            if cabal build -v1 $cflags exe:olifant 2>&1 | tee build.log; then break; fi
+            failed=$(sed -n 's/^Failed to download \([^ ]*\) .*/\1/p' build.log)
+            if [ -z "$failed" ] || [ "$attempt" = 5 ]; then exit 1; fi
+            for id in $failed; do
+              name=${id%-*}; version=${id##*-}
+              mkdir -p "$cache/$name/$version"
+              curl -fsSL --retry 3 -o "$cache/$name/$version/$id.tar.gz" \
+                "https://hackage.haskell.org/package/$id/$id.tar.gz"
+            done
+          done
           echo "OLIFANT_BIN=$(cabal list-bin exe:olifant)" >> "$GITHUB_ENV"
           echo "OLIFANT_REPO=$PWD" >> "$GITHUB_ENV"
       - uses: actions/cache/save@v4

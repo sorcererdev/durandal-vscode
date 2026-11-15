@@ -1,6 +1,7 @@
 import * as assert from 'node:assert/strict';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
+import type { Api } from '../../src/extension';
 import type { ConjurePaused } from '../../src/protocol';
 import { plain } from '../../src/pause/viewModel';
 import { FakeUi } from '../fakeUi';
@@ -34,6 +35,23 @@ const landed = (o: Record<string, unknown> = {}) => ({
   file: abs(MAIN), unit: 'f', edits: mainEdit('line_3 = 33'), summary: 'kept round 3 · red: not_found', green: false,
   tests: tests(), rounds: 3, rungs: ['local'], stopped: true, ...o,
 });
+
+// pageQuiet: once the page's first size report has passed, waits until its size reports stop
+// (none for QUIET_MS, 3x the page's 100 ms ResizeObserver debounce, webview/main.ts). In the
+// #26 case the first report measures a frame not yet laid out and a corrected one follows; a
+// test that sends its own size before then can have it overwritten. Bounded by ms.
+const QUIET_MS = 300;
+async function pageQuiet(a: Api, ms = 5_000): Promise<void> {
+  const end = Date.now() + ms;
+  let seen = a.pause.sizes();
+  let since = Date.now();
+  while (Date.now() - since < QUIET_MS) {
+    if (Date.now() > end) throw new Error('timed out waiting for the page\'s size reports to stop');
+    await new Promise(r => setTimeout(r, 50));
+    const now = a.pause.sizes();
+    if (now !== seen) { seen = now; since = Date.now(); }
+  }
+}
 
 // keptAndSaved: the landing is over. The buffer shows the keep as soon as the edit applies, but
 // land() saves after that and says its notice once the save resolves: a test that stopped at the
@@ -94,6 +112,8 @@ describe('the pause window (fake server)', () => {
   afterEach(async () => {
     const a = await api();
     a.setUi(undefined);
+    // a test that failed mid-run leaves the run in the air: cancelled, so the next test's conjure is not refused
+    if (a.pause.view()?.state === 'running') a.tdd.cancel();
     await windowGone();
     // q keeps the pause; an edit drops it, else the next test's conjure reopens it
     for (const rel of [MAIN, OTHER]) {
@@ -117,7 +137,13 @@ describe('the pause window (fake server)', () => {
   it('a paused answer opens the window beside the file, holds the pause, places one reminder', async () => {
     const a = await running();
     const from = a.shown.length;
+    const sizes = a.pause.sizes();
     await conjureAt(3, paused());
+    // the page's first size report can measure a frame not yet laid out (28, 46 cells) and cut
+    // the title (#26): once it has passed, a full-width one; receive paints at once, so the view
+    // read next is the one at 200
+    await until(() => a.pause.sizes() > sizes, 'the page\'s size report');
+    await a.pause.receive({ type: 'size', cols: 200 });
     assert.equal(a.pause.source(), 'conjure');
     assert.ok(a.pause.stored(uriOf(MAIN)));
     assert.equal(a.pause.reminders(uriOf(MAIN)), 1);
@@ -398,10 +424,13 @@ describe('the pause window (fake server)', () => {
 
   it('the running view: the row\'s label, the server\'s words without the round prefix, the round', async () => {
     const a = await running();
+    const sizes = a.pause.sizes();
     await conjureAt(3, paused());
     // the e2e page reports a narrow width (28, 46 cells), where the status line cuts the words:
-    // once its own report has passed, a wide one
-    await new Promise(r => setTimeout(r, 500));
+    // once its own reports have passed and stopped (the status is read over many ticks, so a
+    // late one would cut it again), a wide one
+    await until(() => a.pause.sizes() > sizes, 'the page\'s size report');
+    await pageQuiet(a);
     await a.pause.receive({ type: 'size', cols: 200 });
     reply('olifant/conjure', { hold: true, title: 'conjuring', progress: ['round 4 of 9 · asking local (qwen3-coder:30b)…'] });
     await a.pause.press('c');
@@ -463,9 +492,12 @@ describe('the pause window (fake server)', () => {
 
   it('a narrow panel: narrow texts, Tab flips, a wide one shows both (spec §4.3)', async () => {
     const a = await running();
+    const sizes = a.pause.sizes();
     await conjureAt(3, paused());
-    // the page reports its own size once it loads; let that pass first
-    await new Promise(r => setTimeout(r, 500));
+    // the page reports its own size once it loads, and again if that first one was wrong; let
+    // both pass first
+    await until(() => a.pause.sizes() > sizes, 'the page\'s size report');
+    await pageQuiet(a);
     await a.pause.receive({ type: 'size', cols: 90 });
     let v = a.pause.view()!;
     assert.ok(v.narrow);

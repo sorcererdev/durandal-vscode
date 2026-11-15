@@ -56,7 +56,7 @@ export class Suggest {
       cursor: () => {
         const ed = vscode.window.activeTextEditor;
         if (!ed || ed.document.uri.scheme !== 'file') return undefined;
-        const line = ed.selection.active.line;
+        const line = ed.document.validatePosition(ed.selection.active).line;
         return { uri: ed.document.uri.toString(), version: ed.document.version, line, lineText: ed.document.lineAt(line).text, inProject: d.inProject() };
       },
       suggest: (uri, line, token) => d.server.request(Olifant.suggest, { textDocument: { uri }, line }, token as unknown as vscode.CancellationToken),
@@ -146,6 +146,10 @@ export class Suggest {
 
   private moved(ed: vscode.TextEditor): void {
     const line = ed.selection.active.line;
+    // a text change is reported before VS Code moves the selection: an edit that shrank the
+    // document past the cursor leaves a stale line here; the selection event that follows runs
+    // moved again with the fresh one (#23)
+    if (line >= ed.document.lineCount) return;
     this.controller.moved(ed.document.uri.toString(), line, ed.document.lineAt(line).text);
     this.controller.schedule();
   }

@@ -52,6 +52,15 @@ const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 const keyName = (k: string) => (k === 'Escape' ? 'Esc' : k);
 const docOf = (uri: string) => vscode.workspace.textDocuments.find(d => d.uri.toString() === uri);
 
+// touches: whether a server edit changes the document at uri (both parsed: the server's spelling
+// of a uri can differ from VS Code's)
+function touches(edit: NonNullable<ChooseResult['edit']>, uri: string): boolean {
+  const key = vscode.Uri.parse(uri).toString();
+  const same = (u: string) => vscode.Uri.parse(u).toString() === key;
+  return Object.keys(edit.changes ?? {}).some(same)
+    || (edit.documentChanges ?? []).some(c => 'textDocument' in c && same(c.textDocument.uri));
+}
+
 // PauseController: the window's source and its keys (spec §3, §4.4). The page sends what was
 // pressed; the controller decides, re-lays out the model and sends it back.
 export class PauseController implements PauseSink {
@@ -60,6 +69,8 @@ export class PauseController implements PauseSink {
   private shownUri: string | undefined;
   private rev: RevState | undefined;
   private cols = 120;
+  // the size reports seen (the page's and the tests'): the e2e tests wait for the page's first one (#26)
+  private sized = 0;
   private help = false;
   private flipped = false;
   private run: Run | undefined;
@@ -157,6 +168,7 @@ export class PauseController implements PauseSink {
 
   async receive(m: FromPage): Promise<void> {
     if (m.type === 'size') {
+      this.sized++;
       this.cols = m.cols;
       this.paint();
     } else if (m.type === 'key') {
@@ -187,6 +199,9 @@ export class PauseController implements PauseSink {
     return this.shownUri ? 'conjure' : undefined;
   }
   notices(): string[] { return [...this.said]; }
+  sizes(): number {
+    return this.sized;
+  }
 
   // progress: the server's work-done progress (hooks.progress); a resume's words feed its run
   progress(token: string | number, v: ProgressValue): void {
@@ -514,20 +529,43 @@ export class PauseController implements PauseSink {
   }
 
   // landReview: a choose's edit (versioned: refused whole if the plan moved) and its facts; the
-  // reason when VS Code or the version check refused
+  // reason when VS Code or the version check refused. A plan it changed that no editor shows
+  // is said (#11).
   private async landReview(planUri: string, edit: ChooseResult['edit'], facts: Fact[] | undefined): Promise<string | undefined> {
+    let changed = false;
     if (edit) {
       const lc = this.d.server.client();
       if (!lc) return NOT_RUNNING;
       const done = await applyServerEdit(lc, { label: 'review', edit }, () => undefined, () => undefined);
       if (!done.applied) return done.failureReason ?? 'VS Code did not apply the edit';
+      changed = touches(edit, planUri);
     }
     if (facts && facts.length > 0) {
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(planUri));
       const edits = factEdits(linesOf(doc), facts);
-      if (edits.length > 0 && !await vscode.workspace.applyEdit(lineEdits(doc, edits))) return 'VS Code did not apply the plan facts';
+      if (edits.length > 0) {
+        if (!await vscode.workspace.applyEdit(lineEdits(doc, edits))) {
+          // the edit may have landed in the hidden plan already: still say it, once
+          if (changed) this.unseen(planUri);
+          return 'VS Code did not apply the plan facts';
+        }
+        changed = true;
+      }
     }
+    if (changed) this.unseen(planUri);
     return undefined;
+  }
+
+  // unseen: a plan a review's answer changed, shown in no editor, is open and unsaved where the
+  // person cannot see it (#11): said once, with Open. The plan is not opened for them (it would
+  // cover the file they are in) and the edit is not refused (the server has moved on).
+  private unseen(planUri: string): void {
+    const uri = vscode.Uri.parse(planUri);
+    if (vscode.window.visibleTextEditors.some(e => e.document.uri.toString() === uri.toString())) return;
+    const name = uri.path.slice(uri.path.lastIndexOf('/') + 1);
+    void this.d.say('info', `plan ${name} changed · unsaved`, 'Open').then(c => {
+      if (c === 'Open') void vscode.window.showTextDocument(uri);
+    });
   }
 
   private selectReview(r: RevState, i: number): true | string {
