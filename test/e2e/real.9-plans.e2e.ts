@@ -97,12 +97,13 @@ describe('the plans reading layer against olifant lsp (python-htmx)', () => {
   });
 
   // a real model's ask: local only (CI has no model), as real.8's conjure
-  it('asks about a step and lands the answer', async function () {
+  it('asks about a question line and lands the answer', async function () {
     const model = process.env.DURANDAL_E2E_MODEL;
     if (!model) return this.skip();
     this.timeout(600_000);
     const a = await running();
-    writeFileSync(join(ws(), STEPS), STEPS_TEXT);
+    // ask answers a question line (- ?); on a step it is refused
+    writeFileSync(join(ws(), STEPS), ['# Booking', '', '- ? which command books a table', ''].join('\n'));
     await vscode.workspace.getConfiguration('durandal').update('model', model, vscode.ConfigurationTarget.Global);
     try {
       await restart();
