@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.1.1
+
+- A review answered while its plan is closed no longer leaves the plan changed where nobody
+  sees it: `plan <name> changed · unsaved` says so, with `Open` (#11).
+- Closing a plan cancels its running ask or validate instead of letting the model run on; a
+  running do still finishes, and its review opens (#14).
+- No more `Illegal value for line` errors in the extension host log when a file shrinks above
+  the cursor (#23).
+- The README notes that a plan ghost is accepted whole (#20).
+- Test only: the pause-window tests no longer race the page's first size report (#26).
+
 ## 0.1.0
 
 - One `olifant lsp` per window, every Olifant project a workspace folder; the server's edits
