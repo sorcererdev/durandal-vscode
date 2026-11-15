@@ -1,7 +1,8 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import { FakeUi } from '../fakeUi';
-import { actionLog, api, disk, docOf, file, log, open, reply, restart, revert, running, settle, sleep, until } from './helpers';
+import { reviewFixture } from '../pauseFixtures';
+import { actionLog, api, disk, docOf, file, log, open, reply, restart, revert, running, settle, sleep, until, windowGone } from './helpers';
 
 // The plan verbs over the fake server (M6 spec §4, §8): dispatch, pending rows, cancel, landing,
 // the prompt, new step / excerpt / toggle, files, stub and test.
@@ -14,10 +15,16 @@ const sent = (method: string) => log().filter(m => m.method === method);
 const REPLIES = [
   'olifant/plans/ask', 'olifant/plans/validate', 'olifant/plans/do', 'olifant/plans/files', 'olifant/plans/stub',
   'olifant/plans/test', 'textDocument/codeAction', 'codeAction/resolve', 'textDocument/foldingRange', 'textDocument/codeLens',
+  'olifant/plans/review',
 ];
 const lines = () => docOf(PLAN)!.getText().split('\n');
 const events = (from: number, name: string) => actionLog().slice(from).filter(e => e.event === name);
 const outcomeParams = (from: number) => sent('olifant/plans/outcome').slice(from).map(m => m.params);
+// cancelled: whether $/cancelRequest went for the last request of method
+const cancelled = (method: string) => {
+  const id = sent(method).at(-1)!.id;
+  return sent('$/cancelRequest').some(m => m.params.id === id);
+};
 
 // at: the plan open and active, the cursor on ROW, durandal.isPlan known
 async function at(row: number, rel = PLAN): Promise<vscode.TextEditor> {
@@ -137,7 +144,7 @@ describe('the plan verbs (fake server)', () => {
     assert.deepEqual(lines().slice(0, 7), ['typed', '# T', '- a', '- b', '- c', '  - so', '- d']);
   });
 
-  it('a plan closed (reopened with another language) before the answer: nothing lands, nothing is sent or said', async () => {
+  it('a plan closed (reopened with another language) before the answer: the ask is cancelled; nothing lands, nothing else is sent or said', async () => {
     const a = await running();
     reply('olifant/plans/ask', {
       delay: 2, id: 'S3', verb: 'ask', facts: [], blocks: [{ after: 3, after_text: null, lines: [{ text: '  - so', fp: null }] }],
@@ -151,10 +158,58 @@ describe('the plan verbs (fake server)', () => {
     // VS Code closes the document and opens a new one on a language change
     await vscode.languages.setTextDocumentLanguage(ed.document, 'plaintext');
     await p;
+    assert.ok(cancelled('olifant/plans/ask'), 'the ask cancelled on close (#14)');
     await sleep(300);
     assert.equal(docOf(PLAN)!.getText(), TEXT);
     assert.equal(sent('olifant/plans/outcome').length, outcomes);
     assert.deepEqual(a.shown.slice(from), []);
+    await vscode.languages.setTextDocumentLanguage(docOf(PLAN)!, 'markdown');
+  });
+
+  for (const verb of ['ask', 'validate'] as const) {
+    it(`a plan closed with a held ${verb} in the air: the ${verb} is cancelled, nothing is said (#14)`, async () => {
+      const a = await running();
+      reply(`olifant/plans/${verb}`, { hold: true, title: verb === 'ask' ? 'asking' : 'validating' });
+      const ed = await at(3);
+      const outcomes = sent('olifant/plans/outcome').length;
+      const p = vscode.commands.executeCommand(`durandal.plan.${verb}`);
+      await until(() => a.planVerbs.running(uriOf(PLAN)).length === 1, `the ${verb} in the air`);
+      const from = a.shown.length;
+      await vscode.languages.setTextDocumentLanguage(ed.document, 'plaintext');
+      await until(() => cancelled(`olifant/plans/${verb}`), `$/cancelRequest for the ${verb}`);
+      // the fake answers a held request's cancel with -32800; the closed entry swallows it
+      await p;
+      await sleep(300);
+      assert.deepEqual(a.planVerbs.running(uriOf(PLAN)), []);
+      assert.deepEqual(a.shown.slice(from), []);
+      assert.equal(sent('olifant/plans/outcome').length, outcomes);
+      await vscode.languages.setTextDocumentLanguage(docOf(PLAN)!, 'markdown');
+    });
+  }
+
+  it('a plan closed with a do and an ask in the air: the ask is cancelled; the do runs on and its review opens (#14)', async () => {
+    const a = await running();
+    reply('olifant/plans/review', reviewFixture('do'));
+    reply('olifant/plans/do', {
+      delay: 2,
+      notify: [{ method: 'olifant/plans/review/ready', params: { id: 'R1', kind: 'do', textDocument: { uri: '$uri' } } }],
+      review: 'R1', changed: ['src/a.py'], seconds: 2,
+    });
+    reply('olifant/plans/ask', { hold: true, title: 'asking' });
+    const ed = await at(8);
+    void vscode.commands.executeCommand('durandal.plan.do');
+    await until(() => a.planVerbs.running(uriOf(PLAN)).length === 1, 'the do in the air');
+    ed.selection = new vscode.Selection(3, 0, 3, 0);
+    void vscode.commands.executeCommand('durandal.plan.ask');
+    await until(() => a.planVerbs.running(uriOf(PLAN)).length === 2, 'the ask in the air');
+    await vscode.languages.setTextDocumentLanguage(ed.document, 'plaintext');
+    await until(() => cancelled('olifant/plans/ask'), '$/cancelRequest for the ask');
+    assert.deepEqual(a.planVerbs.running(uriOf(PLAN)), []);
+    // the do is not cancelled: its runner edits the tree, and dies mid-edit if it is (spec §3.2)
+    await until(() => a.pause.source() === 'do', 'the do\'s review window', 10_000);
+    assert.ok(!cancelled('olifant/plans/do'), 'the do not cancelled');
+    await a.pause.press('q');
+    await windowGone();
     await vscode.languages.setTextDocumentLanguage(docOf(PLAN)!, 'markdown');
   });
 
