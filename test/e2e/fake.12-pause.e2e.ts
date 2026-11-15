@@ -94,6 +94,8 @@ describe('the pause window (fake server)', () => {
   afterEach(async () => {
     const a = await api();
     a.setUi(undefined);
+    // a test that failed mid-run leaves the run in the air: cancelled, so the next test's conjure is not refused
+    if (a.pause.view()?.state === 'running') a.tdd.cancel();
     await windowGone();
     // q keeps the pause; an edit drops it, else the next test's conjure reopens it
     for (const rel of [MAIN, OTHER]) {
@@ -117,7 +119,13 @@ describe('the pause window (fake server)', () => {
   it('a paused answer opens the window beside the file, holds the pause, places one reminder', async () => {
     const a = await running();
     const from = a.shown.length;
+    const sizes = a.pause.sizes();
     await conjureAt(3, paused());
+    // the page's first size report can measure a frame not yet laid out (28, 46 cells) and cut
+    // the title (#26): once it has passed, a full-width one; receive paints at once, so the view
+    // read next is the one at 200
+    await until(() => a.pause.sizes() > sizes, 'the page\'s size report');
+    await a.pause.receive({ type: 'size', cols: 200 });
     assert.equal(a.pause.source(), 'conjure');
     assert.ok(a.pause.stored(uriOf(MAIN)));
     assert.equal(a.pause.reminders(uriOf(MAIN)), 1);
@@ -398,10 +406,11 @@ describe('the pause window (fake server)', () => {
 
   it('the running view: the row\'s label, the server\'s words without the round prefix, the round', async () => {
     const a = await running();
+    const sizes = a.pause.sizes();
     await conjureAt(3, paused());
     // the e2e page reports a narrow width (28, 46 cells), where the status line cuts the words:
     // once its own report has passed, a wide one
-    await new Promise(r => setTimeout(r, 500));
+    await until(() => a.pause.sizes() > sizes, 'the page\'s size report');
     await a.pause.receive({ type: 'size', cols: 200 });
     reply('olifant/conjure', { hold: true, title: 'conjuring', progress: ['round 4 of 9 · asking local (qwen3-coder:30b)…'] });
     await a.pause.press('c');
@@ -463,9 +472,10 @@ describe('the pause window (fake server)', () => {
 
   it('a narrow panel: narrow texts, Tab flips, a wide one shows both (spec §4.3)', async () => {
     const a = await running();
+    const sizes = a.pause.sizes();
     await conjureAt(3, paused());
     // the page reports its own size once it loads; let that pass first
-    await new Promise(r => setTimeout(r, 500));
+    await until(() => a.pause.sizes() > sizes, 'the page\'s size report');
     await a.pause.receive({ type: 'size', cols: 90 });
     let v = a.pause.view()!;
     assert.ok(v.narrow);

@@ -60,6 +60,8 @@ export class PauseController implements PauseSink {
   private shownUri: string | undefined;
   private rev: RevState | undefined;
   private cols = 120;
+  // the size reports seen (the page's and the tests'): the e2e tests wait for the page's first one (#26)
+  private sized = 0;
   private help = false;
   private flipped = false;
   private run: Run | undefined;
@@ -157,6 +159,7 @@ export class PauseController implements PauseSink {
 
   async receive(m: FromPage): Promise<void> {
     if (m.type === 'size') {
+      this.sized++;
       this.cols = m.cols;
       this.paint();
     } else if (m.type === 'key') {
@@ -187,6 +190,9 @@ export class PauseController implements PauseSink {
     return this.shownUri ? 'conjure' : undefined;
   }
   notices(): string[] { return [...this.said]; }
+  sizes(): number {
+    return this.sized;
+  }
 
   // progress: the server's work-done progress (hooks.progress); a resume's words feed its run
   progress(token: string | number, v: ProgressValue): void {

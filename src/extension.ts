@@ -58,6 +58,8 @@ export interface PauseApi {
   source(): SourceKind | undefined;
   press(key: string): Promise<void>;
   receive(m: FromPage): Promise<void>;
+  // the size reports the window has had (the e2e tests wait for the page's own before sending theirs)
+  sizes(): number;
   stored(uri: string): boolean;
   reminders(uri: string): number;
   notices(): string[];
@@ -227,6 +229,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     source: () => ctl.source(),
     press: k => ctl.press(k),
     receive: m => ctl.receive(m),
+    sizes: () => ctl.sizes(),
     stored: uri => !!ctl.store.get(uri),
     reminders: uri => reminders.count(uri),
     notices: () => ctl.notices(),
