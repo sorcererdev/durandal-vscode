@@ -20,6 +20,28 @@ const planEdit = (text: string, version: number | null = null) => ({ documentCha
   { range: { start: { line: 3, character: 0 }, end: { line: 3, character: 0 } }, newText: text },
 ] }] });
 
+const NOTICE = 'plan p.md changed · unsaved';
+const notices = (a: { shown: { level: string; text: string }[] }, from: number) => a.shown.slice(from).filter(s => s.text === NOTICE);
+const mainEdit = (text: string) => ({ documentChanges: [{ textDocument: { uri: uriOf(MAIN), version: null }, edits: [
+  { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: text },
+] }] });
+
+// pushed: every editor closed, a do's review pushed for the plan, its window up (the push test's route)
+async function pushed(): Promise<void> {
+  const a = await api();
+  await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+  reply('olifant/plans/review', reviewFixture('do'));
+  reply('olifant/plans/do', {
+    notify: [{ method: 'olifant/plans/review/ready', params: { id: 'R1', kind: 'do', textDocument: { uri: '$uri' } } }],
+    review: 'R1', changed: ['src/a.py'], seconds: 1,
+  });
+  await a.server.request(Olifant.plansDo, { textDocument: { uri: uriOf(PLAN) }, line: 2 });
+  await until(() => a.pause.source() === 'do', 'the do window');
+  await until(windowTab, 'the window in the workbench');
+}
+const planDoc = () => vscode.workspace.textDocuments.find(d => d.uri.toString() === uriOf(PLAN));
+const planShown = () => vscode.window.visibleTextEditors.some(e => e.document.uri.toString() === uriOf(PLAN));
+
 // showing: open the review the lens names and wait for its window, up in the workbench (windowTab)
 async function showing(review: DoReview | ReconcileReview, entry?: string): Promise<void> {
   const a = await api();
@@ -68,6 +90,44 @@ describe('the review window (fake server)', () => {
     assert.ok(!vscode.window.visibleTextEditors.some(e => e.document.uri.toString() === uriOf(PLAN)));
   });
 
+  it('an answer that edits a plan no editor shows says so once; the plan stays unopened and dirty (#11)', async () => {
+    const a = await running();
+    await pushed();
+    reply('olifant/plans/review/choose', { done: true, said: 'kept', edit: planEdit('  ✓ kept line\n'), facts: [{ row: 0, text: '# A plan, reviewed' }] });
+    const from = a.shown.length;
+    await a.pause.press('a');
+    await until(() => a.shown.slice(from).some(s => s.text === 'do: kept'), 'do: kept');
+    // the edit and the facts both changed it: one notice
+    assert.deepEqual(notices(a, from).map(s => s.level), ['info']);
+    assert.ok(planDoc()!.isDirty);
+    assert.ok(planDoc()!.getText().includes('  ✓ kept line'));
+    assert.ok(planDoc()!.getText().startsWith('# A plan, reviewed\n'));
+    assert.ok(!planShown(), 'the plan not opened for the person');
+  });
+
+  it('facts alone on a plan no editor shows: the notice (#11)', async () => {
+    const a = await running();
+    await pushed();
+    reply('olifant/plans/review/choose', { done: true, said: 'kept', facts: [{ row: 0, text: '# A plan, reviewed' }] });
+    const from = a.shown.length;
+    await a.pause.press('a');
+    await until(() => a.shown.slice(from).some(s => s.text === 'do: kept'), 'do: kept');
+    assert.equal(notices(a, from).length, 1);
+    assert.ok(!planShown());
+  });
+
+  it('an edit of another file only, the plan hidden: no notice (#11)', async () => {
+    const a = await running();
+    await pushed();
+    reply('olifant/plans/review/choose', { done: true, said: 'kept', edit: mainEdit('# kept\n') });
+    const from = a.shown.length;
+    await a.pause.press('a');
+    await until(() => a.shown.slice(from).some(s => s.text === 'do: kept'), 'do: kept');
+    assert.deepEqual(notices(a, from), []);
+    // the server's edit of main.py is saved: back as the later suites expect it
+    await settle(MAIN, 'x = 1\n');
+  });
+
   it('a keeps: choose keep, the plan edit lands, the window closes, do: kept; a second press waits', async () => {
     const a = await running();
     await open(file(PLAN));
@@ -82,6 +142,7 @@ describe('the review window (fake server)', () => {
     assert.ok(a.pause.notices().includes('a: the last answer is still on its way'));
     assert.equal(a.pause.view()!.state, 'busy');
     await until(() => a.shown.slice(from).some(s => s.text === 'do: kept'), 'do: kept');
+    assert.deepEqual(notices(a, from), [], 'the plan is visible: no notice (#11)');
     await until(() => a.landed.fired.length > fired, 'the review landed');
     assert.equal(a.landed.fired.length, fired + 1);
     assert.equal(a.landed.fired.at(-1), 'review');
