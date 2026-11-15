@@ -52,8 +52,6 @@ const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 const keyName = (k: string) => (k === 'Escape' ? 'Esc' : k);
 const docOf = (uri: string) => vscode.workspace.textDocuments.find(d => d.uri.toString() === uri);
 
-// PauseController: the window's source and its keys (spec §3, §4.4). The page sends what was
-// pressed; the controller decides, re-lays out the model and sends it back.
 // touches: whether a server edit changes the document at uri (both parsed: the server's spelling
 // of a uri can differ from VS Code's)
 function touches(edit: NonNullable<ChooseResult['edit']>, uri: string): boolean {
@@ -63,6 +61,8 @@ function touches(edit: NonNullable<ChooseResult['edit']>, uri: string): boolean 
     || (edit.documentChanges ?? []).some(c => 'textDocument' in c && same(c.textDocument.uri));
 }
 
+// PauseController: the window's source and its keys (spec §3, §4.4). The page sends what was
+// pressed; the controller decides, re-lays out the model and sends it back.
 export class PauseController implements PauseSink {
   readonly store: PauseStore;
   // the source shown: a conjure's file, or a review (spec §5.4); at most one of the two is set
@@ -544,7 +544,11 @@ export class PauseController implements PauseSink {
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(planUri));
       const edits = factEdits(linesOf(doc), facts);
       if (edits.length > 0) {
-        if (!await vscode.workspace.applyEdit(lineEdits(doc, edits))) return 'VS Code did not apply the plan facts';
+        if (!await vscode.workspace.applyEdit(lineEdits(doc, edits))) {
+          // the edit may have landed in the hidden plan already: still say it, once
+          if (changed) this.unseen(planUri);
+          return 'VS Code did not apply the plan facts';
+        }
         changed = true;
       }
     }
