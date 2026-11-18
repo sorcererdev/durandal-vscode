@@ -6,8 +6,10 @@ import type {
   Field, PreviewResult, Plan, FileActionsResult, ModelResult, GeneratorItem, InlineItem, SnippetData, Suggestion, SuggestResult,
   ChoicesResult, ConjureLanded, ConjurePaused, ConjureResume, MutateResult, StubResult, TestsRunResult, TestsRunParams, WaiveResult,
   ChooseResult, DoReview, ReconcileReview, ReviewsResult, ErrandParams, ReviewChooseParams, ReconcileResult, ErrandsResult,
+  Shown, StepChoice,
 } from '../../src/protocol';
 import { fixture, wrapped } from '../pauseFixtures';
+import { stepFixture } from '../stepFixtures';
 import { CLIENT_COMMANDS, Lsp, METHODS, Olifant, PLAN_TOKEN_MODIFIERS, PLAN_TOKEN_TYPES, SERVER_COMMANDS } from '../../src/protocol';
 
 const PINNED = [
@@ -203,11 +205,20 @@ const TDD_KEYS = [
   // the reviews (Review.hs, ReviewReadings.hs, Lsp.hs choose)
   'reviews', 'entries', 'key', 'label', 'detail', 'said', 'denied', 'files', 'status', 'facts', 'done', 'reopen',
   'review', 'details', 'badge', 'cost', 'after',
+  // the conjure step (ConjureStep.hs stepJson, the landed and rejected answers)
+  'shown', 'took', 'harder', 'rejected', 'landed', 'situation', 'reply', 'dropped', 'parses', 'ok',
+  'stillRed', 'noTests', 'passing', 'diffs', 'diff', 'goal', 'writer',
 ];
 
 test('the TDD keys are olifant\'s', { skip: !process.env.OLIFANT_REPO && 'OLIFANT_REPO is not set' }, () => {
   const src = hsFiles(join(process.env.OLIFANT_REPO!, 'src')).map(f => readFileSync(f, 'utf8')).join('\n');
   assert.deepEqual(TDD_KEYS.filter(k => !src.includes(`"${k}"`)), []);
+});
+
+test('compile check: a shown step reads as the server sends it (ConjureStep.hs stepJson)', () => {
+  const s: Shown = stepFixture('took');
+  const choice: StepChoice = 'harder';
+  assert.ok(s.token === 'step-1' && s.tests.noTests === false && choice === 'harder');
 });
 
 test('the standard requests the plan chords send themselves', () => {

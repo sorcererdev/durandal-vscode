@@ -806,6 +806,16 @@ export function conjureLegend(o: { narrow: boolean; proposal: boolean; running: 
   return o.narrow ? short : short + PAUSE_STAYS;
 }
 
+// The keys every source of the window shares, as its help names them: the review's tables and
+// the step's read them from here (reviewModel.ts shared()), so none depends on another's table.
+export const SHARED_KEYS = {
+  j: { keys: ['j', 'k'], help: 'scroll the diff: a line' },
+  PageDown: { keys: ['PageDown', 'PageUp'], help: 'scroll the diff: a page' },
+  Tab: { keys: ['Tab'], help: 'narrow: flip the situation and the diff' },
+  d: { keys: ['d'], help: 'details, in a document beside this one' },
+  '?': { keys: ['?'], help: 'this help; any key closes it' },
+} satisfies Record<string, KeyHelp>;
+
 // The one table of keys (pause.lua M.keys :1095-1126), as the page names them; CHORD is the
 // reopen chord's label (`Ctrl+Alt+D C`).
 export function conjureKeys(chord: string): KeyHelp[] {
@@ -821,13 +831,13 @@ export function conjureKeys(chord: string): KeyHelp[] {
     { keys: ['r'], help: 'reject the proposal' },
     { keys: ['[', ']'], help: 'previous / next entry; the diff follows' },
     { keys: ['0-9'], help: 'jump to an entry (0 is the wire)' },
-    { keys: ['j', 'k'], help: 'scroll the diff: a line' },
-    { keys: ['PageDown', 'PageUp'], help: 'scroll the diff: a page' },
-    { keys: ['Tab'], help: 'narrow: flip the situation and the diff' },
-    { keys: ['d'], help: 'details, in a document beside this one' },
+    SHARED_KEYS.j,
+    SHARED_KEYS.PageDown,
+    SHARED_KEYS.Tab,
+    SHARED_KEYS.d,
     { keys: ['x'], help: 'cancel a run (nothing lands)' },
     { keys: ['q', 'Escape'], help: `close; the pause stays, ${chord} reopens it` },
-    { keys: ['?'], help: 'this help; any key closes it' },
+    SHARED_KEYS['?'],
   ];
 }
 

@@ -110,6 +110,19 @@ export interface TestsRunResult {
 export interface TestsFileResult { file: string; kind: 'test' | 'module'; exists: boolean }
 export interface StubParams extends At { survivor?: Survivor }
 export interface StubResult { file: string; line: number; name: string; edits: WorkspaceEdit }
+// --- the conjure step (olifant ConjureStep.hs stepJson :415-443): one step, shown for review,
+// answered accept, reject or harder. Read every nullable through given() (src/pause/text.ts);
+// only an explicit took: false is a step that took none.
+export type StepChoice = 'accept' | 'reject' | 'harder';
+export interface StepTests { passing: string[]; failing: string[]; stillRed: string[]; noTests: boolean }
+// file: absolute; diffs[].file and parses[].file: root-relative; after: the tests' run over the
+// step's text (scope "file"), marked when the step lands
+export interface Shown {
+  token: string; file: string; unit: string; writer: string; goal: string | null; took?: boolean;
+  edits: WorkspaceEdit | null; dropped: string[]; parses: { file: string; ok: boolean }[];
+  tests: StepTests; after: TestsRunResult | null; cost: number | null; seconds: number; harder: boolean;
+  diffs: { file: string; diff: string }[]; situation: string; reply: string;
+}
 // a resume's choice: exactly what resumeOf accepts (Lsp.hs :1077)
 export type ResumeChoice = 'continue' | 'climb' | 'stop' | 'reconjure' | 'accept' | 'reject' | 'wire' | 'port';
 export interface ConjureResume { token: string; choice: ResumeChoice; arg?: string; land?: boolean; hint?: string }

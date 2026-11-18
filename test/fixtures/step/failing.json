@@ -1,0 +1,8 @@
+{ "shown": {
+  "token": "step-1", "file": "/p/src/a.py", "unit": "f", "writer": "claude-haiku-5-5", "goal": "fill f", "took": true,
+  "edits": null, "dropped": ["../evil.py"], "parses": [{ "file": "src/a.py", "ok": false }],
+  "tests": { "passing": [], "failing": ["t::a"], "stillRed": ["t::b", "t::c"], "noTests": false },
+  "after": null, "cost": null, "seconds": 7, "harder": false,
+  "diffs": [{ "file": "src/a.py", "diff": "--- a/src/a.py\n+++ b/src/a.py\n@@ -1,2 +1,2 @@\n def f():\n-    raise NotImplementedError\n+    return (\n" }],
+  "situation": "The cursor is in `f`", "reply": "<goal>fill f</goal>"
+} }

@@ -6,17 +6,14 @@ import type { DoReview, ReadingEntry, ReconcileReview, Review, ReviewListItem, R
 import type { Line, Row, Span, SpanKind, View } from './viewModel';
 import { plain } from './viewModel';
 import { given, width, wrap } from './text';
-import { conjureKeys, cutLine, helpLines, layout, rowLines, SCROLL_WORDS, type KeyHelp } from './model';
+import { cutLine, helpLines, layout, rowLines, SCROLL_WORDS, SHARED_KEYS, type KeyHelp } from './model';
 
 // A row of a review's offers pane: the server's key, and what a choose sends.
 export interface ReviewRow { key: string; label: string; detail: string; choice: string; entry?: string; step?: number }
 
-// The conjure table's entry holding KEY (pause.key in nvim): scroll, Tab and ? read the same
-// in every source.
-function shared(key: string): KeyHelp {
-  const k = conjureKeys('').find(e => e.keys.includes(key));
-  if (!k) throw new Error(`no conjure key ${key}`);
-  return k;
+// The shared key KEY names (scroll, Tab, d, ?): they read the same in every source.
+function shared(key: keyof typeof SHARED_KEYS): KeyHelp {
+  return SHARED_KEYS[key];
 }
 
 export const DO_KEYS: KeyHelp[] = [
@@ -164,7 +161,7 @@ const rtrim = (s: string): string => s.replace(/\s+$/, '');
 
 // One line from SPANS: empty spans dropped, cut to W cells (ending in … when cut), trailing
 // spaces dropped (sheet.put).
-function put(spans: Span[], w?: number): Line {
+export function put(spans: Span[], w?: number): Line {
   let ss = spans.filter(x => x.text !== '');
   if (w !== undefined) ss = cutLine(ss, w);
   while (ss.length > 0) {
@@ -177,7 +174,7 @@ function put(spans: Span[], w?: number): Line {
   return ss;
 }
 
-const span = (text: string, kind?: SpanKind): Span => (kind ? { text, kind } : { text });
+export const span = (text: string, kind?: SpanKind): Span => (kind ? { text, kind } : { text });
 
 // TEXT wrapped at W, each line in KIND from its first letter.
 function wrapped(text: string, w: number, kind: SpanKind): Line[] {
@@ -213,7 +210,7 @@ function doTitles(r: DoReview): Line[] {
 }
 
 // The first of TITLES that fits W cells, else the last cut to fit (pause.lua edge).
-function fit(titles: Line[], w: number): Line {
+export function fit(titles: Line[], w: number): Line {
   for (const t of titles) if (width(plain(t)) <= w) return t;
   return put(titles[titles.length - 1], Math.max(w, 8));
 }
@@ -229,12 +226,12 @@ function legend(what: string, narrow: boolean, w: number): string {
 }
 
 // A diff pane's title: TEXT, and ` · Tab back` when narrow.
-function diffTitle(text: string, narrow: boolean): Line {
+export function diffTitle(text: string, narrow: boolean): Line {
   return narrow ? [span(text, 'title'), span(' · ', 'title'), span('Tab', 'key'), span(' back', 'title')] : [span(text, 'title')];
 }
 
 // A diff's lines, its trailing blank lines dropped.
-function diffLines(diff: string): Line[] {
+export function diffLines(diff: string): Line[] {
   const ls = diff.split('\n');
   while (ls.length > 0 && ls[ls.length - 1] === '') ls.pop();
   return ls.map(l => [span(l)]);
