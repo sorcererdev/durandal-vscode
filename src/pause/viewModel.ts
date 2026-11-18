@@ -1,4 +1,4 @@
-// viewModel: what the extension and the pause page share (spec §2, §4.2). No imports: the
+// viewModel: what the extension and the review window's page share (spec §2, §4.2). No imports: the
 // webview bundle (webview/tsconfig.json) compiles this file too. The extension lays out every
 // pane in display cells at the width the page reports (plan decision 2); the page only paints.
 
@@ -6,11 +6,11 @@
 // meaning, colour never does alone.
 export type SpanKind =
   | 'strong' | 'dim' | 'red' | 'green' | 'check' | 'place' | 'key' | 'running' | 'title'
-  | 'paused' | 'proposal' | 'section' | 'spinner';
+  | 'proposal' | 'section';
 export interface Span { text: string; kind?: SpanKind }
 export type Line = Span[];
 
-export type ViewState = 'paused' | 'proposal' | 'running' | 'review' | 'busy';
+export type ViewState = 'proposal' | 'review' | 'busy';
 
 // Row: an offers row; lines are its rendered columns at the view's width (pause.lua row_lines)
 export interface Row { key?: string; label: string; detail: string; pressable: boolean; lines: Line[] }
@@ -28,10 +28,6 @@ export interface View {
   entries: number;
   selected: number;
   rows: Row[];
-  // a proposal's one-line reason above the rows
-  reason?: Line;
-  // running: the one status line that stands instead of the rows
-  status?: Line;
   diff: { title: Line; lines: Line[] };
   legend: string;
   // while ? is on: the key table, in the diff pane
@@ -58,9 +54,8 @@ export type FromPage =
 // PAGE_KEYS: the keys the page reports, by KeyboardEvent.key; the page lets every other key
 // through (spec §4.2)
 export const PAGE_KEYS: readonly string[] = [
-  'a', 'b', 'c', 'd', 'h', 'i', 'j', 'k', 'n', 'o', 'p', 'q', 'r', 's', 't', 'w', 'x',
-  'C', 'P', 'T', 'W', '[', ']', '?',
-  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+  'a', 'b', 'd', 'h', 'i', 'j', 'k', 'n', 'o', 'p', 'q', 'r', 't', '[', ']', '?',
+  '1', '2', '3', '4', '5', '6', '7', '8', '9',
   'Tab', 'Escape', 'PageUp', 'PageDown',
 ];
 

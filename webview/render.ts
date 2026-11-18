@@ -40,11 +40,9 @@ function row(r: Row, i: number): string {
   return `<button type="button" class="row" data-row="${i}"${key}${off}>${lines}</button>`;
 }
 
-// offers: the rows (the reason above them for a proposal), or the running status line alone
+// offers: the rows
 function offers(v: View): string {
-  if (v.status) return `<section id="off">${block('div', 'line status', v.status)}</section>`;
-  const reason = v.reason ? block('div', 'line reason', v.reason) : '';
-  return `<section id="off">${reason}${v.rows.map(row).join('')}</section>`;
+  return `<section id="off">${v.rows.map(row).join('')}</section>`;
 }
 
 // diff: the selected entry's diff, or the key table while ? is on

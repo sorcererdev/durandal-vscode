@@ -1,4 +1,3 @@
-import type { ConjureLanded } from '../protocol';
 import { differingRows } from '../plans/facts';
 
 // landing: the words and spans of a conjure's or a stub's landing (durandal.nvim conjure.lua
@@ -11,25 +10,10 @@ export function savedWord(saved: number, unsaved: number): string {
   return `${saved} saved, ${unsaved} unsaved`;
 }
 
-export interface Notice { level: 'info' | 'warn'; text: string }
-
-// conjureNotice: the landing's one line (conjure.lua :188-206); written is savedWord's, or
-// undefined when nothing was edited. The level is the outcome: red warns.
-export function conjureNotice(a: ConjureLanded, written: string | undefined): Notice {
-  const level = a.green === false ? 'warn' : 'info';
-  const summary = String(a.summary);
-  if (a.stopped) {
-    if (written === undefined) return { level: 'info', text: 'stopped · nothing landed' };
-    return { level, text: `${summary} · ${written} · undo reverts it` };
-  }
-  let text = `conjured · ${summary}`;
-  const rungs = Array.isArray(a.rungs) ? a.rungs : [];
-  // a steered landing names its round itself
-  if (!summary.includes(' in round ') && ((Number(a.rounds) || 0) > 1 || rungs.length > 1)) {
-    text += ` · ${a.rounds} rounds · ${rungs.join(' → ')}`;
-  }
-  if (written !== undefined) text += ` · ${written}`;
-  return { level, text };
+// stepLanded: a landed step's one line (durandal.nvim conjure.lua answered): its goal, or the
+// step, and what was written (savedWord's, or nothing changed). Always info.
+export function stepLanded(goal: string | null | undefined, written: string): string {
+  return `conjured · ${typeof goal === 'string' && goal !== '' ? goal : 'the step'} · ${written}`;
 }
 
 // changedSpan: the lines of after that differ from before (0-based, inclusive): from the first

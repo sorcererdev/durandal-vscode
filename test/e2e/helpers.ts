@@ -74,7 +74,7 @@ export async function revert(doc: vscode.TextDocument): Promise<void> {
   await vscode.commands.executeCommand('workbench.action.files.revert');
 }
 
-// windowTab: the pause / review window's tab is up in the workbench. It opens (and closes) there
+// windowTab: the review window's tab is up in the workbench. It opens (and closes) there
 // about 100 ms after the controller has drawn (or dropped) it, in a group of its own that takes
 // the focus, and an editor opened meanwhile goes into that group. Runs 43622964717 (pause) and
 // 43636253604 (review), 1.91.0: an after-each revert failed there with "Could NOT open editor".

@@ -10,7 +10,7 @@ import { NO_PAST_DO, NO_RECORD } from './words';
 
 export interface ErrandsDeps {
   server: Server; say: Say; ui: () => Ui; planDocs: PlanDocs;
-  // a past do in the pause window, read-only (M5b's errand review)
+  // a past do in the review window, read-only (M5b's errand review)
   show(planUri: string, review: Review): void;
 }
 

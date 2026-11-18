@@ -1,53 +1,58 @@
 import * as vscode from 'vscode';
+import type { WorkspaceEdit } from 'vscode-languageserver-protocol';
 import { applyServerEdit } from '../applyEdit';
 import type { Landed } from '../landed';
-import { ConjureLanded, ConjureParams, ConjureResult, Olifant, Paused } from '../protocol';
+import { HeldStep, reopens, stepLines, StepStore } from '../pause/stepStore';
+import { ConjureParams, ConjureResult, Olifant, Shown, StepChoice } from '../protocol';
 import { NOT_RUNNING, Say, Server } from '../server';
-import type { Ui } from '../uiTypes';
 import { here, NO_FILE, TddFlights, withCancel } from './common';
-import { Flight, Outcome, settle } from './flights';
-import { changedSpan, conjureNotice, savedWord, selectionLines } from './landing';
+import { settle } from './flights';
+import { changedSpan, savedWord, selectionLines, stepLanded } from './landing';
 import type { Tests } from './tests';
 
 export interface ConjureDeps {
-  server: Server; say: Say; ui: () => Ui; flights: TddFlights; tests: Tests;
+  server: Server; say: Say; flights: TddFlights; tests: Tests;
   // each landing's flashed span (Api.tdd.flashes, for the e2e tests)
   flashes: { first: number; last: number }[];
   landed: Landed;
+  // the held steps, one a document (spec §3.6); the window reads them too
+  steps: StepStore;
 }
 
-// PauseSink: where a pause goes (the pause controller, M5 spec §3)
-export interface PauseSink {
-  // a pause answered, to an opening conjure or a resume (params: the request, its position the
-  // original; hooks: the resume's, undefined for an opening conjure)
-  shown(params: ConjureParams, p: Paused, hooks?: ResumeHooks): void;
-  // a resume ended without a pause (a landing, an error, a cancel): hooks name which one
-  ended(hooks: ResumeHooks): void;
-  // a conjure is about to go from line of uri: true when it reopened the held pause instead
-  atRun(uri: string, line: number, selection: boolean): boolean;
+// StepWindow: where a shown step is drawn (the review window's step source, controller.ts)
+export interface StepWindow {
+  // the held step of URI shown: opened, or drawn again in place with its first file selected
+  showStep(uri: string): void;
+  // URI's step is over (landed, rejected, gone): the window closes if it shows it
+  closeStep(uri: string): void;
 }
 
-// ResumeHooks: a resume's flight, for the window's x; the object is the resume's identity, handed
-// back to the sink with its answer
-export interface ResumeHooks { started(f: Flight<vscode.CancellationToken>): void }
+export const NO_ANSWER = 'conjure: an answer olifant does not give';
+const CANCELLED = 'conjure cancelled · nothing landed';
+// an answer's errors after which the server holds no step: the window closes with them; any
+// other failed h keeps the step and says why in the footer (spec §3.5)
+const GONE = ['this step is gone', 'the file changed since the step was shown'];
+const docOf = (uri: string) => vscode.workspace.textDocuments.find(d => d.uri.toString() === uri);
+// the server can spell a uri differently from VS Code (%3A, [, ])
+const sameUri = (a: string, b: string) => vscode.Uri.parse(a).toString() === vscode.Uri.parse(b).toString();
 
-// Conjure: a body (or the selected lines) filled until its tests pass (durandal.nvim conjure.lua,
-// M4 spec §4). A landing applies the accepted edit, flashes the changed lines, marks the
-// after-run and says one line. A pause goes to the sink (M5 spec §3); a resume comes back
-// through resume() so its landing is this one.
+// Conjure: one step at the cursor (or the selected lines), shown for review (durandal.nvim
+// conjure.lua, spec §3.3). The answer is a shown step, held and drawn by the window; a landed
+// step applies its edits, flashes the changed lines, marks the step's after-run and says one
+// line; a rejected one is said. The window's a, r and h come back through answer().
 export class Conjure {
-  private readonly landed = vscode.window.createTextEditorDecorationType({
+  private readonly flashed = vscode.window.createTextEditorDecorationType({
     isWholeLine: true, backgroundColor: new vscode.ThemeColor('diffEditor.insertedLineBackground'),
   });
-  private sink: PauseSink | undefined;
+  private window: StepWindow | undefined;
 
   constructor(private readonly d: ConjureDeps) {}
 
   register(context: vscode.ExtensionContext): void {
-    context.subscriptions.push(this.landed, vscode.commands.registerCommand('durandal.conjure', () => this.run()));
+    context.subscriptions.push(this.flashed, vscode.commands.registerCommand('durandal.conjure', () => this.run()));
   }
 
-  setSink(s: PauseSink): void { this.sink = s; }
+  setWindow(w: StepWindow): void { this.window = w; }
 
   async run(): Promise<void> {
     const h = here();
@@ -56,67 +61,101 @@ export class Conjure {
       return;
     }
     const sel = selectionLines(h.editor.selection.start, h.editor.selection.end);
-    // a conjure inside a held pause's unit reopens it; anywhere else it forgets it (spec §3.4 rule 4)
-    if (this.sink?.atRun(h.uri, h.position.line, !!sel)) return;
+    // the held step again when the document is as it was shown and the cursor is on its
+    // lines; otherwise it is forgotten (the server drops its own on a new conjure)
+    const held = this.d.steps.get(h.uri);
+    if (held) {
+      if (reopens(held, h.editor.document.version, h.position.line, sel !== undefined)) {
+        this.window?.showStep(h.uri);
+        return;
+      }
+      this.forget(h.uri);
+    }
     const params: ConjureParams = { textDocument: { uri: h.uri }, position: h.position };
     if (sel) params.selection = sel;
-    await this.ask(params);
-  }
-
-  // resume: a pause's answer; the window is its progress (no notification), x cancels the flight
-  async resume(params: ConjureParams, hooks: ResumeHooks): Promise<void> {
-    await this.ask(params, hooks);
-  }
-
-  // ask sends a conjure (or a resume), then lands its answer or hands on its pause
-  private async ask(params: ConjureParams, hooks?: ResumeHooks): Promise<void> {
     if (!this.d.server.client()) {
       void this.d.say('error', NOT_RUNNING);
-      if (hooks) this.sink?.ended(hooks);
       return;
     }
     const f = this.d.flights.start('conjure');
-    const send = () => settle(f, this.d.server.request(Olifant.conjure, params, f.token), Olifant.conjure.method);
-    let o: Outcome<ConjureResult>;
-    if (hooks) {
-      hooks.started(f);
-      o = await send();
-    } else {
-      o = await withCancel('Durandal: conjuring…', f, send);
-    }
+    const o = await withCancel('Durandal: conjuring…', f, () => settle(f, this.d.server.request(Olifant.conjure, params, f.token), Olifant.conjure.method));
     if (o.kind === 'cancelled') {
-      if (hooks) this.sink?.ended(hooks);
-      if (o.why === 'user' || o.why === 'server') void this.d.say('info', 'conjure cancelled · nothing landed');
+      if (o.why === 'user' || o.why === 'server') void this.d.say('info', CANCELLED);
       return;
     }
+    // the opening call's refusal leaves nothing to forget: said as the server says it
     if (o.kind === 'error') {
-      if (hooks) this.sink?.ended(hooks);
       void this.d.say('error', o.message);
       return;
     }
-    // the one branch point is the answer's shape (conjure.lua :175): {paused: {…}} or a landing.
-    // ConjureLanded is open (an index signature), so `in` does not narrow: read it through the cast.
-    const p = (o.value as { paused?: unknown }).paused;
-    if (p && typeof p === 'object') {
-      this.sink?.shown(params, p as Paused, hooks);
-      return;
-    }
-    if (hooks) this.sink?.ended(hooks);
-    await this.land(params, o.value as ConjureLanded);
+    await this.answered(params, o.value, undefined);
   }
 
-  private async land(params: ConjureParams, a: ConjureLanded): Promise<void> {
-    let written: string | undefined;
-    if (a.edits) {
+  // answer: the held step of URI answered with CHOICE (the window's a, r, h). Undefined when it
+  // is done with (shown again, landed, rejected, or gone, each drawn or said); a sentence when
+  // the step stays and the footer should say why (a failed h).
+  async answer(uri: string, choice: StepChoice): Promise<string | undefined> {
+    const held = this.d.steps.get(uri);
+    if (!held) return 'nothing to do here';
+    if (!this.d.server.client()) return NOT_RUNNING;
+    const params: ConjureParams = { textDocument: { uri }, position: held.position, resume: { token: held.shown.token, choice } };
+    const f = this.d.flights.start('conjure');
+    const o = await settle(f, this.d.server.request(Olifant.conjure, params, f.token), Olifant.conjure.method);
+    if (o.kind === 'cancelled') {
+      // a stop or a restart has dropped every step and closed the window already
+      if (o.why === 'user' || o.why === 'server') {
+        this.forget(uri);
+        void this.d.say('info', CANCELLED);
+      }
+      return undefined;
+    }
+    if (o.kind === 'error') {
+      if (choice === 'harder' && !GONE.some(g => o.message.startsWith(g))) return o.message;
+      this.forget(uri);
+      void this.d.say('error', o.message);
+      return undefined;
+    }
+    await this.answered(params, o.value, held);
+    return undefined;
+  }
+
+  // answered: the one branch point is the answer's shape (conjure.lua answered)
+  private async answered(params: ConjureParams, v: ConjureResult, held: HeldStep | undefined): Promise<void> {
+    const uri = params.textDocument.uri;
+    const r = v as { shown?: unknown; landed?: unknown; rejected?: unknown };
+    if (r.shown !== null && typeof r.shown === 'object') {
+      const shown = r.shown as Shown;
+      const version = docOf(uri)?.version ?? 0;
+      this.d.steps.set({ uri, shown, position: params.position, version, lines: stepLines(uri, shown, params.position, sameUri) });
+      this.window?.showStep(uri);
+      return;
+    }
+    this.forget(uri);
+    if (r.rejected === true) {
+      void this.d.say('info', 'step rejected · nothing landed');
+      return;
+    }
+    if (r.landed === null || typeof r.landed !== 'object') {
+      void this.d.say('error', NO_ANSWER);
+      return;
+    }
+    await this.land(uri, (r.landed as { edits?: WorkspaceEdit | null }).edits ?? null, held);
+  }
+
+  // land: the step's edits (one undo step a file, refused whole if a document moved), the
+  // flash, the after-run marked, landed fired, one line said
+  private async land(uri: string, edits: WorkspaceEdit | null, held: HeldStep | undefined): Promise<void> {
+    let written = 'nothing changed';
+    if (edits) {
       const lc = this.d.server.client();
       if (!lc) {
         void this.d.say('error', NOT_RUNNING);
         return;
       }
-      const doc = vscode.workspace.textDocuments.find(x => x.uri.toString() === params.textDocument.uri);
+      const doc = docOf(uri);
       const before = doc?.getText().split('\n');
       let counts = { saved: 0, unsaved: 0 };
-      const done = await applyServerEdit(lc, { label: 'conjure', edit: a.edits }, () => undefined, (saved, unsaved, kept) => {
+      const done = await applyServerEdit(lc, { label: 'conjure', edit: edits }, () => undefined, (saved, unsaved, kept) => {
         counts = { saved: saved.length, unsaved: unsaved.length + kept.length };
         return undefined;
       });
@@ -127,12 +166,15 @@ export class Conjure {
       written = savedWord(counts.saved, counts.unsaved);
       if (doc && before) this.flash(doc, before);
     }
-    // the after-run, as a run marks it; the results refreshed if open, not opened
-    if (a.tests && typeof a.tests === 'object' && !(a.stopped && !a.edits)) this.d.tests.show(a.tests, false);
-    const n = conjureNotice(a, written);
-    void this.d.say(n.level, n.text);
-    // stopped with no edits: nothing landed (conjure.lua :190-205)
-    if (!(a.stopped && !a.edits)) this.d.landed.fire('conjure');
+    const after = held?.shown.after;
+    if (after !== null && after !== undefined && typeof after === 'object') this.d.tests.show(after, false);
+    this.d.landed.fire('conjure');
+    void this.d.say('info', stepLanded(held?.shown.goal, written));
+  }
+
+  private forget(uri: string): void {
+    this.d.steps.drop(uri);
+    this.window?.closeStep(uri);
   }
 
   // flash: the changed lines for half a second; the cursor to the first, when its editor is active
@@ -142,8 +184,8 @@ export class Conjure {
     this.d.flashes.push(span);
     const range = new vscode.Range(span.first, 0, span.last, 0);
     const eds = vscode.window.visibleTextEditors.filter(e => e.document === doc);
-    for (const e of eds) e.setDecorations(this.landed, [range]);
-    setTimeout(() => { for (const e of eds) e.setDecorations(this.landed, []); }, 500);
+    for (const e of eds) e.setDecorations(this.flashed, [range]);
+    setTimeout(() => { for (const e of eds) e.setDecorations(this.flashed, []); }, 500);
     const active = vscode.window.activeTextEditor;
     if (active?.document !== doc) return;
     const at = new vscode.Position(span.first, doc.lineAt(span.first).firstNonWhitespaceCharacterIndex);

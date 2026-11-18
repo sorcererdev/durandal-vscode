@@ -111,8 +111,8 @@ export interface TestsFileResult { file: string; kind: 'test' | 'module'; exists
 export interface StubParams extends At { survivor?: Survivor }
 export interface StubResult { file: string; line: number; name: string; edits: WorkspaceEdit }
 // --- the conjure step (olifant ConjureStep.hs stepJson :415-443): one step, shown for review,
-// answered accept, reject or harder. Read every nullable through given() (src/pause/text.ts);
-// only an explicit took: false is a step that took none.
+// answered accept, reject or harder. Read every nullable null-safely; only an explicit
+// took: false is a step that took none.
 export type StepChoice = 'accept' | 'reject' | 'harder';
 export interface StepTests { passing: string[]; failing: string[]; stillRed: string[]; noTests: boolean }
 // file: absolute; diffs[].file and parses[].file: root-relative; after: the tests' run over the
@@ -123,57 +123,14 @@ export interface Shown {
   tests: StepTests; after: TestsRunResult | null; cost: number | null; seconds: number; harder: boolean;
   diffs: { file: string; diff: string }[]; situation: string; reply: string;
 }
-// a resume's choice: exactly what resumeOf accepts (Lsp.hs :1077)
-export type ResumeChoice = 'continue' | 'climb' | 'stop' | 'reconjure' | 'accept' | 'reject' | 'wire' | 'port';
-export interface ConjureResume { token: string; choice: ResumeChoice; arg?: string; land?: boolean; hint?: string }
+// a step's answer: its token and the choice (ConjureStep.hs stepResumeOf :447-457)
+export interface ConjureResume { token: string; choice: StepChoice }
+// selection: 0-based lines, inclusive (the server adds 1); resume: an answer to the shown step,
+// sent with the opening conjure's textDocument and position
 export interface ConjureParams extends At { selection?: { start: number; end: number }; resume?: ConjureResume }
-// landed: edits null when nothing changed; tests the after-run (scope "file"); stopped always sent
-export interface ConjureLanded extends Open {
-  file: string; unit: string; edits: WorkspaceEdit | null; summary: string; green: boolean;
-  tests: TestsRunResult; rounds: number; rungs: string[]; stopped: boolean;
-}
-// The pause (ConjureNext.hs pausedJson :865-955). lines 1-based inclusive; file absolute; a
-// round's, wire's or step's files root-relative. A thin answer may carry only token, lines and
-// offers; nullable fields arrive as null. Read every field through given() (src/pause/text.ts).
-export interface PausedFile { file: string; diff: string }
-export interface PausedFailed {
-  test: string; message: string; summary?: string | null; at?: number | string | null; assertion?: string | null;
-  got?: string | null; expected?: string | null; output?: string | null;
-}
-export interface PausedDecide { choice: string; confidence: number; probabilities: Record<string, number> }
-export interface PausedRound {
-  round: number; rung: string; attempt?: string | null; line: string; verdict: 'green' | 'red';
-  failing: string[]; failed: PausedFailed[]; passed: string[]; check?: string | null;
-  decide?: PausedDecide | null; diff: string | null; files: PausedFile[];
-}
-// flipped: the round the test's status changed in (0 = before round 1)
-export interface PausedTest {
-  test: string; source?: string | null; status: 'failing' | 'passing'; flipped?: number | null; assertion?: string | null; note?: string | null;
-}
-export interface PausedWired { param: string; port: string; test?: string | null; files: PausedFile[] }
-// an offer: choice `proposal` is an entry, not a resume verb; land and hint only on stop / continue
-export interface PausedOffer { choice: string; arg?: string | null; label: string; detail: string; land?: boolean | null; hint?: boolean | null }
-export interface PausedStep { after: number; kind?: 'wire' | 'test' | 'hint' | 'port' | null; text: string; files: PausedFile[]; test?: string | null }
-export interface PausedProblem { file: string; line?: number | null; message: string }
-export type PausedFailure =
-  | { round: number; kind: 'check'; tool: string; problems: PausedProblem[] }
-  | { round: number; kind: 'tests'; tests: string[] };
-export interface PausedProposal {
-  file: string; test: string; before?: string | null; after?: string | null; diff: string; refused?: string | null;
-  step?: string | null; kind?: 'test' | 'port' | null; files?: string[] | null;
-}
-export interface PausedTitle { unit?: string | null; round?: number | null; of?: number | null; rung?: string | null; model?: string | null; seconds?: number | null }
-export interface Paused {
-  token: string; lines: { first: number; last: number }; offers: PausedOffer[];
-  file?: string; round?: number; rung?: string; summary?: string; why?: string; title?: PausedTitle;
-  diagnosis?: string[]; trigger?: string; rounds?: PausedRound[]; tests?: PausedTest[];
-  unit?: { header: string; ports: string[] }; landing?: { diff: string }; wired?: PausedWired[];
-  expires?: number; outcome?: string | null; steps?: PausedStep[]; failure?: PausedFailure | null;
-  checker?: string | null; snippet?: { file: string; line: number; ghost: unknown; body: string } | null;
-  proposal?: PausedProposal | null;
-}
-export interface ConjurePaused { paused: Paused }
-export type ConjureResult = ConjureLanded | ConjurePaused;
+// the answer: a step shown for review, a step landed (edits null when it changed nothing), or
+// a step rejected (also an accepted step that took none)
+export type ConjureResult = { shown: Shown } | { landed: { file: string; edits: WorkspaceEdit | null } } | { rejected: true };
 export interface MutateSurvivor extends Survivor { dim: boolean }
 export interface MutateResult {
   file: string; unit: string; lines: { first: number; last: number }; killed: number; survived: number; waived: number;

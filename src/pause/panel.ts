@@ -22,7 +22,7 @@ export class PausePanel {
   constructor(private readonly d: { extensionUri: vscode.Uri; receive(m: FromPage): void; closed(): void }) {}
 
   // show: create the panel beside the file, or update it; an existing panel is revealed only
-  // when focus is asked for (a running view re-sent each second never pulls a hidden tab forward)
+  // when focus is asked for (a repaint, such as a busy footer, never pulls a hidden tab forward)
   show(view: View, o: { beside?: vscode.ViewColumn; flash?: 'row' | 'entry'; focus: boolean }): void {
     this.shown = view;
     if (!this.panel) {

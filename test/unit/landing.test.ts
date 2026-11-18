@@ -1,15 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { ConjureLanded } from '../../src/protocol';
 import {
-  changedSpan, conjureNotice, cursorColumn, savedWord, selectionLines, stubWord,
+  changedSpan, cursorColumn, savedWord, selectionLines, stepLanded, stubWord,
 } from '../../src/tdd/landing';
-
-const landed = (o: Partial<ConjureLanded> = {}): ConjureLanded => ({
-  file: '/p/a.py', unit: 'f', edits: { documentChanges: [] }, summary: 'green', green: true,
-  tests: { file: '/p/a__test.py', passed: ['x'], scope: 'file', test: null, failed: [], broken: null, seconds: 0.4 },
-  rounds: 1, rungs: ['local'], stopped: false, ...o,
-});
 
 test('savedWord: write_landed\'s words', () => {
   assert.equal(savedWord(0, 0), 'saved');
@@ -20,26 +13,11 @@ test('savedWord: write_landed\'s words', () => {
   assert.equal(savedWord(2, 1), '2 saved, 1 unsaved');
 });
 
-test('conjured: the summary and the save; info when green', () => {
-  assert.deepEqual(conjureNotice(landed(), 'saved'), { level: 'info', text: 'conjured · green · saved' });
-});
-
-test('conjured without edits: no save word', () => {
-  assert.deepEqual(conjureNotice(landed({ edits: null, summary: 'green: already passes' }), undefined),
-    { level: 'info', text: 'conjured · green: already passes' });
-});
-
-test('red: a warning; rounds and rungs when more than one, unless the summary names its round', () => {
-  assert.deepEqual(conjureNotice(landed({ green: false, summary: 'red: test_x · boom', rounds: 3, rungs: ['local', 'cloud'] }), 'saved'),
-    { level: 'warn', text: 'conjured · red: test_x · boom · 3 rounds · local → cloud · saved' });
-  assert.equal(conjureNotice(landed({ rounds: 1, rungs: ['local', 'cloud'] }), 'saved').text, 'conjured · green · 1 rounds · local → cloud · saved');
-  assert.equal(conjureNotice(landed({ summary: 'green in round 2', rounds: 2, rungs: ['a', 'b'] }), 'saved').text, 'conjured · green in round 2 · saved');
-});
-
-test('stopped: the summary, the save, undo; nothing landed without edits', () => {
-  assert.deepEqual(conjureNotice(landed({ stopped: true, green: false, summary: 'red: test_x' }), 'saved'),
-    { level: 'warn', text: 'red: test_x · saved · undo reverts it' });
-  assert.deepEqual(conjureNotice(landed({ stopped: true, edits: null }), undefined), { level: 'info', text: 'stopped · nothing landed' });
+test('the landing\'s line: the goal and what was written; the step when no goal; nothing changed when no edit', () => {
+  assert.equal(stepLanded('fill f', 'saved'), 'conjured · fill f · saved');
+  assert.equal(stepLanded(null, '2 files saved'), 'conjured · the step · 2 files saved');
+  assert.equal(stepLanded(undefined, 'nothing changed'), 'conjured · the step · nothing changed');
+  assert.equal(stepLanded('', '1 saved, 1 unsaved'), 'conjured · the step · 1 saved, 1 unsaved');
 });
 
 test('changedSpan: the first to the last changed line of after, 0-based', () => {

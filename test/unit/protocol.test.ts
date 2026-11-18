@@ -4,11 +4,10 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
   Field, PreviewResult, Plan, FileActionsResult, ModelResult, GeneratorItem, InlineItem, SnippetData, Suggestion, SuggestResult,
-  ChoicesResult, ConjureLanded, ConjurePaused, ConjureResume, MutateResult, StubResult, TestsRunResult, TestsRunParams, WaiveResult,
+  ChoicesResult, ConjureResult, ConjureResume, MutateResult, StubResult, TestsRunResult, TestsRunParams, WaiveResult,
   ChooseResult, DoReview, ReconcileReview, ReviewsResult, ErrandParams, ReviewChooseParams, ReconcileResult, ErrandsResult,
   Shown, StepChoice,
 } from '../../src/protocol';
-import { fixture, wrapped } from '../pauseFixtures';
 import { stepFixture } from '../stepFixtures';
 import { CLIENT_COMMANDS, Lsp, METHODS, Olifant, PLAN_TOKEN_MODIFIERS, PLAN_TOKEN_TYPES, SERVER_COMMANDS } from '../../src/protocol';
 
@@ -131,22 +130,23 @@ test('compile check: the TDD answers read as the server sends them (Lsp.hs :608-
     failed: [{ id: 'a__test.py::test_two', file: '/p/a__test.py', line: null, message: 'm', output: '' }], broken: null, seconds: 0.3,
   };
   const params: TestsRunParams = { textDocument: { uri: 'file:///p/a.py' }, scope: 'file' };
-  const landed: ConjureLanded = {
-    file: '/p/a.py', unit: 'f', edits: null, summary: 'green', green: true, tests: run, rounds: 1, rungs: ['local'], stopped: false,
-  };
-  const paused: ConjurePaused = { paused: { token: 't', lines: { first: 3, last: 9 }, offers: [], diagnosis: ['d'] } };
+  const answers: ConjureResult[] = [
+    { shown: stepFixture('took') },
+    { landed: { file: '/p/a.py', edits: null } },
+    { rejected: true },
+  ];
   const mutate: MutateResult = {
     file: '/p/a.py', unit: 'f', lines: { first: 3, last: 9 }, killed: 5, survived: 1, waived: 0,
     survivors: [{ line: 4, operator: 'swap', from: '+', to: '-', mutated: 'y = a - b', dim: false }], summary: '1 survivor · 5/6 killed',
   };
   const stub: StubResult = { file: '/p/a__test.py', line: 8, name: 'test_f', edits: { documentChanges: [] } };
   const waived: WaiveResult = { waived: true };
-  assert.ok(run.failed[0].line === null && params.scope === 'file' && landed.edits === null && paused.paused.token === 't');
+  assert.ok(run.failed[0].line === null && params.scope === 'file' && answers.length === 3);
   assert.ok(mutate.lines.first === 3 && stub.line === 8 && waived.waived);
 });
 
 test('compile check: a resume, the reviews and a choose read as the server sends them (Lsp.hs :694-737, :1066-1090)', () => {
-  const resume: ConjureResume = { token: 'conjure-1', choice: 'stop', land: true, arg: '2' };
+  const resume: ConjureResume = { token: 'step-1', choice: 'harder' };
   const list: ReviewsResult = { reviews: [
     { id: 'R1', kind: 'do', row: 2, step: '- [ ] a step', status: 'answered' },
     { id: 'reconcile', kind: 'reconcile', entries: [{ id: 'done|a.py|f|abc', kind: 'done', row: 4 }] },
@@ -163,31 +163,8 @@ test('compile check: a resume, the reviews and a choose read as the server sends
   const chosen: ChooseResult = { done: false, said: '1 passed · 0 failed', facts: [{ row: 2, text: '- [x] a step' }, { after: 2, lines: ['  ✓ t'] }], review: done };
   const choose: ReviewChooseParams = { textDocument: { uri: 'file:///p/plans/t.md' }, id: 'reconcile', choice: 'place', entry: 'k', step: 3 };
   const reopen: ErrandParams = { textDocument: { uri: 'file:///p/plans/t.md' }, line: 2, resume: 'R1', text: 'more' };
-  assert.ok(resume.land && list.reviews.length === 2 && readings.entries[0].offers[0].step === 3 && chosen.review === done);
+  assert.ok(resume.choice === 'harder' && list.reviews.length === 2 && readings.entries[0].offers[0].step === 3 && chosen.review === done);
   assert.ok(choose.step === 3 && reopen.resume === 'R1');
-});
-
-// PAUSED_FIELDS: every field Paused names (protocol.ts); a fixture field outside it means the
-// server sends something the models cannot read yet
-const PAUSED_FIELDS = [
-  'token', 'lines', 'offers', 'file', 'round', 'rung', 'summary', 'why', 'title', 'diagnosis', 'trigger', 'rounds', 'tests',
-  'unit', 'landing', 'wired', 'expires', 'outcome', 'steps', 'failure', 'checker', 'snippet', 'proposal',
-];
-
-test('the four pause fixtures: paused answers whose fields Paused names', () => {
-  for (const name of ['plain', 'wired', 'steps', 'check'] as const) {
-    const p = fixture(name);
-    assert.equal(typeof p.token, 'string', name);
-    assert.ok(p.lines.first >= 1 && p.lines.last >= p.lines.first, name);
-    assert.ok(Array.isArray(p.offers) && p.offers.length > 0, name);
-    assert.ok(Array.isArray(p.diagnosis), `${name}: diagnosis is a list`);
-    assert.deepEqual(Object.keys(p).filter(k => !PAUSED_FIELDS.includes(k)), [], name);
-    assert.deepEqual(Object.keys(wrapped(name)), ['paused'], name);
-  }
-  // a copy each call: a test that edits one does not change the next
-  const a = fixture('plain');
-  a.token = 'changed';
-  assert.notEqual(fixture('plain').token, 'changed');
 });
 
 // The keys the TDD commands read or send (spec §2); each a string literal in olifant's source.
@@ -195,19 +172,15 @@ test('the four pause fixtures: paused answers whose fields Paused names', () => 
 // the key from this list to make it pass.
 const TDD_KEYS = [
   'passed', 'scope', 'test', 'failed', 'broken', 'seconds', 'output', 'exists',
-  'edits', 'green', 'tests', 'rounds', 'rungs', 'paused', 'token',
+  'edits', 'tests', 'token',
   'lines', 'first', 'last', 'killed', 'survived', 'waived', 'survivors', 'operator', 'from', 'to', 'mutated', 'dim',
   'unit', 'reason', 'selection', 'resume', 'choice', 'position', 'summary',
-  // the pause (ConjureNext.hs pausedJson)
-  'why', 'trigger', 'offers', 'outcome', 'steps', 'failure', 'landing', 'verdict',
-  'attempt', 'decide', 'probabilities', 'confidence', 'note', 'refused', 'hint',
-  'problems', 'tool', 'param', 'port', 'failing', 'got', 'expected', 'assertion',
   // the reviews (Review.hs, ReviewReadings.hs, Lsp.hs choose)
   'reviews', 'entries', 'key', 'label', 'detail', 'said', 'denied', 'files', 'status', 'facts', 'done', 'reopen',
   'review', 'details', 'badge', 'cost', 'after',
   // the conjure step (ConjureStep.hs stepJson, the landed and rejected answers)
   'shown', 'took', 'harder', 'rejected', 'landed', 'situation', 'reply', 'dropped', 'parses', 'ok',
-  'stillRed', 'noTests', 'passing', 'diffs', 'diff', 'goal', 'writer',
+  'stillRed', 'noTests', 'passing', 'failing', 'diffs', 'diff', 'goal', 'writer',
 ];
 
 test('the TDD keys are olifant\'s', { skip: !process.env.OLIFANT_REPO && 'OLIFANT_REPO is not set' }, () => {

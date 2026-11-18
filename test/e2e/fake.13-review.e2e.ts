@@ -1,10 +1,11 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
-import type { ConjurePaused, DoReview, ReconcileReview } from '../../src/protocol';
+import type { DoReview, ReconcileReview } from '../../src/protocol';
 import { Olifant } from '../../src/protocol';
 import { plain } from '../../src/pause/viewModel';
 import { FakeUi } from '../fakeUi';
-import { reviewFixture, wrapped } from '../pauseFixtures';
+import { reviewFixture } from '../pauseFixtures';
+import { stepAnswer } from '../stepFixtures';
 import { api, file, hidden, log, open, reply, revert, running, settle, tabsUnder, until, windowGone, windowTab } from './helpers';
 
 // The review sources over the fake server (M5 spec §5, §8): the push after a do, the lens, the
@@ -330,24 +331,25 @@ describe('the review window (fake server)', () => {
     await vscode.window.tabGroups.close(tab);
   });
 
-  it('a review opened over a pause swaps the window; the pause stays; a conjure in the unit swaps back (spec §5.4)', async () => {
+  it('a review opened over a step swaps the window; the step stays held; a conjure on its lines swaps back with no request (spec §5.4)', async () => {
     const a = await running();
     await settle(MAIN, Array.from({ length: 10 }, (_, i) => `v${i} = ${i}`).join('\n') + '\n');
     const ed = await open(file(MAIN));
     ed.selection = new vscode.Selection(3, 0, 3, 0);
-    const w: ConjurePaused = wrapped('plain');
-    w.paused.lines = { first: 3, last: 5 };
+    const w = stepAnswer('took');
+    w.shown.edits = { documentChanges: [{ textDocument: { uri: uriOf(MAIN), version: null }, edits: [
+      { range: { start: { line: 3, character: 0 }, end: { line: 5, character: 0 } }, newText: 'v3 = 33\n' },
+    ] }] };
     reply('olifant/conjure', w);
     await vscode.commands.executeCommand('durandal.conjure');
-    await until(() => a.pause.source() === 'conjure', 'the pause window');
+    await until(() => a.pause.source() === 'step', 'the step window');
     await showing(reviewFixture('do'));
-    assert.ok(a.pause.stored(uriOf(MAIN)));
-    assert.equal(a.pause.reminders(uriOf(MAIN)), 1);
+    assert.equal(a.pause.held(uriOf(MAIN)), 'step-1');
     const n = sent('olifant/conjure').length;
     const back = await open(file(MAIN));
     back.selection = new vscode.Selection(4, 0, 4, 0);
     await vscode.commands.executeCommand('durandal.conjure');
-    await until(() => a.pause.source() === 'conjure', 'the pause again');
+    await until(() => a.pause.source() === 'step', 'the step again');
     assert.equal(sent('olifant/conjure').length, n);
     await hidden();
     await settle(MAIN, 'x = 1\n');
