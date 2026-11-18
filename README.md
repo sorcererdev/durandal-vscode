@@ -2,8 +2,8 @@
 
 Olifant's conventions, generators and TDD loop in VS Code, over the `olifant lsp` language
 server: rule findings and their fixes, regions kept on save, actions and generators with a
-live preview, ⚡ hints, the migration report, ghost text, the TDD loop, the review window (a conjure's step, a do, a reconcile) and
-plans. It is a port of durandal.nvim, the Neovim plugin.
+live preview, ⚡ hints, the migration report, ghost text, the TDD loop, the review window (a conjure's step, a do, a reconcile)
+and plans. It is a port of durandal.nvim, the Neovim plugin.
 
 Requires an `olifant` binary with the `lsp` command. Build one from a checkout of
 [sorcererdev/olifant](https://github.com/sorcererdev/olifant): `cabal build &&
@@ -90,7 +90,7 @@ The chord is Ctrl+Alt+D (also on macOS) followed by a letter.
 | (palette) | Run All Tests | The project's tests. |
 | `j` | Jump to Test or Module | Between a module and its test file; a missing test file opens untitled at its path. |
 | `s` | Stub a Test | A new test for the function at the cursor, at the end of its test file, saved; the cursor on its name. |
-| `c` | Conjure | Fills the body at the cursor, or the selected lines, until its tests pass; lands as one undo step. |
+| `c` | Conjure | Asks for one small step at the cursor (or the selected lines), shown in the review window; `a` lands it, one undo step per file. |
 | `m` | Mutate | Mutates the unit at the cursor; survivors are warnings and a picker stubs or waives them. |
 
 A run writes its summary as a notice and its failures as errors on their lines (press F8 to walk them).
@@ -122,8 +122,11 @@ each file parses, and each file's diff.
 | `q` `Esc` | later: the window closes and the step stays |
 
 A step that took none (nothing to do, or no file written) opens all the same, with nothing to
-accept. After `q`, `Ctrl+Alt+D C` on the step's lines reopens it while the file is as it was
-shown; after an edit, or anywhere else, it asks for a new step.
+accept. After `q`, `Ctrl+Alt+D C` with the cursor on the step's lines and no selection reopens it while
+the file is as it was shown; after an edit, with a selection, or anywhere else, it asks for a
+new step.
+
+### The review window
 
 The same tab reviews a plan's do, a past do, and a reconcile's readings. A do's review opens by
 itself when the do ends; the plan's lenses and `Ctrl+Alt+D P R` on a plan open
@@ -183,7 +186,7 @@ says:
 ## Settings
 
 - `durandal.path`: the binary.
-- `durandal.debounceMs`: how long typing must stop before suggestions are worked out.
+- `durandal.debounceMs`: how long typing must stay quiet before suggestions are worked out.
 - `durandal.model`: the model backend for holes (empty: the project's default).
 - `durandal.fills`: a recorded fills file standing in for the model (tests, demos).
 - `durandal.hints`: the ⚡ hints.
@@ -213,10 +216,8 @@ OLIFANT_BIN=$(cd ~/projects/olifant-$(cut -c1-7 .olifant-ref) && cabal list-bin 
 OLIFANT_REPO=~/projects/olifant-$(cut -c1-7 .olifant-ref) npm run test:e2e
 ```
 
-The conjure in `real.8` and `real.9` call a model and run only with
-`DURANDAL_E2E_MODEL=<name>`, a backend under `[model.backends.<name>]` in
-`~/.config/olifant/config.toml` (the test sandboxes have no `[model]` of their own). CI has no
-model, so run them before a release.
+`real.8`'s conjure tests run on a recorded step (`DURANDAL_STEP_REPLIES`, which `run.ts` points at
+a file), so they need no model.
 
 ### Releasing
 
