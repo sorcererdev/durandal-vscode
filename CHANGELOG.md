@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Conjure is one step now, as olifant main makes it: the review window shows the writer's step
+  (goal, tests, parses, diff) and `a` accepts it, `r` rejects it, `h` asks the harder writer.
+  The pause, its rounds, its reminders and the `x` cancel are gone.
+- `Plan: Answer This` (`P Q`) runs the server's *Answer this* action; the old ask, its straight
+  landing and `durandal.plans.reviewAnswers` are removed.
+- The hover on a checked plan sentence names VS Code's keys: `F12: the code · Keep this
+  verdict: Ctrl+Alt+D P K`.
+- Inspect's actions (*Show why*, *Dismiss*) and the claim pass's *Answer this* and *Check the
+  plan* run on the server from the lightbulb and the chord-`a` menu.
 - Tested against olifant `127570e` (the commit in `.olifant-ref`).
 
 ## 0.1.1

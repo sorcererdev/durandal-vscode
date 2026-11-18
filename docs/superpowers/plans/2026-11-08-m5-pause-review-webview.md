@@ -1,5 +1,7 @@
 # durandal-vscode M5: the pause / review webview Implementation Plan
 
+> **Superseded (conjure half) by** `2026-11-17-m9-pin-bump-and-conjure-step-design.md`: conjure answers with one step, reviewed as the window's step source. The do, errand and reconcile review half stands.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** durandal.nvim's pause and review window in VS Code. A conjure that pauses opens one webview tab beside the file. It shows the situation, the offers as keyed rows and the diff the selected entry would land. One letter or click answers, the tab shows the run, then the next pause or the landing. The same tab reviews a plan's do, an errand and a reconcile's readings. `d` opens the details as a markdown document beside it.
