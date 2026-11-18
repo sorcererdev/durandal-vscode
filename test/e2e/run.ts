@@ -93,16 +93,24 @@ async function bare(): Promise<void> {
   }
 }
 
+// The real sandbox's config after try-pack.sh's [packs] (plan-time finding 2, 10).
+const SANDBOX = [
+  '', '[decide]', 'model = "jev"', '[model.backends.jev]', 'kind = "jev"',
+  '[plans]', 'check_model = "sonnet"', '[inspect]', 'enabled = true', 'settle = 0.5', '',
+].join('\n');
+
 // real: two python-htmx sandboxes (py, py2) served by the olifant at .olifant-ref.
 async function real(bin: string, repo: string): Promise<void> {
   const ws = realpathSync(mkdtempSync(join(tmpdir(), 'durandal-real-')));
   try {
     for (const name of ['py', 'py2']) {
       execFileSync('bash', [join(repo, 'scripts/try-pack.sh'), 'python-htmx', join(ws, name)], { stdio: 'ignore' });
-      // olifant 48f38ab checks a plan's claims with the model on open and save: never in the suite.
-      // Committed, so the suites' `git checkout -- .` cleanups keep it.
-      appendFileSync(join(ws, name, '.olifant/config.toml'), '\n[plans]\npass_cost = 0\n');
-      execFileSync('git', ['-C', join(ws, name), '-c', 'user.name=olifant', '-c', 'user.email=olifant@localhost', 'commit', '-qam', 'pass_cost = 0']);
+      // the pinned olifant's sandbox: a recorded decide model (Jev, answered by decide_answers),
+      // checks on sonnet alone (answered by check_answers), inspect on with a short settle
+      // (answered by inspect_answers). No `[plans] pass_cost = 0`: M10 asserts the ○ and the
+      // Check actions it hides. Committed, so the suites' `git checkout -- .` cleanups keep it.
+      appendFileSync(join(ws, name, '.olifant/config.toml'), SANDBOX);
+      execFileSync('git', ['-C', join(ws, name), '-c', 'user.name=olifant', '-c', 'user.email=olifant@localhost', 'commit', '-qam', 'the e2e sandbox']);
     }
     // one recorded claim check (olifant's check_answers test hook, LspSpec claimPassSpec): a
     // deterministic verdict with no model; the sentence key is the line's words, anchor dropped
@@ -111,8 +119,23 @@ async function real(bin: string, repo: string): Promise<void> {
       text: '```json\n' + JSON.stringify({ verdict: 'wrong', why: 'it checks nothing', evidence: [{ path: 'src/bistro/booking/commands/create_booking.py', unit: 'CreateBooking' }] }) + '\n```',
       cost: 0.1,
     } } }));
+    // recorded decisions: the claim pass's triage, and inspect's three questions
+    const decide = join(ws, 'decide.json');
+    writeFileSync(decide, JSON.stringify({ answers: {
+      'sentence-kind': { choice: 'claim', confidence: 0.9, probabilities: { claim: 0.9 } }, 'about-code': { choice: true, confidence: 0.9 },
+      'stops-early': { choice: false, confidence: 0.9 }, nitpick: { choice: false, confidence: 0.9 }, same: { choice: true, confidence: 0.9 },
+    } }));
+    // inspect's find calls: none recorded yet (M10 adds its finding)
+    const inspect = join(ws, 'inspect.json');
+    writeFileSync(inspect, JSON.stringify({ replies: {} }));
+    // what every conjure writer answers: the real tests rewrite it before each conjure
+    const steps = join(ws, 'steps.txt');
+    writeFileSync(steps, '<goal>nothing</goal>\n');
     settings(ws, bin);
-    await launch(ws, { DURANDAL_E2E_SUITE: 'real', DURANDAL_CHECK_ANSWERS: checks });
+    await launch(ws, {
+      DURANDAL_E2E_SUITE: 'real', DURANDAL_CHECK_ANSWERS: checks,
+      DURANDAL_DECIDE_ANSWERS: decide, DURANDAL_INSPECT_ANSWERS: inspect, DURANDAL_STEP_REPLIES: steps,
+    });
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }

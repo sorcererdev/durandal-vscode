@@ -6,7 +6,7 @@ import { DidChangeWatchedFilesNotification, FileChangeType } from 'vscode-langua
 import { Olifant } from '../../src/protocol';
 import { lineTokens } from '../../src/plans/reading';
 import { FakeUi } from '../fakeUi';
-import { api, file, open, restart, revert, running, until, ws } from './helpers';
+import { api, file, open, revert, running, until, ws } from './helpers';
 
 // The plans reading layer against olifant lsp at .olifant-ref (python-htmx): the six-modifier
 // legend arrives and decodes, a ticked step and an excerpt fold and close on entry. A frozen
@@ -96,31 +96,6 @@ describe('the plans reading layer against olifant lsp (python-htmx)', () => {
     }
   });
 
-  // a real model's ask: local only (CI has no model), as real.8's conjure
-  it('asks about a question line and lands the answer', async function () {
-    const model = process.env.DURANDAL_E2E_MODEL;
-    if (!model) return this.skip();
-    this.timeout(600_000);
-    const a = await running();
-    // ask answers a question line (- ?); on a step it is refused
-    writeFileSync(join(ws(), STEPS), ['# Booking', '', '- ? which command books a table', ''].join('\n'));
-    await vscode.workspace.getConfiguration('durandal').update('model', model, vscode.ConfigurationTarget.Global);
-    try {
-      await restart();
-      const ed = await open(file(STEPS));
-      ed.selection = new vscode.Selection(2, 0, 2, 0);
-      const from = a.shown.length;
-      await vscode.commands.executeCommand('durandal.plan.ask');
-      assert.ok(a.shown.slice(from).some(s => /^ask: \d+ lines · /.test(s.text)), JSON.stringify(a.shown.slice(from)));
-    } finally {
-      await vscode.workspace.getConfiguration('durandal').update('model', undefined, vscode.ConfigurationTarget.Global);
-      const d = vscode.workspace.textDocuments.find(x => x.uri.toString() === file(STEPS).toString());
-      if (d?.isDirty) await revert(d);
-      rmSync(join(ws(), STEPS), { force: true });
-      await restart();
-    }
-  });
-
   it('a forced reconcile answers its counts; p c says nothing wrong', async () => {
     const a = await running();
     mkdirSync(join(ws(), 'py/plans'), { recursive: true });
@@ -165,6 +140,10 @@ describe('the plans reading layer against olifant lsp (python-htmx)', () => {
         const asked = join(ws(), 'checks.json.asked');
         throw new Error(`${(e as Error).message}; asked: ${existsSync(asked) ? readFileSync(asked, 'utf8') : '(none)'}`);
       }
+      // the hover footer names this editor's keys (olifant reads keys.definition and keys.plan_keep)
+      const hovers = await vscode.commands.executeCommand<vscode.Hover[]>('vscode.executeHoverProvider', ed.document.uri, new vscode.Position(0, 4));
+      const md = hovers.flatMap(h => h.contents).map(c => (typeof c === 'string' ? c : c.value)).join('\n');
+      assert.ok(md.includes('F12: the code · Keep this verdict: Ctrl+Alt+D P K'), md);
       assert.deepEqual(ui.log.filter(l => l.startsWith('error')), []);
     } finally {
       a.setUi(undefined);

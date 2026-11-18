@@ -6,8 +6,8 @@ import { ErrandParams, ErrandResult, Olifant } from '../protocol';
 import { NOT_RUNNING, Say, Server } from '../server';
 import type { ServedLog } from '../suggest/ghostItem';
 import { CANCELLED } from '../tdd/flights';
-import { landing, Placed, placeBlocks, throughEdits, Verb } from './blocks';
-import { applyLineEdits, factEdits, TextEdit0 } from './facts';
+import { Placed, placeBlocks, throughEdits, Verb } from './blocks';
+import { applyLineEdits, factEdits } from './facts';
 import { Ghost, Ghosts, rowLines } from './ghosts';
 import { GHOST_ACCEPTED, GhostAcceptedArgs, GhostView } from './ghostView';
 import { planHere, runningHere } from './here';
@@ -45,17 +45,17 @@ export interface PlanVerbsApi {
 // server stopped).
 interface Entry { uri: string; verb: Verb; row: number; request: number; tick: number; cts: vscode.CancellationTokenSource; gone: boolean }
 
-const REQUEST = { ask: Olifant.plansAsk, validate: Olifant.plansValidate, do: Olifant.plansDo } as const;
+const REQUEST = { validate: Olifant.plansValidate, do: Olifant.plansDo } as const;
 const FLASH_MS = 300;
 
 const keyOf = (uri: string) => vscode.Uri.parse(uri).toString();
 const openDoc = (uri: string) => vscode.workspace.textDocuments.find(d => d.uri.toString() === keyOf(uri));
 
-// PlanVerbs: ask, validate and do on a plan row (durandal.nvim plans.lua dispatch, landed,
-// cancel; M6 spec §4.1-4.2), and the ghosts their answers leave (M7; ghosts.lua). One request
-// per row; the row shows a pending mark while it runs. The answer lands in nvim's order: facts
-// (only at the version asked), a do's review notice, blocks (an ask's straight in, the others
-// held as ghosts under their rows), the notice, a flash.
+// PlanVerbs: validate and do on a plan row (durandal.nvim plans.lua dispatch, landed, cancel;
+// M6 spec §4.1-4.2), and the ghosts their answers leave (M7; ghosts.lua). One request per row;
+// the row shows a pending mark while it runs. The answer lands in nvim's order: facts (only at
+// the version asked), a do's review notice, blocks (held as ghosts under their rows), the
+// notice, a flash.
 export class PlanVerbs {
   private readonly entries = new Set<Entry>();
   private readonly ghosts = new Ghosts();
@@ -85,7 +85,6 @@ export class PlanVerbs {
     context.subscriptions.push(
       this.pending,
       this.flash,
-      vscode.commands.registerCommand('durandal.plan.ask', () => this.command('ask')),
       vscode.commands.registerCommand('durandal.plan.validate', () => this.command('validate')),
       vscode.commands.registerCommand('durandal.plan.do', () => this.command('do')),
       vscode.commands.registerCommand('durandal.plan.cancel', () => this.cancel()),
@@ -184,26 +183,17 @@ export class PlanVerbs {
     const tracked = throughEdits(facts, e.row);
     const withFacts = applyLineEdits(lines, facts);
     const placed = placeBlocks(withFacts, r.blocks, e.verb, e.request, tracked);
-    const straight = e.verb === 'ask' && !this.d.options().reviewAnswers;
-    let rows: number[];
-    if (straight) {
-      // an ask's answer goes straight in: facts and blocks in one edit, one undo step
-      const written = await this.writeBlocks(doc, lines, facts, placed, r.id);
-      if (!written) return;
-      rows = written;
-    } else {
-      // the facts now; the blocks become ghosts, placed on the plan as the facts left it
-      if (!(await writeLines(doc, lines, withFacts))) {
-        void this.d.say('error', NOT_APPLIED);
-        return;
-      }
-      rows = placed.map(p => p.row);
+    // the facts now; the blocks become ghosts, placed on the plan as the facts left it
+    if (!(await writeLines(doc, lines, withFacts))) {
+      void this.d.say('error', NOT_APPLIED);
+      return;
     }
+    const rows = placed.map(p => p.row);
     const count = placed.reduce((k, p) => k + p.lines.length, 0);
     void this.d.say('info', landedWord(e.verb, count, r));
     this.flashRow(doc, rows.at(-1) ?? tracked);
     if (e.verb === 'do') this.d.landed.fire('do');
-    if (!straight && placed.length > 0) this.hold(e.uri, e.verb, placed, typeof r.id === 'string' ? r.id : undefined);
+    if (placed.length > 0) this.hold(e.uri, e.verb, placed, typeof r.id === 'string' ? r.id : undefined);
   }
 
   // hold: the blocks as ghosts under their rows until a decision (M7 spec §3.1); a second
@@ -296,26 +286,6 @@ export class PlanVerbs {
     this.view.settled(uri);
   }
 
-  // writeBlocks: DOC's LINES (read just now, no await since) with FACTS and the PLACED blocks
-  // written in one edit, one undo step; then, nvim's `if wrote`, outcome accepted for each block
-  // that had lines and landed accept, only when some did. The blocks' rows in the result, or
-  // undefined (said) when VS Code did not apply the edit. An ask straight in.
-  private async writeBlocks(
-    doc: vscode.TextDocument, lines: readonly string[], facts: readonly TextEdit0[], placed: readonly Placed[], id: unknown,
-  ): Promise<number[] | undefined> {
-    const l = landing(lines, facts, placed);
-    if (!(await writeLines(doc, lines, l.lines))) {
-      void this.d.say('error', NOT_APPLIED);
-      return undefined;
-    }
-    const wrote = placed.filter(p => p.lines.length > 0);
-    if (wrote.length > 0) {
-      this.outcomes(doc.uri.toString(), wrote.map(p => ({ id, index: p.index })), 'accepted');
-      this.d.landed.fire('accept');
-    }
-    return l.rows;
-  }
-
   // outcomes: each block's outcome, to the server, against its answer's id
   private outcomes(uri: string, blocks: readonly { id?: unknown; index: number }[], outcome: 'accepted' | 'rejected'): void {
     if (!this.d.server.client()) return;
@@ -354,8 +324,8 @@ export class PlanVerbs {
     this.view.settled();
   }
 
-  // a closed plan's verbs land nothing and say nothing; its ghosts go without an outcome. An ask
-  // or a validate is cancelled: the server runs them read-only, so no work is lost (#14). A do runs
+  // a closed plan's verbs land nothing and say nothing; its ghosts go without an outcome. A
+  // validate is cancelled: the server runs it read-only, so no work is lost (#14). A do runs
   // to its end: cancelling kills its runner mid-edit with no review to revert it; its review is
   // pushed and says the plan changed (#11)
   private closed(uri: string): void {

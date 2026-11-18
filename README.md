@@ -24,7 +24,7 @@ then `PATH`, `~/.local/bin`, `~/.cabal/bin` and `~/bin` (VS Code started from th
 shorter `PATH` than your shell). `Durandal: Show Health` says what it found, and runs
 `olifant doctor` for the project of the file you are in.
 
-This release was tested against olifant `48f38ab` (the commit in `.olifant-ref`); a newer
+This release was tested against olifant `127570e` (the commit in `.olifant-ref`); a newer
 olifant whose `--help` lists `lsp` is found too, but only that commit is tested.
 
 One `olifant lsp` serves the window. Every folder holding `.olifant/` is a project and keeps its

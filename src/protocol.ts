@@ -172,10 +172,10 @@ export interface WaiveResult { waived: true }
 // --- plans (milestones 5 and 6)
 // plans/do: `resume` is a review id (reopen), text what the do should change
 export interface ErrandParams extends Row { resume?: string; text?: string }
-// plans/ask, validate, do (Lsp.hs errandJson :1962-1977). Rows 0-based. A block's line carries
-// its anchor's fingerprint (null when it did not resolve); after_text, when a string, names the
-// line the block goes under, searched in the request row's section. The server sends no
-// `replace`: the client infers it (a do's block whose first line is a step).
+// plans/validate, do (and plans/ask, served but not called) (Lsp.hs errandJson): Rows 0-based.
+// A block's line carries its anchor's fingerprint (null when it did not resolve); after_text,
+// when a string, names the line the block goes under, searched in the request row's section.
+// The server sends no `replace`: the client infers it (a do's block whose first line is a step).
 export interface BlockLine { text: string; fp?: string | null }
 export interface Block { after?: number; after_text?: string | null; lines?: BlockLine[] | null; replace?: boolean }
 export interface ErrandResult extends Open {
@@ -260,6 +260,7 @@ export const Olifant = {
   testsRun: req<TestsRunParams, TestsRunResult>('olifant/tests/run'),
   testsFile: req<Doc, TestsFileResult>('olifant/tests/file'),
   debugState: req<Record<string, never>, DebugState>('olifant/debugState'),
+  // served, not called: P Q runs the server's Answer this code action (plans/actions.ts)
   plansAsk: req<ErrandParams, ErrandResult>('olifant/plans/ask'),
   plansValidate: req<ErrandParams, ErrandResult>('olifant/plans/validate'),
   plansDo: req<ErrandParams, ErrandResult>('olifant/plans/do'),
@@ -290,15 +291,20 @@ export const Lsp = {
   codeActionResolve: req<CodeAction, CodeAction>('codeAction/resolve'),
 } as const;
 
-// The server's own commands (workspace/executeCommand); the library registers them from the
-// server's executeCommandProvider. The claim pass's three (olifant 48f38ab) are code actions'
-// commands: the chord-a menu runs them (milestone 6c), showWhy and showCode answer with
+// The server's own commands (workspace/executeCommand, Lsp.hs:204 at the pin); the library
+// registers them from the server's executeCommandProvider. They are code actions' commands
+// (the claim pass's, inspect's) and the doctor: the lightbulb and the chord-a menu run them on
+// the server (actions/command.ts), showWhy, showCode and inspectShowWhy answer with
 // window/showDocument.
 export const SERVER_COMMANDS = {
   doctor: 'olifant.doctor',
   checkSentence: 'olifant.checkSentence',
+  answerSentence: 'olifant.answerSentence',
+  checkPlan: 'olifant.checkPlan',
   showWhy: 'olifant.showWhy',
   showCode: 'olifant.showCode',
+  inspectShowWhy: 'olifant.inspectShowWhy',
+  inspectDismiss: 'olifant.inspectDismiss',
 } as const;
 
 // Commands the server names in its inlay hints and code lenses; the client runs them.
@@ -317,6 +323,6 @@ export const PLAN_TOKEN_TYPES: readonly string[] = [
   'planMarker', 'planStep', 'planStepDone', 'planQuestion', 'planEvidence', 'planClaim', 'planTest',
   'planAlso', 'planJournal', 'planAnchorPath', 'planAnchorUnit', 'planVerdict', 'planFingerprint',
 ];
-// At 48f38ab: checked and wrong mark a bare line's text by its stored check; resolved is no
+// At the pin: checked and wrong mark a bare line's text by its stored check; resolved is no
 // longer given and stays for older clients.
 export const PLAN_TOKEN_MODIFIERS: readonly string[] = ['done', 'stale', 'notFound', 'checked', 'wrong', 'resolved'];

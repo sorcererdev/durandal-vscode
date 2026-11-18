@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Tested against olifant `127570e` (the commit in `.olifant-ref`).
+
 ## 0.1.1
 
 - A review answered while its plan is closed no longer leaves the plan changed where nobody

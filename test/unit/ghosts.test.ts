@@ -12,9 +12,9 @@ const p = (index: number, row: number, lines: string[], replace = false): Placed
 test('add keeps each block with its answer\'s id and verb; at gives a row\'s blocks in the order they came', () => {
   const g = new Ghosts();
   g.add(U, 'validate', 'V1', [p(0, 5, ['  - one']), p(1, 5, ['  - two']), p(2, 2, ['  - early'])]);
-  g.add(U, 'ask', 'S1', [p(0, 5, ['  - three'])]);
+  g.add(U, 'validate', 'S1', [p(0, 5, ['  - three'])]);
   assert.deepEqual(g.at(U, 5).map(b => [b.id, b.verb, b.index, b.lines[0]]),
-    [['V1', 'validate', 0, '  - one'], ['V1', 'validate', 1, '  - two'], ['S1', 'ask', 0, '  - three']]);
+    [['V1', 'validate', 0, '  - one'], ['V1', 'validate', 1, '  - two'], ['S1', 'validate', 0, '  - three']]);
   assert.deepEqual(g.rows(U), [2, 5]);
   assert.deepEqual(g.at(U, 3), []);
   assert.deepEqual(g.rows('file:///w/other.md'), []);

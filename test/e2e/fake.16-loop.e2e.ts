@@ -468,6 +468,20 @@ describe('the loop (fake server)', () => {
     assert.equal(docOf(PLAN)!.getText(), TEXT);
   });
 
+  for (const [title, command] of [
+    ['Answer this (sonnet, ~$0.12)', 'olifant.answerSentence'], ['Check the plan (~$0.40)', 'olifant.checkPlan'],
+    ['Show why (inspect)', 'olifant.inspectShowWhy'], ['Dismiss here', 'olifant.inspectDismiss'],
+  ] as const) {
+    it(`${command} from the chord-a menu runs on the server, its arguments verbatim`, async () => {
+      reply('workspace/executeCommand', null);
+      reply('textDocument/codeAction', [{ title, kind: '', command: { title, command, arguments: [uriOf(PLAN), 'f-1', 'here'] } }]);
+      const n = sent('workspace/executeCommand').length;
+      await menu(3, title.split(' (')[0]);
+      await until(() => sent('workspace/executeCommand').length > n, `${command} sent`);
+      assert.deepEqual(sent('workspace/executeCommand').at(-1)!.params, { command, arguments: [uriOf(PLAN), 'f-1', 'here'] });
+    });
+  }
+
   it('in a plan, an action\'s own edit applies (Re-fingerprint this claim, a quickfix); the plan stays unsaved', async () => {
     reply('textDocument/codeAction', [{ title: 'Re-fingerprint this claim', kind: 'quickfix', edit: lineEdit(2, '  - test_it ✓ abc1234') }]);
     await menu(2, 'Fix: Re-fingerprint');

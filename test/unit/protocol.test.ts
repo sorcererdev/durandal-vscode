@@ -29,7 +29,9 @@ test('every olifant/* method, once', () => {
 
 test('the commands and the plan legend', () => {
   assert.deepEqual(SERVER_COMMANDS, {
-    doctor: 'olifant.doctor', checkSentence: 'olifant.checkSentence', showWhy: 'olifant.showWhy', showCode: 'olifant.showCode',
+    doctor: 'olifant.doctor', checkSentence: 'olifant.checkSentence', answerSentence: 'olifant.answerSentence',
+    checkPlan: 'olifant.checkPlan', showWhy: 'olifant.showWhy', showCode: 'olifant.showCode',
+    inspectShowWhy: 'olifant.inspectShowWhy', inspectDismiss: 'olifant.inspectDismiss',
   });
   assert.deepEqual(Object.values(CLIENT_COMMANDS).sort(),
     ['olifant.plans.errand', 'olifant.plans.excerpt', 'olifant.plans.review', 'olifant.showActions']);
@@ -191,12 +193,12 @@ test('the four pause fixtures: paused answers whose fields Paused names', () => 
 // the key from this list to make it pass.
 const TDD_KEYS = [
   'passed', 'scope', 'test', 'failed', 'broken', 'seconds', 'output', 'exists',
-  'edits', 'green', 'tests', 'rounds', 'rungs', 'stopped', 'paused', 'token', 'diagnosis',
+  'edits', 'green', 'tests', 'rounds', 'rungs', 'paused', 'token',
   'lines', 'first', 'last', 'killed', 'survived', 'waived', 'survivors', 'operator', 'from', 'to', 'mutated', 'dim',
   'unit', 'reason', 'selection', 'resume', 'choice', 'position', 'summary',
   // the pause (ConjureNext.hs pausedJson)
-  'why', 'trigger', 'offers', 'expires', 'outcome', 'steps', 'failure', 'checker', 'wired', 'landing', 'verdict',
-  'attempt', 'decide', 'probabilities', 'confidence', 'flipped', 'note', 'proposal', 'refused', 'arg', 'land', 'hint',
+  'why', 'trigger', 'offers', 'outcome', 'steps', 'failure', 'landing', 'verdict',
+  'attempt', 'decide', 'probabilities', 'confidence', 'note', 'refused', 'hint',
   'problems', 'tool', 'param', 'port', 'failing', 'got', 'expected', 'assertion',
   // the reviews (Review.hs, ReviewReadings.hs, Lsp.hs choose)
   'reviews', 'entries', 'key', 'label', 'detail', 'said', 'denied', 'files', 'status', 'facts', 'done', 'reopen',

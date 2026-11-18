@@ -6,7 +6,8 @@ import { plansOptionsFrom } from '../../src/plans/settings';
 const from = (values: Record<string, unknown>) => plansOptionsFrom((k, fallback) => (k in values ? values[k] : fallback));
 
 test('the defaults mirror durandal.nvim: dir plans, conceal off, folds of done work closed, nvim\'s glyphs', () => {
-  assert.deepEqual(from({}), { dir: 'plans', conceal: false, glyphs: DEFAULT_GLYPHS, foldDone: true, reviewAnswers: false, reconcile: 'auto' });
+  assert.deepEqual(from({}), { dir: 'plans', conceal: false, glyphs: DEFAULT_GLYPHS, foldDone: true, reconcile: 'auto' });
+  assert.ok(!('reviewAnswers' in plansOptionsFrom(() => undefined)));
   assert.deepEqual([...GLYPH_NAMES], ['todo', 'done', 'question', 'test', 'also', 'dash', 'path', 'hex', 'queued', 'checking', 'right', 'wrong', 'unsure']);
   assert.deepEqual(DEFAULT_GLYPHS, {
     todo: '☐', done: '☑', question: '?', test: '·', also: '+', dash: '', path: '', hex: '',
@@ -37,11 +38,6 @@ test('conceal and foldDone take booleans only', () => {
   assert.equal(from({ foldDone: false }).foldDone, false);
   assert.equal(from({ foldDone: 0 }).foldDone, true);
   assert.equal(from({ glyphs: null }).glyphs.todo, '☐');
-});
-
-test('reviewAnswers takes a boolean only (default false: an ask goes straight in)', () => {
-  assert.equal(from({ reviewAnswers: true }).reviewAnswers, true);
-  assert.equal(from({ reviewAnswers: 'yes' }).reviewAnswers, false);
 });
 
 test('reconcile is "auto" unless it is exactly "key"', () => {

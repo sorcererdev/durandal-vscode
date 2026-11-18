@@ -20,15 +20,24 @@ test('the chord label follows the platform, and names the review chord of KEYS',
   assert.equal(KEYS.find(k => k.command === 'durandal.plan.review')?.keys, 'p r');
 });
 
-test('initializationOptions: debug off, the review key, the debounce; model and fills only when set', () => {
+test('initializationOptions: debug off, the review, keep and definition keys, the debounce; model and fills only when set', () => {
+  const keys = { plan_review: 'Ctrl+Alt+D P R', plan_keep: 'Ctrl+Alt+D P K', definition: 'F12' };
   assert.deepEqual(initOptions({ debounceMs: 300, model: '', fills: '' }, 'linux', {}),
-    { debug: false, keys: { plan_review: 'Ctrl+Alt+D P R' }, debounce_ms: 300 });
+    { debug: false, keys, debounce_ms: 300 });
   assert.deepEqual(initOptions({ debounceMs: 50, model: 'qwen', fills: '/f.toml' }, 'darwin', {}),
-    { debug: false, keys: { plan_review: 'Ctrl+Alt+D P R' }, debounce_ms: 50, model: 'qwen', fills: '/f.toml' });
+    { debug: false, keys, debounce_ms: 50, model: 'qwen', fills: '/f.toml' });
 });
 
 test('check_answers passes olifant\'s test hook through from the environment, only when set', () => {
   const s = settingsFrom(getter({}));
   assert.equal(initOptions(s, 'linux', {}).check_answers, undefined);
   assert.equal(initOptions(s, 'linux', { DURANDAL_CHECK_ANSWERS: '/tmp/checks.json' }).check_answers, '/tmp/checks.json');
+});
+
+test('step_replies, decide_answers and inspect_answers pass olifant\'s test hooks through from the environment, only when set', () => {
+  const s = settingsFrom(getter({}));
+  const none = initOptions(s, 'linux', {});
+  assert.deepEqual([none.step_replies, none.decide_answers, none.inspect_answers], [undefined, undefined, undefined]);
+  const o = initOptions(s, 'linux', { DURANDAL_STEP_REPLIES: '/t/steps.txt', DURANDAL_DECIDE_ANSWERS: '/t/decide.json', DURANDAL_INSPECT_ANSWERS: '/t/inspect.json' });
+  assert.deepEqual([o.step_replies, o.decide_answers, o.inspect_answers], ['/t/steps.txt', '/t/decide.json', '/t/inspect.json']);
 });

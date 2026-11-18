@@ -24,6 +24,21 @@ export function sources(xs: unknown): CodeAction[] {
   return xs.filter(isAction).filter(a => a.kind === 'source' || a.kind!.startsWith('source.'));
 }
 
+// pickTitled: the first code action (not a bare Command) whose title starts with one of
+// PREFIXES, tried in order; exact: the title is the prefix; needsEdit: it carries its edit.
+// The plan chords that run the server's own actions by name (P Q's Answer this; M10's P S,
+// P shift+S, P K) pick with it.
+export function pickTitled(xs: unknown, prefixes: readonly string[], o: { exact?: boolean; needsEdit?: boolean } = {}): CodeAction | undefined {
+  if (!Array.isArray(xs)) return undefined;
+  const actions = xs.filter((x): x is CodeAction =>
+    !!x && typeof x === 'object' && typeof (x as { title?: unknown }).title === 'string' && typeof (x as { command?: unknown }).command !== 'string');
+  for (const p of prefixes) {
+    const a = actions.find(x => (o.exact ? x.title === p : x.title.startsWith(p)) && (!o.needsEdit || x.edit !== undefined));
+    if (a) return a;
+  }
+  return undefined;
+}
+
 export function newStepNext(xs: readonly CodeAction[]): Next {
   const a = xs.find(x => x.title === NEW_STEP_TITLE && x.edit);
   return a ? { kind: 'apply', action: a } : { kind: 'say', level: 'warn', text: NO_NEW_STEP };

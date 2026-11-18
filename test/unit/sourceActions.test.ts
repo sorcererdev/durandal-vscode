@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { excerptNext, newStepNext, sources, toggleNext } from '../../src/plans/sourceActions';
+import { excerptNext, newStepNext, pickTitled, sources, toggleNext } from '../../src/plans/sourceActions';
 
 const edit = { changes: {} };
 const newStep = { title: 'New step below', kind: 'source', edit };
@@ -36,4 +36,20 @@ test('toggle: by data.kind; disabled says its reason; an edit applies; else reso
   assert.equal(at({ edit }).kind, 'apply');
   assert.deepEqual((at({}) as { none: string }).none, 'toggle: nothing to change here');
   assert.deepEqual(toggleNext([newStep]), { kind: 'say', level: 'info', text: 'toggle: not on a step' });
+});
+
+test('pickTitled: the first code action whose title starts with a prefix; bare Commands and edit-less ones skipped when asked', () => {
+  const cmd = (title: string) => ({ title, kind: '', command: { title, command: 'olifant.x', arguments: [] } });
+  const xs = [
+    { title: 'Answer this (bare)', command: 'olifant.answerSentence', arguments: [] },
+    cmd('Check this (sonnet, ~$0.10)'),
+    cmd('Answer this (sonnet, ~$0.12)'),
+    { title: 'Keep this verdict', kind: 'quickfix', edit: { changes: {} } },
+  ];
+  assert.equal(pickTitled(xs, ['Answer this'])?.title, 'Answer this (sonnet, ~$0.12)');
+  assert.equal(pickTitled(xs, ['Nope']), undefined);
+  assert.equal(pickTitled(xs, ['Check this'], { exact: true }), undefined);
+  assert.equal(pickTitled(xs, ['Keep this verdict'], { exact: true, needsEdit: true })?.kind, 'quickfix');
+  assert.equal(pickTitled(xs, ['Answer this'], { needsEdit: true }), undefined);
+  assert.equal(pickTitled(null, ['Answer this']), undefined);
 });
