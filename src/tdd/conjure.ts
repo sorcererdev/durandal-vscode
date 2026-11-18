@@ -2,11 +2,12 @@ import * as vscode from 'vscode';
 import type { WorkspaceEdit } from 'vscode-languageserver-protocol';
 import { applyServerEdit } from '../applyEdit';
 import type { Landed } from '../landed';
+import { STEP_BUSY } from '../pause/stepModel';
 import { HeldStep, reopens, stepLines, StepStore } from '../pause/stepStore';
 import { ConjureParams, ConjureResult, Olifant, Shown, StepChoice } from '../protocol';
 import { NOT_RUNNING, Say, Server } from '../server';
 import { here, NO_FILE, TddFlights, withCancel } from './common';
-import { settle } from './flights';
+import { Outcome, settle } from './flights';
 import { changedSpan, savedWord, selectionLines, stepLanded } from './landing';
 import type { Tests } from './tests';
 
@@ -93,16 +94,37 @@ export class Conjure {
 
   // answer: the held step of URI answered with CHOICE (the window's a, r, h). Undefined when it
   // is done with (shown again, landed, rejected, or gone, each drawn or said); a sentence when
-  // the step stays and the footer should say why (a failed h).
-  async answer(uri: string, choice: StepChoice): Promise<string | undefined> {
+  // the step stays and the footer should say why (a failed h, or an answer already in the air).
+  // The step is busy from the moment the request is sent until its answer is handled, whatever
+  // the outcome; the window reads that from the held step.
+  answer(uri: string, choice: StepChoice): Promise<string | undefined> {
     const held = this.d.steps.get(uri);
-    if (!held) return 'nothing to do here';
-    if (!this.d.server.client()) return NOT_RUNNING;
+    if (!held) return Promise.resolve('nothing to do here');
+    if (held.busy !== undefined) return Promise.resolve(STEP_BUSY);
+    if (!this.d.server.client()) return Promise.resolve(NOT_RUNNING);
     const params: ConjureParams = { textDocument: { uri }, position: held.position, resume: { token: held.shown.token, choice } };
     const f = this.d.flights.start('conjure');
-    const o = await settle(f, this.d.server.request(Olifant.conjure, params, f.token), Olifant.conjure.method);
+    held.busy = choice;
+    const sent = settle(f, this.d.server.request(Olifant.conjure, params, f.token), Olifant.conjure.method);
+    return this.resumed(uri, params, choice, held, sent).finally(() => { held.busy = undefined; });
+  }
+
+  // resumed: an answer's outcome. A held step that is no longer the one held (a stop dropped it,
+  // or a new conjure replaced it) has had its window closed already: only a landing still
+  // applies (the server took it), and nothing is forgotten, so the newer step stays.
+  private async resumed(uri: string, params: ConjureParams, choice: StepChoice, held: HeldStep, sent: Promise<Outcome<ConjureResult>>): Promise<string | undefined> {
+    const o = await sent;
+    const current = this.d.steps.get(uri) === held;
+    if (!current) {
+      const r = o.kind === 'answer' ? o.value as { landed?: unknown } : undefined;
+      if (r && r.landed !== null && typeof r.landed === 'object') {
+        await this.land(uri, (r.landed as { edits?: WorkspaceEdit | null }).edits ?? null, held);
+      }
+      return undefined;
+    }
     if (o.kind === 'cancelled') {
-      // a stop or a restart has dropped every step and closed the window already
+      // a Cancel click or the server's own cancel forgets the step and says so; a stop or a
+      // restart dropped every step and closed the window, so it is the stale case above
       if (o.why === 'user' || o.why === 'server') {
         this.forget(uri);
         void this.d.say('info', CANCELLED);

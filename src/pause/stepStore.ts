@@ -1,5 +1,5 @@
 import type { WorkspaceEdit } from 'vscode-languageserver-protocol';
-import type { Shown } from '../protocol';
+import type { Shown, StepChoice } from '../protocol';
 import { took } from './stepModel';
 
 // The held step (spec §3.6): one shown step a document, kept until it is answered, a new
@@ -8,7 +8,12 @@ import { took } from './stepModel';
 
 // Lines: 0-based, inclusive
 export interface Lines { first: number; last: number }
-export interface HeldStep { uri: string; shown: Shown; position: { line: number; character: number }; version: number; lines: Lines | undefined }
+// busy: the answer in the air for this step (a, r or h), kept here and not on the window so a
+// closed and reopened window still shows it and still refuses a second answer
+export interface HeldStep {
+  uri: string; shown: Shown; position: { line: number; character: number }; version: number; lines: Lines | undefined;
+  busy?: StepChoice;
+}
 
 // stepLines: the lines the step's edits change in the document at URI (its documentChanges'
 // text edits and its changes'), compared by SAME (the server can spell a uri differently from

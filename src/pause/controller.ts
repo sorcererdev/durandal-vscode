@@ -32,8 +32,9 @@ export interface ControllerDeps {
   redo(planUri: string, line: number, id: string, text: string): Promise<void>;
 }
 
-// a step shown: its document (its held step is in the store), the selected file, the answer in the air
-interface StepState { uri: string; selected: number; busy?: StepChoice }
+// a step shown: its document (its held step, and the answer in the air, are in the store) and
+// the selected file
+interface StepState { uri: string; selected: number }
 
 // a review shown: its plan, the payload, the selected file or reading, the choice in the air
 interface RevState { planUri: string; review: Review; selected: number; busy?: string }
@@ -159,7 +160,7 @@ export class PauseController implements StepWindow {
     const s = this.step;
     const h = s ? this.d.steps.get(s.uri) : undefined;
     if (!s || !h) return;
-    const view = stepView(h.shown, { cols: this.cols, selected: s.selected, flipped: this.flipped, help: this.help, busy: s.busy });
+    const view = stepView(h.shown, { cols: this.cols, selected: s.selected, flipped: this.flipped, help: this.help, busy: h.busy });
     const beside = vscode.window.visibleTextEditors.find(e => e.document.uri.toString() === s.uri)?.viewColumn;
     this.d.panel.show(view, { beside, flash, focus });
   }
@@ -218,26 +219,22 @@ export class PauseController implements StepWindow {
     ];
   }
 
-  // answerStep: the refusals first (nothing sent), then the answer with its busy footer. A new
-  // shown step (h) is drawn in place by showStep; a landing or a rejection closes the window;
-  // a failed h keeps the step and says why.
+  // answerStep: the refusals first (nothing sent), then the answer with its busy footer (the
+  // busy choice is the held step's, set by conjure as the request goes). A new shown step (h) is
+  // drawn in place by showStep; a landing or a rejection closes the window; a failed h keeps
+  // the step and says why.
   private async answerStep(s: StepState, choice: StepChoice): Promise<true | string> {
     const h = this.d.steps.get(s.uri);
     if (!h) return 'nothing to do here';
-    const no = stepRefusal(h.shown, choice, s.busy !== undefined);
+    const no = stepRefusal(h.shown, choice, h.busy !== undefined);
     if (no) return no;
     if (!this.d.server.client()) return NOT_RUNNING;
-    s.busy = choice;
+    const answered = this.d.conjure.answer(s.uri, choice);
     this.paint();
-    let kept: string | undefined;
-    try {
-      kept = await this.d.conjure.answer(s.uri, choice);
-    } finally {
-      s.busy = undefined;
-    }
+    const kept = await answered;
     if (kept === undefined) return true;
     // the window moved on (closed, or another source): the sentence as a notification
-    if (this.step !== s) {
+    if (this.step?.uri !== s.uri) {
       void this.d.say('error', kept);
       return true;
     }

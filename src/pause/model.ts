@@ -146,7 +146,6 @@ export function cutLine(l: Line, w: number): Line {
   return out;
 }
 
-
 // layout: the panel's geometry from its width in cells (pause.lua geometry :922-934). right is
 // the diff pane's width: the whole panel when narrow (one pane at a time).
 export function layout(cols: number): { narrow: boolean; text: number; right: number } {
@@ -168,7 +167,6 @@ export const SHARED_KEYS = {
   d: { keys: ['d'], help: 'details, in a document beside this one' },
   '?': { keys: ['?'], help: 'this help; any key closes it' },
 } satisfies Record<string, KeyHelp>;
-
 
 // A key as the help shows it.
 const SHOWN: Record<string, string> = { Escape: 'Esc', PageDown: 'PgDn', PageUp: 'PgUp' };
