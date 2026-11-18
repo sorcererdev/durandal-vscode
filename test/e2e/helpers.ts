@@ -157,3 +157,18 @@ export function actionLog(): Record<string, unknown>[] {
   if (!existsSync(p)) return [];
   return readFileSync(p, 'utf8').split('\n').filter(l => l !== '').map(l => JSON.parse(l) as Record<string, unknown>);
 }
+
+// QUIET_MS / pageQuiet: once the page's first size report has passed, wait until its size
+// reports stop (#26), so a test's own size is not overwritten by a late one
+const QUIET_MS = 300;
+export async function pageQuiet(a: Api, ms = 5_000): Promise<void> {
+  const end = Date.now() + ms;
+  let seen = a.pause.sizes();
+  let since = Date.now();
+  while (Date.now() - since < QUIET_MS) {
+    if (Date.now() > end) throw new Error('timed out waiting for the page\'s size reports to stop');
+    await new Promise(r => setTimeout(r, 50));
+    const now = a.pause.sizes();
+    if (now !== seen) { seen = now; since = Date.now(); }
+  }
+}

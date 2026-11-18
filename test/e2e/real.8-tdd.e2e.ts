@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import type { Api } from '../../src/extension';
 import { plain } from '../../src/pause/viewModel';
 import { FakeUi } from '../fakeUi';
-import { api, cleanTold, file, open, revert, running, until, ws } from './helpers';
+import { api, cleanTold, file, open, pageQuiet, revert, running, until, ws } from './helpers';
 
 const DIR = 'py/src/bistro/booking/commands/';
 const MODULE = `${DIR}create_booking.py`;
@@ -160,7 +160,8 @@ describe('the TDD loop against olifant lsp (python-htmx)', () => {
     const a = await running();
     writeFileSync(STEPS!, '<goal>nothing</goal>\n');
     await conjureHere(a);
-    // the title is cut at a narrow panel's width
+    // the title is cut at a narrow panel's width; a late size report must not overwrite ours
+    await pageQuiet(a);
     await a.pause.receive({ type: 'size', cols: 200 });
     assert.equal(plain(a.pause.view()!.title), 'conjure · no step · the writer saw nothing to do');
     await a.pause.press('a');

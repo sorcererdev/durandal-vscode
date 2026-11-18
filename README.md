@@ -2,8 +2,8 @@
 
 Olifant's conventions, generators and TDD loop in VS Code, over the `olifant lsp` language
 server: rule findings and their fixes, regions kept on save, actions and generators with a
-live preview, ⚡ hints, the migration report, ghost text, the TDD loop, the review window (a conjure's step, a do, a reconcile)
-and plans. It is a port of durandal.nvim, the Neovim plugin.
+live preview, ⚡ hints, the migration report, ghost text, the TDD loop, the review window (a
+conjure's step, a do, a reconcile) and plans. It is a port of durandal.nvim, the Neovim plugin.
 
 Requires an `olifant` binary with the `lsp` command. Build one from a checkout of
 [sorcererdev/olifant](https://github.com/sorcererdev/olifant): `cabal build &&

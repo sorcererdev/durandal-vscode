@@ -1,11 +1,10 @@
 import * as assert from 'node:assert/strict';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
-import type { Api } from '../../src/extension';
 import type { Shown } from '../../src/protocol';
 import { plain } from '../../src/pause/viewModel';
 import { stepAnswer } from '../stepFixtures';
-import { api, disk, file, log, open, reply, restart, revert, running, settle, tabsUnder, until, windowGone, windowTab, ws } from './helpers';
+import { api, disk, file, log, open, pageQuiet, reply, restart, revert, running, settle, tabsUnder, until, windowGone, windowTab, ws } from './helpers';
 
 // The step window over the fake server (spec §3.3-§3.6, §4): a shown step, its keys, its
 // answers, the held step. The fake answers each method with one reply, so a flow sets the next
@@ -33,21 +32,6 @@ function step(o: Partial<Shown> = {}): { shown: Shown } {
   return w;
 }
 const landed = (edits: unknown = mainEdit('line_3 = 33')) => ({ landed: { file: abs(MAIN), edits } });
-
-// QUIET_MS / pageQuiet: once the page's first size report has passed, wait until its size
-// reports stop (#26), so a test's own size is not overwritten by a late one
-const QUIET_MS = 300;
-async function pageQuiet(a: Api, ms = 5_000): Promise<void> {
-  const end = Date.now() + ms;
-  let seen = a.pause.sizes();
-  let since = Date.now();
-  while (Date.now() - since < QUIET_MS) {
-    if (Date.now() > end) throw new Error('timed out waiting for the page\'s size reports to stop');
-    await new Promise(r => setTimeout(r, 50));
-    const now = a.pause.sizes();
-    if (now !== seen) { seen = now; since = Date.now(); }
-  }
-}
 
 // conjureAt: a conjure from LINE (0-based) of main.py answered with ANSWER; waits for the window
 async function conjureAt(line: number, answer: unknown): Promise<void> {
@@ -240,8 +224,8 @@ describe('the step window (fake server)', () => {
     assert.equal(conjures().length, n);
     await a.pause.press('q');
     await ed.edit(b => b.insert(new vscode.Position(20, 0), '# moved\n'));
-    // closing the window can leave no active editor; the conjure reads the active one
-    await open(file(MAIN));
+    // closing the window gives the focus back to the file (the README says so)
+    await until(() => vscode.window.activeTextEditor?.document.uri.toString() === uriOf(MAIN) || undefined, 'the editor focused again after q');
     reply('olifant/conjure', step({ token: 'step-2' }));
     ed.selection = new vscode.Selection(2, 4, 2, 4);
     await vscode.commands.executeCommand('durandal.conjure');
@@ -313,6 +297,53 @@ describe('the step window (fake server)', () => {
     assert.equal(conjures().length, total + 1);
   });
 
+  it('h in the air, q, a conjure off the step\'s lines or over a selection says the last answer is still on its way and sends nothing; busy clears after', async () => {
+    const a = await running();
+    await conjureAt(2, step());
+    reply('olifant/conjure', { delay: 2, ...step({ token: 'step-2', goal: 'fill f harder' }) });
+    const n = resumes().length;
+    const first = a.pause.press('h');
+    await until(() => resumes().length > n, 'the harder ask sent');
+    await a.pause.press('q');
+    await until(() => a.pause.view() === undefined || undefined, 'the window closed');
+    await until(() => vscode.window.activeTextEditor?.document.uri.toString() === uriOf(MAIN) || undefined, 'the editor focused again after q');
+    const total = conjures().length;
+    const ed = vscode.window.activeTextEditor!;
+    const from = a.shown.length;
+    ed.selection = new vscode.Selection(10, 0, 10, 0);
+    await vscode.commands.executeCommand('durandal.conjure');
+    ed.selection = new vscode.Selection(2, 0, 4, 0);
+    await vscode.commands.executeCommand('durandal.conjure');
+    assert.deepEqual(a.shown.slice(from).map(s => [s.level, s.text]), [
+      ['info', 'the last answer is still on its way'], ['info', 'the last answer is still on its way'],
+    ]);
+    assert.equal(conjures().length, total);
+    await first;
+    await until(() => a.pause.held(uriOf(MAIN)) === 'step-2' || undefined, 'the harder step held');
+    await a.pause.press('q');
+    ed.selection = new vscode.Selection(10, 0, 10, 0);
+    reply('olifant/conjure', step({ token: 'step-3' }));
+    await vscode.commands.executeCommand('durandal.conjure');
+    await until(() => conjures().length > total, 'a conjure after the answer settled');
+  });
+
+  it('a step whose edit uri is spelled differently is held with its lines; c on them reopens it', async () => {
+    const a = await running();
+    const spelled = uriOf(MAIN).replace('/one/', '/one%2F');
+    const w = step();
+    w.shown.edits = JSON.parse(JSON.stringify(mainEdit('line_3 = 33')).replace(uriOf(MAIN), spelled));
+    await conjureAt(2, w);
+    await a.pause.press('q');
+    await until(() => a.pause.view() === undefined || undefined, 'the window closed');
+    assert.equal(a.pause.held(uriOf(MAIN)), 'step-1');
+    await until(() => vscode.window.activeTextEditor?.document.uri.toString() === uriOf(MAIN) || undefined, 'the editor focused again after q');
+    const n = conjures().length;
+    vscode.window.activeTextEditor!.selection = new vscode.Selection(2, 4, 2, 4);
+    await vscode.commands.executeCommand('durandal.conjure');
+    await until(() => a.pause.source() === 'step' || undefined, 'the window again');
+    assert.equal(conjures().length, n);
+  });
+
   it('a landed answer for a moved document lands nothing and does not leave the window busy', async () => {
     const a = await running();
     await conjureAt(2, step());
@@ -322,7 +353,7 @@ describe('the step window (fake server)', () => {
     reply('olifant/conjure', landed(stale));
     const from = a.shown.length;
     await pressed('a');
-    await new Promise<void>(r => setTimeout(r, 1500));
+    await until(() => a.pause.view() === undefined || undefined, 'the window closed');
     assert.deepEqual(a.shown.slice(from).map(s => [s.level, s.text]), [['error', 'main.py changed since']]);
     assert.equal(a.pause.held(uriOf(MAIN)), undefined);
     assert.equal(disk(MAIN), MAIN_TEXT);

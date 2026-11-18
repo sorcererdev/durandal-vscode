@@ -70,6 +70,11 @@ export class Conjure {
         this.window?.showStep(h.uri);
         return;
       }
+      // a harder answer is on its way: a fresh conjure would drop the step it will replace
+      if (held.busy !== undefined) {
+        void this.d.say('info', STEP_BUSY);
+        return;
+      }
       this.forget(h.uri);
     }
     const params: ConjureParams = { textDocument: { uri: h.uri }, position: h.position };
