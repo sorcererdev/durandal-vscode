@@ -13,7 +13,7 @@ export const BUILT: Record<string, { title: string; enablement?: string }> = {
   'durandal.stub': { title: 'Stub a Test' },
   'durandal.conjure': { title: 'Conjure' },
   'durandal.plan.review': { title: 'Plan: Review' },
-  'durandal.plan.ask': { title: 'Plan: Ask' },
+  'durandal.plan.ask': { title: 'Plan: Answer This' },
   'durandal.plan.validate': { title: 'Plan: Validate' },
   'durandal.plan.do': { title: 'Plan: Do' },
   'durandal.plan.cancel': { title: 'Plan: Cancel' },

@@ -4,7 +4,7 @@
 import type { Block } from '../protocol';
 import { applyLineEdits, TextEdit0 } from './facts';
 
-export type Verb = 'ask' | 'validate' | 'do';
+export type Verb = 'validate' | 'do';
 
 // Placed: a block at its row: its lines (fingerprints stamped) go under ROW, or replace it.
 // index: the block's place in the answer (its outcome names it).

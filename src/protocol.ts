@@ -110,57 +110,27 @@ export interface TestsRunResult {
 export interface TestsFileResult { file: string; kind: 'test' | 'module'; exists: boolean }
 export interface StubParams extends At { survivor?: Survivor }
 export interface StubResult { file: string; line: number; name: string; edits: WorkspaceEdit }
-// a resume's choice: exactly what resumeOf accepts (Lsp.hs :1077)
-export type ResumeChoice = 'continue' | 'climb' | 'stop' | 'reconjure' | 'accept' | 'reject' | 'wire' | 'port';
-export interface ConjureResume { token: string; choice: ResumeChoice; arg?: string; land?: boolean; hint?: string }
+// --- the conjure step (olifant ConjureStep.hs stepJson :415-443): one step, shown for review,
+// answered accept, reject or harder. Read every nullable null-safely; only an explicit
+// took: false is a step that took none.
+export type StepChoice = 'accept' | 'reject' | 'harder';
+export interface StepTests { passing: string[]; failing: string[]; stillRed: string[]; noTests: boolean }
+// file: absolute; diffs[].file and parses[].file: root-relative; after: the tests' run over the
+// step's text (scope "file"), marked when the step lands
+export interface Shown {
+  token: string; file: string; unit: string; writer: string; goal: string | null; took?: boolean;
+  edits: WorkspaceEdit | null; dropped: string[]; parses: { file: string; ok: boolean }[];
+  tests: StepTests; after: TestsRunResult | null; cost: number | null; seconds: number; harder: boolean;
+  diffs: { file: string; diff: string }[]; situation: string; reply: string;
+}
+// a step's answer: its token and the choice (ConjureStep.hs stepResumeOf :447-457)
+export interface ConjureResume { token: string; choice: StepChoice }
+// selection: 0-based lines, inclusive (the server adds 1); resume: an answer to the shown step,
+// sent with the opening conjure's textDocument and position
 export interface ConjureParams extends At { selection?: { start: number; end: number }; resume?: ConjureResume }
-// landed: edits null when nothing changed; tests the after-run (scope "file"); stopped always sent
-export interface ConjureLanded extends Open {
-  file: string; unit: string; edits: WorkspaceEdit | null; summary: string; green: boolean;
-  tests: TestsRunResult; rounds: number; rungs: string[]; stopped: boolean;
-}
-// The pause (ConjureNext.hs pausedJson :865-955). lines 1-based inclusive; file absolute; a
-// round's, wire's or step's files root-relative. A thin answer may carry only token, lines and
-// offers; nullable fields arrive as null. Read every field through given() (src/pause/text.ts).
-export interface PausedFile { file: string; diff: string }
-export interface PausedFailed {
-  test: string; message: string; summary?: string | null; at?: number | string | null; assertion?: string | null;
-  got?: string | null; expected?: string | null; output?: string | null;
-}
-export interface PausedDecide { choice: string; confidence: number; probabilities: Record<string, number> }
-export interface PausedRound {
-  round: number; rung: string; attempt?: string | null; line: string; verdict: 'green' | 'red';
-  failing: string[]; failed: PausedFailed[]; passed: string[]; check?: string | null;
-  decide?: PausedDecide | null; diff: string | null; files: PausedFile[];
-}
-// flipped: the round the test's status changed in (0 = before round 1)
-export interface PausedTest {
-  test: string; source?: string | null; status: 'failing' | 'passing'; flipped?: number | null; assertion?: string | null; note?: string | null;
-}
-export interface PausedWired { param: string; port: string; test?: string | null; files: PausedFile[] }
-// an offer: choice `proposal` is an entry, not a resume verb; land and hint only on stop / continue
-export interface PausedOffer { choice: string; arg?: string | null; label: string; detail: string; land?: boolean | null; hint?: boolean | null }
-export interface PausedStep { after: number; kind?: 'wire' | 'test' | 'hint' | 'port' | null; text: string; files: PausedFile[]; test?: string | null }
-export interface PausedProblem { file: string; line?: number | null; message: string }
-export type PausedFailure =
-  | { round: number; kind: 'check'; tool: string; problems: PausedProblem[] }
-  | { round: number; kind: 'tests'; tests: string[] };
-export interface PausedProposal {
-  file: string; test: string; before?: string | null; after?: string | null; diff: string; refused?: string | null;
-  step?: string | null; kind?: 'test' | 'port' | null; files?: string[] | null;
-}
-export interface PausedTitle { unit?: string | null; round?: number | null; of?: number | null; rung?: string | null; model?: string | null; seconds?: number | null }
-export interface Paused {
-  token: string; lines: { first: number; last: number }; offers: PausedOffer[];
-  file?: string; round?: number; rung?: string; summary?: string; why?: string; title?: PausedTitle;
-  diagnosis?: string[]; trigger?: string; rounds?: PausedRound[]; tests?: PausedTest[];
-  unit?: { header: string; ports: string[] }; landing?: { diff: string }; wired?: PausedWired[];
-  expires?: number; outcome?: string | null; steps?: PausedStep[]; failure?: PausedFailure | null;
-  checker?: string | null; snippet?: { file: string; line: number; ghost: unknown; body: string } | null;
-  proposal?: PausedProposal | null;
-}
-export interface ConjurePaused { paused: Paused }
-export type ConjureResult = ConjureLanded | ConjurePaused;
+// the answer: a step shown for review, a step landed (edits null when it changed nothing), or
+// a step rejected (also an accepted step that took none)
+export type ConjureResult = { shown: Shown } | { landed: { file: string; edits: WorkspaceEdit | null } } | { rejected: true };
 export interface MutateSurvivor extends Survivor { dim: boolean }
 export interface MutateResult {
   file: string; unit: string; lines: { first: number; last: number }; killed: number; survived: number; waived: number;
@@ -172,10 +142,10 @@ export interface WaiveResult { waived: true }
 // --- plans (milestones 5 and 6)
 // plans/do: `resume` is a review id (reopen), text what the do should change
 export interface ErrandParams extends Row { resume?: string; text?: string }
-// plans/ask, validate, do (Lsp.hs errandJson :1962-1977). Rows 0-based. A block's line carries
-// its anchor's fingerprint (null when it did not resolve); after_text, when a string, names the
-// line the block goes under, searched in the request row's section. The server sends no
-// `replace`: the client infers it (a do's block whose first line is a step).
+// plans/validate, do (and plans/ask, served but not called) (Lsp.hs errandJson): Rows 0-based.
+// A block's line carries its anchor's fingerprint (null when it did not resolve); after_text,
+// when a string, names the line the block goes under, searched in the request row's section.
+// The server sends no `replace`: the client infers it (a do's block whose first line is a step).
 export interface BlockLine { text: string; fp?: string | null }
 export interface Block { after?: number; after_text?: string | null; lines?: BlockLine[] | null; replace?: boolean }
 export interface ErrandResult extends Open {
@@ -260,6 +230,7 @@ export const Olifant = {
   testsRun: req<TestsRunParams, TestsRunResult>('olifant/tests/run'),
   testsFile: req<Doc, TestsFileResult>('olifant/tests/file'),
   debugState: req<Record<string, never>, DebugState>('olifant/debugState'),
+  // served, not called: P Q runs the server's Answer this code action (plans/actions.ts)
   plansAsk: req<ErrandParams, ErrandResult>('olifant/plans/ask'),
   plansValidate: req<ErrandParams, ErrandResult>('olifant/plans/validate'),
   plansDo: req<ErrandParams, ErrandResult>('olifant/plans/do'),
@@ -290,15 +261,20 @@ export const Lsp = {
   codeActionResolve: req<CodeAction, CodeAction>('codeAction/resolve'),
 } as const;
 
-// The server's own commands (workspace/executeCommand); the library registers them from the
-// server's executeCommandProvider. The claim pass's three (olifant 48f38ab) are code actions'
-// commands: the chord-a menu runs them (milestone 6c), showWhy and showCode answer with
+// The server's own commands (workspace/executeCommand, Lsp.hs:204 at the pin); the library
+// registers them from the server's executeCommandProvider. They are code actions' commands
+// (the claim pass's, inspect's) and the doctor: the lightbulb and the chord-a menu run them on
+// the server (actions/command.ts), showWhy, showCode and inspectShowWhy answer with
 // window/showDocument.
 export const SERVER_COMMANDS = {
   doctor: 'olifant.doctor',
   checkSentence: 'olifant.checkSentence',
+  answerSentence: 'olifant.answerSentence',
+  checkPlan: 'olifant.checkPlan',
   showWhy: 'olifant.showWhy',
   showCode: 'olifant.showCode',
+  inspectShowWhy: 'olifant.inspectShowWhy',
+  inspectDismiss: 'olifant.inspectDismiss',
 } as const;
 
 // Commands the server names in its inlay hints and code lenses; the client runs them.
@@ -317,6 +293,6 @@ export const PLAN_TOKEN_TYPES: readonly string[] = [
   'planMarker', 'planStep', 'planStepDone', 'planQuestion', 'planEvidence', 'planClaim', 'planTest',
   'planAlso', 'planJournal', 'planAnchorPath', 'planAnchorUnit', 'planVerdict', 'planFingerprint',
 ];
-// At 48f38ab: checked and wrong mark a bare line's text by its stored check; resolved is no
+// At the pin: checked and wrong mark a bare line's text by its stored check; resolved is no
 // longer given and stays for older clients.
 export const PLAN_TOKEN_MODIFIERS: readonly string[] = ['done', 'stale', 'notFound', 'checked', 'wrong', 'resolved'];

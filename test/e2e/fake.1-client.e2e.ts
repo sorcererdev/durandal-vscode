@@ -11,7 +11,7 @@ describe('the client (fake server)', () => {
     const inits = log().filter(m => m.method === 'initialize');
     assert.equal(inits.length, 1);
     assert.deepEqual(inits[0].params.initializationOptions,
-      { debug: false, keys: { plan_review: chordLabel(process.platform, 'P R') }, debounce_ms: 300 });
+      { debug: false, keys: { plan_review: chordLabel(process.platform, 'P R'), plan_keep: chordLabel(process.platform, 'P K'), definition: 'F12' }, debounce_ms: 300 });
     assert.deepEqual(inits[0].params.workspaceFolders.map((f: { uri: string }) => f.uri), [vscode.Uri.file(ws()).toString()]);
     await until(() => added().length >= 2, 'the projects as workspace folders');
     assert.deepEqual(added().sort(), [file('one').toString(), file('two').toString()].sort());

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-// shell: the pause panel's HTML document (spec §4.1), pure so the CSP is unit-tested. Scripts
+// shell: the review window's HTML document (spec §4.1), pure so the CSP is unit-tested. Scripts
 // run only with the nonce; styles and fonts load only from the webview's own origin; nothing is
 // inline (colours come from the --vscode-* variables VS Code injects). The page script renders
 // into #root; #measure is the 100 cells it measures to tell the extension its width in cells

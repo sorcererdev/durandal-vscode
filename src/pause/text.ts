@@ -1,4 +1,4 @@
-// text: display-cell text for the pause window (durandal.nvim pause.lua :11-61). Every width is
+// text: display-cell text for the review window (durandal.nvim pause.lua :11-61). Every width is
 // in cells (nvim_strwidth): East Asian wide and emoji-presentation characters take two, marks
 // and joiners none. The models lay their panes out with these (plan decision 2).
 export { plain } from './viewModel';

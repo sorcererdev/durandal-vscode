@@ -1,10 +1,12 @@
 import * as assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
+import type { Api } from '../../src/extension';
+import { plain } from '../../src/pause/viewModel';
 import { FakeUi } from '../fakeUi';
-import { api, cleanTold, file, open, restart, revert, running, until, ws } from './helpers';
+import { api, cleanTold, file, open, pageQuiet, revert, running, until, ws } from './helpers';
 
 const DIR = 'py/src/bistro/booking/commands/';
 const MODULE = `${DIR}create_booking.py`;
@@ -53,6 +55,7 @@ describe('the TDD loop against olifant lsp (python-htmx)', () => {
   afterEach(async () => {
     const a = await running();
     a.setUi(undefined);
+    if (a.pause.view()) await a.pause.press('q');
     execFileSync('git', ['checkout', '--', '.'], { cwd: join(ws(), 'py') });
     await cleanTold(a, join(ws(), 'py'));
     // every open sandbox document back to the disk (a stub saved the test file; the watcher is slow)
@@ -127,27 +130,41 @@ describe('the TDD loop against olifant lsp (python-htmx)', () => {
     }
   });
 
-  // a real model's conjure: local only (CI has no model), as durandal.nvim's e2e
-  it('conjures a stubbed method\'s body from its red tests', async function () {
-    const model = process.env.DURANDAL_E2E_MODEL;
-    if (!model) return this.skip();
-    this.timeout(600_000);
-    await vscode.workspace.getConfiguration('durandal').update('model', model, vscode.ConfigurationTarget.Global);
-    try {
-      await restart();
-      const ed = await open(file(MODULE));
-      const { def, last } = handleSpan(ed.document);
-      const lastLen = ed.document.lineAt(last).text.length;
-      await ed.edit(b => b.replace(new vscode.Range(def + 1, 0, last, lastLen), '        raise NotImplementedError("later")'));
-      ed.selection = new vscode.Selection(def + 1, 8, def + 1, 8);
-      await said('durandal.test.here', /failed/);
-      await open(file(MODULE));
-      ed.selection = new vscode.Selection(def + 1, 8, def + 1, 8);
-      await said('durandal.conjure', /^conjured · green/, 300_000);
-      assert.ok(!vscode.window.activeTextEditor!.document.getText().includes('NotImplementedError'));
-    } finally {
-      await vscode.workspace.getConfiguration('durandal').update('model', undefined, vscode.ConfigurationTarget.Global);
-      await restart();
-    }
+  // a recorded step (olifant's step_replies: the file's text is every writer's reply), so CI
+  // runs it; run.ts points DURANDAL_STEP_REPLIES at the file
+  const STEPS = process.env.DURANDAL_STEP_REPLIES;
+  const conjureHere = async (a: Api): Promise<void> => {
+    const ed = await open(file(MODULE));
+    const { def } = handleSpan(ed.document);
+    ed.selection = new vscode.Selection(def + 1, 8, def + 1, 8);
+    void vscode.commands.executeCommand('durandal.conjure');
+    await until(() => a.pause.source() === 'step' || a.shown.find(s => s.level === 'error') || undefined, 'the step window', 120_000);
+    assert.equal(a.pause.source(), 'step', JSON.stringify(a.shown.slice(-3)));
+  };
+
+  it('conjure shows a recorded step with its goal; a lands it', async () => {
+    const a = await running();
+    assert.ok(STEPS, 'run.ts sets DURANDAL_STEP_REPLIES');
+    const module = readFileSync(join(ws(), MODULE), 'utf8');
+    writeFileSync(STEPS!, `<goal>mark the module</goal>\n<file path="src/bistro/booking/commands/create_booking.py">\n${module}# conjured\n</file>\n`);
+    await conjureHere(a);
+    assert.ok(plain(a.pause.view()!.title).includes('mark the module'), plain(a.pause.view()!.title));
+    const from = a.shown.length;
+    await a.pause.press('a');
+    const s = await until(() => a.shown.slice(from).find(x => x.text.startsWith('conjured') || x.level === 'error'), 'the landing said', 60_000);
+    assert.equal(s.text, 'conjured · mark the module · saved');
+    assert.ok(readFileSync(join(ws(), MODULE), 'utf8').endsWith('# conjured\n'));
+  });
+
+  it('a recorded step that took none opens the no-step window; a is refused', async () => {
+    const a = await running();
+    writeFileSync(STEPS!, '<goal>nothing</goal>\n');
+    await conjureHere(a);
+    // the title is cut at a narrow panel's width; a late size report must not overwrite ours
+    await pageQuiet(a);
+    await a.pause.receive({ type: 'size', cols: 200 });
+    assert.equal(plain(a.pause.view()!.title), 'conjure · no step · the writer saw nothing to do');
+    await a.pause.press('a');
+    assert.equal(a.pause.notices().at(-1), 'a: no step to accept: h asks the harder writer, d shows the reply');
   });
 });

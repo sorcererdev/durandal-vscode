@@ -3,7 +3,7 @@
 import { DEFAULT_GLYPHS, GLYPH_NAMES, Glyphs } from './glyphs';
 import { PLANS_DIR } from './isPlan';
 
-export interface PlansOptions { dir: string; conceal: boolean; glyphs: Glyphs; foldDone: boolean; reviewAnswers: boolean; reconcile: 'auto' | 'key' }
+export interface PlansOptions { dir: string; conceal: boolean; glyphs: Glyphs; foldDone: boolean; reconcile: 'auto' | 'key' }
 
 // dir: under each project, the folder whose markdown files are plans; it must match the
 // server's [plans] dir. Slashes at either end and spaces are dropped; empty is the default.
@@ -31,8 +31,6 @@ export function plansOptionsFrom(get: (key: string, fallback: unknown) => unknow
     conceal: conceal === true,
     glyphs: glyphsOf(get('glyphs', {})),
     foldDone: typeof foldDone === 'boolean' ? foldDone : true,
-    // an ask's answer waits as a ghost under its row, as a validate's does (M7)
-    reviewAnswers: get('reviewAnswers', false) === true,
     // "key": only Plan: Reconcile reconciles; "auto" also on entry, landings and saves elsewhere
     reconcile: get('reconcile', 'auto') === 'key' ? 'key' : 'auto',
   };

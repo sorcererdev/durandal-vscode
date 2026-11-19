@@ -6,7 +6,6 @@ import {
 } from 'vscode-languageclient/node';
 import { applyServerEdit } from './applyEdit';
 import { checkBinary, Gate, ServerState, STOPPED } from './health';
-import type { ProgressValue } from './pause/progress';
 import { planTaps, type ReadingHooks } from './plans/taps';
 import { DoctorResult, InlineItem, Olifant, ReviewReady, SERVER_COMMANDS, Suggestion } from './protocol';
 import { realRoot } from './root';
@@ -40,9 +39,6 @@ export interface ClientHooks {
   planGhost?: { item(document: vscode.TextDocument, position: vscode.Position): vscode.InlineCompletionItem[] | undefined };
   // olifant/suggestion: what follows the last edit, pushed (M3 spec §3.3)
   suggestion?(s: Suggestion): void;
-  // the server's work-done progress, every begin, report and end the library shows (M5 spec
-  // §3.6): the pause window claims a resume's
-  progress?(token: string | number, v: ProgressValue): void;
   // olifant/plans/review/ready: a do's review is waiting (sent before the do's own answer)
   reviewReady?(p: ReviewReady): void;
   // the server stopped (a stop, a restart, or its client closed): nothing it said stands
@@ -222,15 +218,6 @@ export class Server {
           if (r && !r.command && item.command) r.command = item.command;
           if (r && hooks.suggest) hooks.suggest.resolved(item, r);
           return r;
-        },
-        // seen, then shown by the library as before (its status-bar progress)
-        handleWorkDoneProgress: (token, params, next) => {
-          // a hook that throws must not strand the library's own progress
-          try {
-            hooks.progress?.(token, params);
-          } finally {
-            next(token, params);
-          }
         },
       },
       errorHandler: {

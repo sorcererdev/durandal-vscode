@@ -1,0 +1,7 @@
+{ "shown": {
+  "token": "step-1", "file": "/p/src/a.py", "unit": "f", "writer": "claude-haiku-5-5", "goal": "nothing", "took": false,
+  "edits": null, "dropped": [], "parses": [],
+  "tests": { "passing": [], "failing": [], "stillRed": ["t::a"], "noTests": false },
+  "after": null, "cost": 0.001, "seconds": 1.5, "harder": true,
+  "diffs": [], "situation": "The cursor is in `f`", "reply": "<goal>nothing</goal>"
+} }

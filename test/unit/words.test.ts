@@ -1,15 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { doWord, fileItem, landedWord, NO_GHOST, NO_PAST_DO, NO_RECORD, nothingBack, PENDING, reconcileWord, testsWord } from '../../src/plans/words';
+import { ASK_NONE, doWord, fileItem, landedWord, NO_GHOST, NO_PAST_DO, NO_RECORD, nothingBack, PENDING, reconcileWord, testsWord } from '../../src/plans/words';
 
 test('the do and landing notices, verbatim from durandal.nvim (plans.lua landed)', () => {
   assert.equal(doWord({ changed: ['/p/a.py'], seconds: 42 }), 'do: 1 file changed · to review · 42 s');
   assert.equal(doWord({ changed: ['a', 'b'], seconds: 9.1, cost: 0.5 }), 'do: 2 files changed · to review · 9.1 s · $0.5');
   assert.equal(doWord({}), 'do: 0 files changed · to review · 0 s');
-  assert.equal(landedWord('ask', 2, { dropped: 1, unresolved: 0, seconds: 9.1, cost: 0.0123 }), 'ask: 2 lines · 1 not found · 9.1 s · $0.0123');
+  assert.equal(landedWord('validate', 2, { dropped: 1, unresolved: 0, seconds: 9.1, cost: 0.0123 }), 'validate: 2 lines · 1 not found · 9.1 s · $0.0123');
   assert.equal(landedWord('validate', 1, { dropped: 0, unresolved: 2, seconds: 1, cost: null }), 'validate: 1 lines · 2 not found · 1 s');
   assert.equal(nothingBack('do'), 'do: nothing came back');
-  assert.deepEqual(PENDING, { ask: ' ⋯ asking', validate: ' ⋯ validating', do: ' ⋯ doing' });
+  assert.deepEqual(PENDING, { validate: ' ⋯ validating', do: ' ⋯ doing' });
 });
 
 test('no ghost here, the tests notice and a files item', () => {
@@ -26,4 +26,8 @@ test('the loop\'s words (plans.lua reconciled :550-558, review.lua :512-531)', (
   assert.equal(reconcileWord(0, 0), 'reconcile: 0 facts · 0 to review');
   assert.equal(NO_PAST_DO, 'plans: no past do here');
   assert.equal(NO_RECORD, 'plans: no record behind this line');
+});
+
+test('P Q with nothing to answer says so', () => {
+  assert.equal(ASK_NONE, 'ask: nothing to answer here (checked already? hover reads it)');
 });

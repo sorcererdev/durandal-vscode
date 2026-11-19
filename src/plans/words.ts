@@ -6,10 +6,12 @@ const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v)
 const cost = (r: ErrandResult): string => (typeof r.cost === 'number' ? ` · $${r.cost}` : '');
 
 // the pending mark at a running row's end
-export const PENDING: Record<Verb, string> = { ask: ' ⋯ asking', validate: ' ⋯ validating', do: ' ⋯ doing' };
+export const PENDING: Record<Verb, string> = { validate: ' ⋯ validating', do: ' ⋯ doing' };
 
 export const RUNNING_HERE = 'plans: a request is already running on this line';
 export const NOTHING_RUNNING = 'plans: nothing is running';
+// P Q at a sentence the server offers no Answer this for
+export const ASK_NONE = 'ask: nothing to answer here (checked already? hover reads it)';
 export const CANCELLED_WORD = 'cancelled';
 export const NO_PLAN = 'open a plan of an Olifant project first';
 export const NO_FILES = 'plans: no files';

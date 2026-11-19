@@ -7,7 +7,7 @@ import { pickAtCursor } from './reviewModel';
 
 // Reviews: the ways into a review (spec §5.1): the server's push after a do, the plan lens
 // (olifant.plans.review), and the chord p r on a plan. Each asks olifant/plans/review and shows it
-// in the pause window. (Not generate/review.ts's reviewModel, the generate form's review, nor
+// in the review window. (Not generate/review.ts's reviewModel, the generate form's review, nor
 // land.ts's plans.review, a landing's: those are other reviews.)
 export class Reviews {
   constructor(private readonly d: { server: Server; say: Say; controller: PauseController }) {}

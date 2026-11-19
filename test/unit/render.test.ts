@@ -2,19 +2,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { conjureLegend, conjureView, entries, layout } from '../../src/pause/model';
+import { stepView } from '../../src/pause/stepModel';
 import { width } from '../../src/pause/text';
 import { plain } from '../../src/pause/viewModel';
 import type { View } from '../../src/pause/viewModel';
 import { esc, html, lineHtml } from '../../webview/render';
-import { fixture } from '../pauseFixtures';
+import { stepFixture } from '../stepFixtures';
 
 // a hand-made view: two entries (the second selected, two lines long), a keyed row, a keyless
 // unpressable row, a keep row; a diff with a `<` in it
 const view = (o: Partial<View> = {}): View => ({
-  state: 'paused',
+  state: 'review',
   tab: 'conjure · cancel_booking',
-  title: [{ text: 'conjure · cancel_booking', kind: 'title' }, { text: ' · ' }, { text: '● paused', kind: 'paused' }],
+  title: [{ text: 'conjure · cancel_booking', kind: 'title' }, { text: ' · ' }, { text: '● review', kind: 'strong' }],
   short: [{ text: 'cancel_booking', kind: 'title' }],
   lines: [
     [{ text: 'red', kind: 'red' }, { text: ' after round 2' }],
@@ -81,7 +81,7 @@ test('entries: each line of an entry carries data-entry; the selected entry\'s l
 
 test('the title leads the situation; an empty line keeps its height', () => {
   const sit = pane(html(view()), 'sit');
-  assert.ok(sit.startsWith('<div class="line title"><span class="k-title">conjure · cancel_booking</span> · <span class="k-paused">● paused</span></div>'));
+  assert.ok(sit.startsWith('<div class="line title"><span class="k-title">conjure · cancel_booking</span> · <span class="k-strong">● review</span></div>'));
   assert.ok(sit.includes('<div class="line"> </div>'));
 });
 
@@ -103,11 +103,11 @@ test('help mode: the key table replaces the diff pane', () => {
 });
 
 test('narrow: main carries narrow (and flipped), the short title shows; wide main has neither', () => {
-  assert.match(html(view()), /^<main data-state="paused">/);
+  assert.match(html(view()), /^<main data-state="review">/);
   const narrow = html(view({ narrow: true }));
-  assert.match(narrow, /^<main class="narrow" data-state="paused">/);
+  assert.match(narrow, /^<main class="narrow" data-state="review">/);
   assert.ok(pane(narrow, 'sit').startsWith('<div class="line title"><span class="k-title">cancel_booking</span></div>'));
-  assert.match(html(view({ narrow: true, flipped: true })), /^<main class="narrow flipped" data-state="paused">/);
+  assert.match(html(view({ narrow: true, flipped: true })), /^<main class="narrow flipped" data-state="review">/);
 });
 
 test('the footer: the legend, or a notice in its place', () => {
@@ -118,26 +118,8 @@ test('the footer: the legend, or a notice in its place', () => {
   assert.match(html(view(), ''), /<footer id="foot" class="line">c continue/);
 });
 
-test('running: the status line replaces the rows and the reason', () => {
-  const out = html(view({
-    state: 'running',
-    reason: [{ text: 'why it was proposed' }],
-    status: [{ text: '⠋', kind: 'spinner' }, { text: ' continue · round 3 · 4 s', kind: 'running' }],
-  }));
-  const off = pane(out, 'off');
-  assert.equal(buttons(off).length, 0);
-  assert.ok(!off.includes('why it was proposed'));
-  assert.equal(off, '<div class="line status"><span class="k-spinner">⠋</span><span class="k-running"> continue · round 3 · 4 s</span></div>');
-  assert.match(out, /data-state="running"/);
-});
-
-test('a proposal\'s reason sits above the rows', () => {
-  const off = pane(html(view({ state: 'proposal', reason: [{ text: 'the test was wrong', kind: 'proposal' }] })), 'off');
-  assert.ok(off.startsWith('<div class="line reason"><span class="k-proposal">the test was wrong</span></div><button'));
-});
-
 test('no inline style anywhere (the CSP allows none)', () => {
-  for (const v of [view(), view({ narrow: true, flipped: true }), view({ help: [[{ text: 'x' }]] }), view({ state: 'running', status: [{ text: '⠋', kind: 'spinner' }] })]) {
+  for (const v of [view(), view({ narrow: true, flipped: true }), view({ help: [[{ text: 'x' }]] })]) {
     const out = html(v, 'a notice');
     assert.ok(!/style=/i.test(out) && !/<style/i.test(out), out);
   }
@@ -152,28 +134,33 @@ const css = readFileSync(join(__dirname, '..', '..', '..', 'webview', 'pause.css
 const rule = (selector: string): string => css.split(`\n${selector} {`)[1]?.split('}')[0] ?? '';
 
 test('the wide page fits its chrome: the left pane, the chrome and the diff title fit the cols the page reports', () => {
-  for (const name of ['plain', 'wired', 'steps', 'check'] as const) {
+  for (const name of ['took', 'nostep', 'failing'] as const) {
     for (let cols = 110; cols <= 200; cols++) {
-      const p = fixture(name);
-      for (let selected = 0; selected < entries(p).length; selected++) {
-        const v = conjureView(p, { cols, selected, flipped: false, help: false, chord: 'Cmd+Alt+D C' });
+      const shown = stepFixture(name);
+      const files = Math.max(shown.diffs.length, 1);
+      for (let selected = 0; selected < files; selected++) {
+        const v = stepView(shown, { cols, selected, flipped: false, help: false });
         const left = Math.max(...[v.title, ...v.lines, ...v.rows.flatMap(r => r.lines)].map(l => width(plain(l))));
         assert.ok(left <= v.width, `${name} at ${cols}: a left line of ${left} cells in a ${v.width}-cell pane`);
         const used = v.width + CHROME + width(plain(v.diff.title));
-        assert.ok(used <= cols, `${name} at ${cols}, entry ${selected}: ${used} cells`);
+        assert.ok(used <= cols, `${name} at ${cols}, file ${selected}: ${used} cells`);
       }
     }
   }
 });
 
-test('the footer wraps in the left column and never widens it: the wide legend is longer than the pane', () => {
-  // the premise: the model leaves the wide legend whole but for its tail ("the page wraps it")
-  const legend = conjureLegend({ narrow: false, proposal: false, running: false, wire: true });
-  const short = legend.slice(0, legend.indexOf(' · q close') + ' · q close'.length);
-  assert.ok(width(short) > layout(200).text, `${width(short)} cells`);
+test('the footer wraps in the left column and never widens it', () => {
   // a max-content column sizes to its widest item: the footer gives it no width, then fills it
   const foot = rule('#foot');
   assert.match(foot, /(?:^|\s)width: 0;/);
   assert.match(foot, /(?:^|\s)min-width: 100%;/);
   assert.match(foot, /(?:^|\s)white-space: normal;/);
+});
+
+test('a step renders: its title, its files, no rows, its legend wrapped by the page', () => {
+  const v = stepView(stepFixture('took'), { cols: 200, selected: 0, flipped: false, help: false });
+  const out = html(v);
+  assert.ok(out.includes('conjure · f · '));
+  assert.ok(out.includes('src/a__test.py'));
+  assert.ok(out.includes('a accept'));
 });

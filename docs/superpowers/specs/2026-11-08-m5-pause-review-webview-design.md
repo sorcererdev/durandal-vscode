@@ -1,5 +1,7 @@
 # durandal-vscode M5: the pause / review webview
 
+> **Superseded (conjure half) by** `2026-11-17-m9-pin-bump-and-conjure-step-design.md`: conjure answers with one step, reviewed as the window's step source. The do, errand and reconcile review half stands.
+
 Date: 2026-11-08. Status: approved in conversation, section by section. Umbrella:
 `2026-11-06-durandal-vscode-design.md` §6 row 5 ("the one webview: conjure pause, do review,
 reconcile review, details view"; decision it owns: "the webview's message protocol and key

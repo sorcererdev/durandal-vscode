@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import type { CodeAction, WorkspaceEdit } from 'vscode-languageserver-protocol';
+import { CodeAction, ExecuteCommandRequest, WorkspaceEdit } from 'vscode-languageserver-protocol';
+import { errorMessage } from '../errors';
 import { Lsp } from '../protocol';
 import type { Say, Server } from '../server';
 import { toggleFoldAt } from './folds';
@@ -7,16 +8,18 @@ import { asked, RunningHere, runningHere } from './here';
 import type { PlanLayer } from './layer';
 import type { PlanDocs } from './planDocs';
 import { applyPlanEdit } from './serverEdit';
-import { excerptNext, newStepNext, Next, sources, toggleNext } from './sourceActions';
+import { excerptNext, newStepNext, Next, pickTitled, sources, toggleNext } from './sourceActions';
+import { ASK_NONE } from './words';
 
 export interface ActionsDeps {
   server: Server; say: Say; planDocs: PlanDocs;
   layer: Pick<PlanLayer, 'collapsedAt' | 'foldStartsAt' | 'excerptAt'>;
 }
 
-// PlanActions: new step, excerpt and toggle (M6 spec §4.4). Each asks the server for the row's
-// code actions with only: [source] itself (source actions never reach the lightbulb) and applies
-// the server's edit through applyServerEdit, so a stale one is refused as every server edit is.
+// PlanActions: new step, excerpt and toggle (M6 spec §4.4), and P Q's Answer this (runTitled).
+// The first three ask the server for the row's code actions with only: [source] itself (source
+// actions never reach the lightbulb) and apply the server's edit through applyServerEdit, so a
+// stale one is refused as every server edit is.
 export class PlanActions {
   constructor(private readonly d: ActionsDeps) {}
 
@@ -25,6 +28,7 @@ export class PlanActions {
       vscode.commands.registerCommand('durandal.plan.newStep', () => this.newStep()),
       vscode.commands.registerCommand('durandal.plan.excerpt', () => this.excerpt()),
       vscode.commands.registerCommand('durandal.plan.toggle', () => this.toggle()),
+      vscode.commands.registerCommand('durandal.plan.ask', () => this.runTitled(['Answer this'], ASK_NONE)),
     );
   }
 
@@ -64,6 +68,43 @@ export class PlanActions {
     const h = await runningHere(this.d);
     const xs = h && await this.sources(h);
     if (h && xs) await this.next(h, toggleNext(xs));
+  }
+
+  // runTitled: the server's own code action at the cursor whose title starts with one of
+  // PREFIXES (pickTitled), run: its edit applied, or its command run on the server with its
+  // arguments verbatim. None: NONE, as info. A refusal (a ResponseError) is said as info too:
+  // the server's sentence is an answer, not a fault (spec §3.1).
+  async runTitled(prefixes: readonly string[], none: string, o: { exact?: boolean; needsEdit?: boolean } = {}): Promise<void> {
+    const h = await runningHere(this.d);
+    if (!h) return;
+    // the cursor's point, its column in UTF-16 code units (VS Code's and LSP's both)
+    const at = { line: h.editor.selection.active.line, character: h.editor.selection.active.character };
+    let xs: unknown;
+    try {
+      xs = await this.d.server.request(Lsp.codeAction, { textDocument: { uri: h.uri }, range: { start: at, end: at }, context: { diagnostics: [] } });
+    } catch (err) {
+      if (this.d.server.client() === h.lc) void this.d.say('info', errorMessage(err));
+      return;
+    }
+    if (this.d.server.client() !== h.lc) return;
+    const a = pickTitled(xs, prefixes, o);
+    if (!a) {
+      void this.d.say('info', none);
+      return;
+    }
+    if (a.edit) {
+      await this.apply(a);
+      return;
+    }
+    if (!a.command) {
+      void this.d.say('info', none);
+      return;
+    }
+    try {
+      await this.d.server.request(ExecuteCommandRequest.type, { command: a.command.command, arguments: a.command.arguments ?? [] });
+    } catch (err) {
+      if (this.d.server.client() === h.lc) void this.d.say('info', errorMessage(err));
+    }
   }
 
   private async sources(h: RunningHere): Promise<CodeAction[] | undefined> {

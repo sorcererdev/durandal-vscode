@@ -2,8 +2,8 @@
 
 Olifant's conventions, generators and TDD loop in VS Code, over the `olifant lsp` language
 server: rule findings and their fixes, regions kept on save, actions and generators with a
-live preview, ⚡ hints, the migration report, ghost text, the TDD loop, the pause window and
-plans. It is a port of durandal.nvim, the Neovim plugin.
+live preview, ⚡ hints, the migration report, ghost text, the TDD loop, the review window (a
+conjure's step, a do, a reconcile) and plans. It is a port of durandal.nvim, the Neovim plugin.
 
 Requires an `olifant` binary with the `lsp` command. Build one from a checkout of
 [sorcererdev/olifant](https://github.com/sorcererdev/olifant): `cabal build &&
@@ -24,7 +24,7 @@ then `PATH`, `~/.local/bin`, `~/.cabal/bin` and `~/bin` (VS Code started from th
 shorter `PATH` than your shell). `Durandal: Show Health` says what it found, and runs
 `olifant doctor` for the project of the file you are in.
 
-This release was tested against olifant `48f38ab` (the commit in `.olifant-ref`); a newer
+This release was tested against olifant `127570e` (the commit in `.olifant-ref`); a newer
 olifant whose `--help` lists `lsp` is found too, but only that commit is tested.
 
 One `olifant lsp` serves the window. Every folder holding `.olifant/` is a project and keeps its
@@ -90,7 +90,7 @@ The chord is Ctrl+Alt+D (also on macOS) followed by a letter.
 | (palette) | Run All Tests | The project's tests. |
 | `j` | Jump to Test or Module | Between a module and its test file; a missing test file opens untitled at its path. |
 | `s` | Stub a Test | A new test for the function at the cursor, at the end of its test file, saved; the cursor on its name. |
-| `c` | Conjure | Fills the body at the cursor, or the selected lines, until its tests pass; lands as one undo step. |
+| `c` | Conjure | Asks for one small step at the cursor (or the selected lines), shown in the review window; `a` lands it, one undo step per file. |
 | `m` | Mutate | Mutates the unit at the cursor; survivors are warnings and a picker stubs or waives them. |
 
 A run writes its summary as a notice and its failures as errors on their lines (press F8 to walk them).
@@ -98,36 +98,35 @@ The full output is in the results document, which opens beside the editor when s
 Ctrl/Cmd-click a `✗` line to go to it; `t` or `shift+t` there runs the last run again, and
 `s` works in the untitled test file a jump opens. A green run of a module's tests mutates its marked units
 again and says which survivors it killed. Runs, conjures and mutates show a Cancel button. A
-conjure that pauses opens the pause window (below). There is no Test Explorer: olifant lists no
+conjure opens its step in the review window (below). There is no Test Explorer: olifant lists no
 tests.
 
-## The pause window
+### Conjure
 
-A conjure that pauses (a project with a decision model and a ladder) opens a tab beside the
-file. The left side says why it stopped, lists the rounds (the wire as entry 0, accepted steps
-between them) and the tests involved, and offers what can be done next, each on a key. The right
-side shows the diff the selected entry would land. One letter or a click answers; the tab then
-shows the run, and the next pause or the landing.
+`Ctrl+Alt+D C` (`Durandal: Conjure`) asks olifant for one small step at the cursor: the writer
+reads the unit, its tests and what you have been doing, names a goal and writes it. A selection
+points it at those lines instead. The step is shown before anything lands, in the review window
+beside the file: the goal, the writer with its seconds and cost, how the tests moved, whether
+each file parses, and each file's diff.
 
-| Key | What it does |
+| Key | Does |
 |---|---|
-| `c` / `h` | Continue: more rounds with this model; `h` asks a sentence for the model first. |
-| `C` | Climb to the stronger model. |
-| `w` `W`, `t` `T`, `p` `P` | Wire a port, fix a test, add the method a port lacks (the first / the second). |
-| `a` | Accept the diff on the right: keep that round (red), keep the wire alone, or accept a proposal. |
-| `r` | Reject the proposal. |
-| `s` | Stop: nothing lands. |
-| `[` `]`, `0`-`9` | Previous / next entry, or jump to one; the diff follows. |
-| `j` `k`, PageUp PageDown | Scroll the diff. |
-| `Tab` | In a narrow tab, move between the situation and the diff. |
-| `d` | The details as a markdown document beside the tab. |
-| `x` | Cancel a run (nothing lands). |
-| `q`, `Esc` | Close the tab; the pause stays. |
-| `?` | The keys; any key closes them. |
+| `a` | accept: the step lands, one undo step per file, and `conjured · <goal> · saved` says so |
+| `r` | reject: nothing lands |
+| `h` | ask the harder writer (`[conjure] harder`) for the same step; its step replaces this one |
+| `[` `]` | previous / next file |
+| `j` `k` `PgDn` `PgUp` | scroll the diff |
+| `Tab` | on a narrow panel, flip between the situation and the diff |
+| `d` | the situation the writer read and its reply, beside the window |
+| `?` | the keys |
+| `q` `Esc` | later: the window closes and the step stays |
 
-Closing the tab keeps the pause: `Ctrl+Alt+D C` inside the unit reopens it, and a
-note at the end of the unit's last line says so. Editing the file drops the pause, as the server
-does; a conjure elsewhere in the file forgets it. A pause lives ten minutes on the server.
+A step that took none (nothing to do, or no file written) opens all the same, with nothing to
+accept. After `q`, `Ctrl+Alt+D C` with the cursor on the step's lines and no selection reopens it while
+the file is as it was shown; after an edit, with a selection, or anywhere else, it asks for a
+new step.
+
+### The review window
 
 The same tab reviews a plan's do, a past do, and a reconcile's readings. A do's review opens by
 itself when the do ends; the plan's lenses and `Ctrl+Alt+D P R` on a plan open
@@ -161,10 +160,9 @@ says:
 - **Claim checks.** Opening or saving a plan, and a second after typing stops in it (triage
   only: olifant sorts the plan's sentences), can start an olifant claim pass that runs paid
   model checks; `[plans] pass_cost = 0` in `.olifant/config.toml` turns it off.
-- **Verbs.** On a plan row, `Ctrl+Alt+D P Q` asks the model about it, `P V`
-  validates it, `P D` does the step. The row shows `⋯ asking` while it runs; `Durandal: Plan:
-  Cancel` stops it. An ask's answer goes straight in, fingerprints stamped, and one undo takes
-  it back (`durandal.plans.reviewAnswers` makes it wait). A validate's blocks, and a do's in a
+- **Verbs.** On a plan row, `Ctrl+Alt+D P Q` runs the server's *Answer this* on the question at
+  the cursor (as the lightbulb does), `P V` validates it, `P D` does the step. `Durandal: Plan:
+  Cancel` stops a running one. A validate's blocks, and a do's in a
   project without git, wait under their row as a ghost: the row ends in `ai · +N lines` (hover
   it to read them), the lines show under the row while the cursor is on it, `P Y` (or `Tab`)
   writes them and `P N` drops them. Accept the whole ghost: accepting only part of it (Accept
@@ -188,7 +186,7 @@ says:
 ## Settings
 
 - `durandal.path`: the binary.
-- `durandal.debounceMs`: how long typing must pause before suggestions are worked out.
+- `durandal.debounceMs`: how long typing must stay quiet before suggestions are worked out.
 - `durandal.model`: the model backend for holes (empty: the project's default).
 - `durandal.fills`: a recorded fills file standing in for the model (tests, demos).
 - `durandal.hints`: the ⚡ hints.
@@ -198,7 +196,6 @@ says:
 - `durandal.plans.conceal`: plan glyphs (off by default).
 - `durandal.plans.glyphs`: glyph overrides by name.
 - `durandal.plans.foldDone`: close done work on entry, not only excerpts (on by default).
-- `durandal.plans.reviewAnswers`: an ask's answer waits as a ghost under its row (off by default).
 - `durandal.plans.reconcile`: `"auto"` (default) reconciles on entry, landings and saves elsewhere; `"key"` only on Plan: Reconcile.
 - `durandal.trace.server`: LSP traffic into the Durandal output channel.
 
@@ -219,10 +216,8 @@ OLIFANT_BIN=$(cd ~/projects/olifant-$(cut -c1-7 .olifant-ref) && cabal list-bin 
 OLIFANT_REPO=~/projects/olifant-$(cut -c1-7 .olifant-ref) npm run test:e2e
 ```
 
-The conjure in `real.8` and the ask in `real.9` call a model and run only with
-`DURANDAL_E2E_MODEL=<name>`, a backend under `[model.backends.<name>]` in
-`~/.config/olifant/config.toml` (the test sandboxes have no `[model]` of their own). CI has no
-model, so run them before a release.
+`real.8`'s conjure tests run on a recorded step (`DURANDAL_STEP_REPLIES`, which `run.ts` points at
+a file), so they need no model.
 
 ### Releasing
 

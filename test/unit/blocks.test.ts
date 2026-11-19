@@ -51,7 +51,7 @@ test('replaces: block.replace, or a do\'s block whose first line opens a step', 
   assert.equal(replaces('do', { lines: [{ text: '  - [x] step' }] }), true);
   assert.equal(replaces('do', { lines: [{ text: '  - did it' }] }), false);
   assert.equal(replaces('validate', { lines: [{ text: '- [x] step' }] }), false);
-  assert.equal(replaces('ask', { replace: true, lines: [] }), true);
+  assert.equal(replaces('validate', { replace: true, lines: [] }), true);
   assert.equal(replaces('do', { lines: null }), false);
 });
 
@@ -62,7 +62,7 @@ test('an ask straight in (plans_spec :575): facts first, then blocks bottom-up, 
     { after: 3, lines: [{ text: '  - a @src/a.py:F', fp: 'abc1234' }, { text: '  - so' }] },
     { after: 3, lines: [{ text: '  - then' }] },
     { after: 1, lines: [{ text: '  - early' }] },
-  ], 'ask', 3, throughEdits(facts, 3));
+  ], 'validate', 3, throughEdits(facts, 3));
   assert.deepEqual(placed.map(p => [p.index, p.row, p.replace]), [[0, 3, false], [1, 3, false], [2, 1, false]]);
   const l = landing(A, facts, placed);
   assert.deepEqual(l.lines, ['# T', '- a fact', '  - early', '- b', '- c', '  - a @src/a.py:F ✓ abc1234', '  - so', '  - then', '- d', '- e target line', '- f', '## Next', '- [ ] step @src/a.py:Foo']);
@@ -70,7 +70,7 @@ test('an ask straight in (plans_spec :575): facts first, then blocks bottom-up, 
 });
 
 test('a block after the request row lands under the tracked row; others under their after; clamped', () => {
-  const placed = placeBlocks(A, [{ after: 3, lines: [{ text: '  - x' }] }, { after: 1, lines: [{ text: '  - y' }] }, { after: 99, lines: [{ text: '  - z' }] }], 'ask', 3, 5);
+  const placed = placeBlocks(A, [{ after: 3, lines: [{ text: '  - x' }] }, { after: 1, lines: [{ text: '  - y' }] }, { after: 99, lines: [{ text: '  - z' }] }], 'validate', 3, 5);
   assert.deepEqual(placed.map(p => p.row), [5, 1, 8]);
 });
 
@@ -88,9 +88,9 @@ test('a do\'s step block replaces its row (plans_spec :641)', () => {
 });
 
 test('null or malformed blocks and lines land nothing and break nothing (plans_spec :1055)', () => {
-  assert.deepEqual(placeBlocks(A, null, 'ask', 1, 1), []);
-  assert.deepEqual(placeBlocks(A, 'x', 'ask', 1, 1), []);
-  const p = placeBlocks(A, [null, { after: 1, after_text: null, lines: null }, { after: 2, lines: [{ text: 7 }, { text: '  - ok' }] }], 'ask', 1, 1);
+  assert.deepEqual(placeBlocks(A, null, 'validate', 1, 1), []);
+  assert.deepEqual(placeBlocks(A, 'x', 'validate', 1, 1), []);
+  const p = placeBlocks(A, [null, { after: 1, after_text: null, lines: null }, { after: 2, lines: [{ text: 7 }, { text: '  - ok' }] }], 'validate', 1, 1);
   assert.deepEqual(p, [{ index: 1, row: 1, replace: false, lines: [] }, { index: 2, row: 2, replace: false, lines: ['  - ok'] }]);
   assert.deepEqual(landing(A, [], p).lines, [...A.slice(0, 3), '  - ok', ...A.slice(3)]);
 });

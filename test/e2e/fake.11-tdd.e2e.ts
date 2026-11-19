@@ -224,9 +224,7 @@ describe('the TDD loop (fake server)', () => {
   const mainEdit = (text: string) => ({ documentChanges: [{ textDocument: { uri: uriOf(MAIN), version: null }, edits: [
     { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, newText: text },
   ] }] });
-  const landed = (o: Record<string, unknown> = {}) => ({
-    file: abs(MAIN), unit: 'f', edits: mainEdit('x = 2'), summary: 'green', green: true, tests: green(), rounds: 1, rungs: ['local'], stopped: false, ...o,
-  });
+  const landedAnswer = (edits: unknown = mainEdit('x = 2')) => ({ landed: { file: abs(MAIN), edits } });
   const conjures = () => log().filter(m => m.method === 'olifant/conjure');
 
   it('stub: applied, saved, the test file opened on the name', async () => {
@@ -255,46 +253,50 @@ describe('the TDD loop (fake server)', () => {
     assert.equal(await said('durandal.stub', () => true), 'no function or class at line 1: put the cursor in one to stub its test');
   });
 
-  it('conjure lands: applied and saved, flashed, the cursor on it, info', async () => {
+  it('a landed answer lands: applied and saved, flashed, the cursor on it, info', async () => {
     await settle(MAIN, 'x = 1\n');
     const a = await running();
     await open(file(MAIN));
-    reply('olifant/conjure', landed());
+    reply('olifant/conjure', landedAnswer());
     const flashes = a.tdd.flashes.length;
     const fired = a.landed.fired.length;
-    assert.equal(await said('durandal.conjure', t => t.startsWith('conjured')), 'conjured · green · saved');
+    assert.equal(await said('durandal.conjure', t => t.startsWith('conjured')), 'conjured · the step · saved');
     await until(() => a.landed.fired.length > fired, 'the conjure landed');
-    assert.equal(a.landed.fired.length, fired + 1);
     assert.equal(a.landed.fired.at(-1), 'conjure');
     assert.equal(disk(MAIN), 'x = 2\n');
     assert.deepEqual(a.tdd.flashes.slice(flashes), [{ first: 0, last: 0 }]);
-    assert.equal(testMarks(TEST).length, 0);
+    assert.equal(a.shown.at(-1)!.level, 'info');
     await settle(MAIN, 'x = 1\n');
   });
 
-  it('conjure red: a warning with rounds and rungs; the after-run marked', async () => {
+  it('a landed answer without edits: nothing applied, nothing changed', async () => {
     await open(file(MAIN));
-    reply('olifant/conjure', landed({ green: false, summary: 'red: test_two · assert 1 == 2', tests: red(), rounds: 3, rungs: ['local', 'cloud'] }));
-    const text = await said('durandal.conjure', t => t.startsWith('conjured'));
-    assert.equal(text, 'conjured · red: test_two · assert 1 == 2 · 3 rounds · local → cloud · saved');
-    const a = await api();
-    assert.equal(a.shown[a.shown.length - 1].level, 'warn');
-    await until(() => testMarks(TEST).length === 1, 'the after-run marked');
-    await settle(MAIN, 'x = 1\n');
-  });
-
-  it('conjure without edits: nothing applied, the summary alone', async () => {
-    await open(file(MAIN));
-    reply('olifant/conjure', landed({ edits: null, summary: 'green: already passes' }));
-    assert.equal(await said('durandal.conjure', t => t.startsWith('conjured')), 'conjured · green: already passes');
+    reply('olifant/conjure', landedAnswer(null));
+    assert.equal(await said('durandal.conjure', t => t.startsWith('conjured')), 'conjured · the step · nothing changed');
     assert.equal(disk(MAIN), 'x = 1\n');
+  });
+
+  it('a rejected answer is said; an answer olifant does not give is an error', async () => {
+    const a = await running();
+    await open(file(MAIN));
+    reply('olifant/conjure', { rejected: true });
+    assert.equal(await said('durandal.conjure', t => t.startsWith('step')), 'step rejected · nothing landed');
+    reply('olifant/conjure', { paused: { token: 't' } });
+    assert.equal(await said('durandal.conjure', () => true), 'conjure: an answer olifant does not give');
+    assert.equal(a.shown.at(-1)!.level, 'error');
+  });
+
+  it('a refusal of the opening call is said verbatim', async () => {
+    await open(file(MAIN));
+    reply('olifant/conjure', { lsp_error: 'no function or class at line 1: put the cursor in one to conjure it' });
+    assert.equal(await said('durandal.conjure', () => true), 'no function or class at line 1: put the cursor in one to conjure it');
   });
 
   it('a whole-line selection sends its last selected line (Review Focus 2)', async () => {
     await settle(MAIN, 'x = 1\ny = 2\nz = 3\n');
     const ed = await open(file(MAIN));
     ed.selection = new vscode.Selection(0, 0, 2, 0);
-    reply('olifant/conjure', landed({ edits: null }));
+    reply('olifant/conjure', landedAnswer(null));
     const n = conjures().length;
     await said('durandal.conjure', t => t.startsWith('conjured'));
     assert.deepEqual(conjures()[n].params.selection, { start: 0, end: 1 });
@@ -304,7 +306,7 @@ describe('the TDD loop (fake server)', () => {
   it('conjure cancelled (the Cancel button): $/cancelRequest, nothing landed', async () => {
     const a = await running();
     await open(file(MAIN));
-    reply('olifant/conjure', { hold: true, title: 'conjuring', progress: ['round 1 of 8 · asking local…'] });
+    reply('olifant/conjure', { hold: true, title: 'conjuring', progress: ['conjuring with sonnet'] });
     const n = conjures().length;
     const from = a.shown.length;
     void vscode.commands.executeCommand('durandal.conjure');

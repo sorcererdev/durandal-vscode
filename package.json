@@ -146,11 +146,6 @@
           "default": true,
           "markdownDescription": "Close done steps and answered questions, as well as code excerpts, when a plan is first shown. Off: close only the excerpts."
         },
-        "durandal.plans.reviewAnswers": {
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "An ask's answer waits as a ghost under its row for `Ctrl+Alt+D P Y` or `P N`, as a validate's does. Off: it goes straight into the plan, and one undo takes it back."
-        },
         "durandal.plans.reconcile": {
           "type": "string",
           "enum": [
@@ -273,7 +268,7 @@
       },
       {
         "command": "durandal.plan.ask",
-        "title": "Plan: Ask",
+        "title": "Plan: Answer This",
         "category": "Durandal"
       },
       {

@@ -5,41 +5,36 @@ import type { Landed } from '../landed';
 import { factEdits } from '../plans/facts';
 import { lineEdits, linesOf } from '../plans/lineEdits';
 import { Olifant } from '../protocol';
-import type { ChooseResult, ConjureParams, Fact, Paused, Review } from '../protocol';
-import { findRoot } from '../root';
+import type { ChooseResult, Fact, Review, StepChoice } from '../protocol';
 import { NOT_RUNNING, Say, Server } from '../server';
-import { chordLabel } from '../settings';
-import type { Conjure, PauseSink, ResumeHooks } from '../tdd/conjure';
-import type { Flight } from '../tdd/flights';
+import type { Conjure, StepWindow } from '../tdd/conjure';
 import type { Ui } from '../uiTypes';
 import type { VirtualDocs } from '../virtualDocs';
-import { conjureDetails, reviewDetails } from './details';
-import { conjureView, defaultSelected, entries, layout, noRow, PauseRow, rows, Running } from './model';
+import { acted } from './acted';
+import { reviewDetails } from './details';
+import { layout } from './model';
 import type { PausePanel } from './panel';
-import { Claim, ProgressClaims, ProgressValue } from './progress';
-import type { Reminders } from './reminder';
-import { acted, progressWords, resumeParams, runningLabel, runningRound } from './resume';
 import { entryIndex, notOffered, reviewRows, reviewTitle, reviewView } from './reviewModel';
-import { held, Pause, PauseStore } from './store';
+import { stepFiles, stepRefusal, stepView } from './stepModel';
+import type { StepStore } from './stepStore';
 import type { FromPage, View } from './viewModel';
 
-export type SourceKind = 'conjure' | 'do' | 'errand' | 'reconcile';
+export type SourceKind = 'step' | 'do' | 'errand' | 'reconcile';
 
 // KeyAct: a key's action; true when it did something, else why not (the footer's notice)
 export interface KeyAct { keys: string[]; act(key: string): Promise<true | string> | true | string }
 
 export interface ControllerDeps {
-  server: Server; say: Say; ui: () => Ui; docs: VirtualDocs; panel: PausePanel; reminders: Reminders; conjure: Conjure; platform: string; landed: Landed;
+  server: Server; say: Say; ui: () => Ui; docs: VirtualDocs; panel: PausePanel; landed: Landed;
+  // the window's a, r and h (tdd/conjure.ts); the held steps it draws
+  conjure: Pick<Conjure, 'answer'>; steps: StepStore;
   // redo: plans/do resuming a review's thread on the plan's LINE, landed as Plan: Do lands it (M6b)
   redo(planUri: string, line: number, id: string, text: string): Promise<void>;
 }
 
-// a run: a resume in the air, one at a time across documents; pause is the one it took, drawn
-// until the answer comes; hooks are its identity (Conjure hands them back with its answer)
-interface Run {
-  uri: string; pause: Pause; row: PauseRow; started: number; timer: NodeJS.Timeout; hooks: ResumeHooks;
-  flight?: Flight<vscode.CancellationToken>; message?: string; round?: number; claim?: Claim;
-}
+// a step shown: its document (its held step, and the answer in the air, are in the store) and
+// the selected file
+interface StepState { uri: string; selected: number }
 
 // a review shown: its plan, the payload, the selected file or reading, the choice in the air
 interface RevState { planUri: string; review: Review; selected: number; busy?: string }
@@ -48,9 +43,7 @@ const BUSY = 'the last answer is still on its way';
 // the files of a do, the readings of a reconcile
 const countOf = (r: Review) => (r.kind === 'reconcile' ? r.entries.length : r.landing.files.length);
 
-const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 const keyName = (k: string) => (k === 'Escape' ? 'Esc' : k);
-const docOf = (uri: string) => vscode.workspace.textDocuments.find(d => d.uri.toString() === uri);
 
 // touches: whether a server edit changes the document at uri (both parsed: the server's spelling
 // of a uri can differ from VS Code's)
@@ -63,90 +56,22 @@ function touches(edit: NonNullable<ChooseResult['edit']>, uri: string): boolean 
 
 // PauseController: the window's source and its keys (spec §3, §4.4). The page sends what was
 // pressed; the controller decides, re-lays out the model and sends it back.
-export class PauseController implements PauseSink {
-  readonly store: PauseStore;
-  // the source shown: a conjure's file, or a review (spec §5.4); at most one of the two is set
-  private shownUri: string | undefined;
+export class PauseController implements StepWindow {
+  // the source shown: a step, or a review (spec §5.4); at most one of the two is set
+  private step: StepState | undefined;
   private rev: RevState | undefined;
   private cols = 120;
   // the size reports seen (the page's and the tests'): the e2e tests wait for the page's first one (#26)
   private sized = 0;
   private help = false;
   private flipped = false;
-  private run: Run | undefined;
-  private readonly claims = new ProgressClaims();
   private readonly said: string[] = [];
 
-  constructor(private readonly d: ControllerDeps) {
-    this.store = new PauseStore((p, why) => this.dropped(p, why));
-  }
-
-  register(context: vscode.ExtensionContext): void {
-    context.subscriptions.push(
-      // any edit of the unit's file kills the pause server-side (ConjureNext.hs pruned)
-      vscode.workspace.onDidChangeTextDocument(e => {
-        const uri = e.document.uri.toString();
-        const p = this.store.get(uri);
-        if (p && e.contentChanges.length > 0 && e.document.version !== p.version) {
-          this.store.drop(uri, 'conjure: the file changed, the pause is gone');
-        }
-      }),
-      vscode.workspace.onDidCloseTextDocument(doc => this.store.drop(doc.uri.toString())),
-      { dispose: () => this.endRun() },
-    );
-  }
-
-  // --- the sink (tdd/conjure.ts)
-
-  shown(params: ConjureParams, p: Paused, hooks?: ResumeHooks): void {
-    const uri = params.textDocument.uri;
-    // only this run's own answer ends it; a stale one's pause is held all the same
-    const after = hooks !== undefined && this.run?.hooks === hooks;
-    if (after) this.endRun();
-    const doc = docOf(uri);
-    const h = held(uri, params.position, p, doc?.version ?? 0, doc?.lineCount ?? p.lines.last);
-    this.store.set(h);
-    this.d.reminders.show(uri, h.last, `conjure paused · ${chordLabel(this.d.platform, 'C')} reopens`);
-    void this.d.say('info', p.why ? `conjure paused · ${p.why}` : 'conjure paused');
-    this.rev = undefined;
-    this.shownUri = uri;
-    this.help = false;
-    this.paint(after ? 'entry' : undefined, true);
-  }
-
-  ended(hooks: ResumeHooks): void {
-    // a stale run's end (stopped, then answered) never ends the run going now
-    if (this.run?.hooks !== hooks) return;
-    const uri = this.run.uri;
-    this.endRun();
-    if (uri !== undefined && this.shownUri === uri) this.hide();
-  }
-
-  atRun(uri: string, line: number, selection: boolean): boolean {
-    // the file's resume is in the air (its pause taken): the running view again, no second request
-    if (this.run?.uri === uri) {
-      this.rev = undefined;
-      this.shownUri = uri;
-      this.help = false;
-      this.paint(undefined, true);
-      return true;
-    }
-    const p = this.store.get(uri);
-    if (!p) return false;
-    if (!selection && line >= p.first && line <= p.last) {
-      this.rev = undefined;
-      this.shownUri = uri;
-      this.help = false;
-      this.paint(undefined, true);
-      return true;
-    }
-    this.store.drop(uri, 'the earlier pause is forgotten');
-    return false;
-  }
+  constructor(private readonly d: ControllerDeps) {}
 
   // showReview: a review in the window (spec §5); entry selects a reading. The same review shown
-  // again keeps its selection (and, while its answer is on its way, its state); a pause shown
-  // before stays stored with its reminder (§5.4).
+  // again keeps its selection (and, while its answer is on its way, its state); a step shown
+  // before stays held (§5.4).
   showReview(planUri: string, review: Review, entry?: string): void {
     const r = this.rev;
     const same = r !== undefined && r.planUri === planUri && r.review.id === review.id && r.review.kind === review.kind;
@@ -158,10 +83,23 @@ export class PauseController implements PauseSink {
     }
     const selected = entry !== undefined ? entryIndex(review, entry)
       : same ? Math.min(r.selected, Math.max(countOf(review) - 1, 0)) : 0;
-    this.shownUri = undefined;
+    this.step = undefined;
     this.help = false;
     this.rev = { planUri, review, selected };
     this.paint(undefined, true);
+  }
+
+  // showStep: URI's held step in the window (tdd/conjure.ts, spec §3.4): opened, or drawn again
+  // in place after h with its first file selected
+  showStep(uri: string): void {
+    this.rev = undefined;
+    this.help = false;
+    this.step = { uri, selected: 0 };
+    this.paint(undefined, true);
+  }
+
+  closeStep(uri: string): void {
+    if (this.step?.uri === uri) this.hide();
   }
 
   // --- the page
@@ -177,7 +115,7 @@ export class PauseController implements PauseSink {
       const r = this.view()?.rows[m.row];
       if (r?.key) await this.press(r.key);
     } else if (m.type === 'select') {
-      await this.answer('select', this.rev ? this.selectReview(this.rev, m.entry) : this.select(m.entry));
+      await this.answer('select', this.rev ? this.selectReview(this.rev, m.entry) : this.step ? this.selectFile(this.step, m.entry) : 'nothing to do here');
     }
   }
 
@@ -196,48 +134,20 @@ export class PauseController implements PauseSink {
   source(): SourceKind | undefined {
     if (!this.d.panel.isOpen()) return undefined;
     if (this.rev) return this.rev.review.kind;
-    return this.shownUri ? 'conjure' : undefined;
+    return this.step ? 'step' : undefined;
   }
   notices(): string[] { return [...this.said]; }
   sizes(): number {
     return this.sized;
   }
 
-  // progress: the server's work-done progress (hooks.progress); a resume's words feed its run
-  progress(token: string | number, v: ProgressValue): void {
-    this.claims.hear(token, v);
-  }
-
-  // stopped: the server stopped; nothing it said stands
+  // stopped: the server stopped; no step it showed stands
   stopped(): void {
-    this.claims.clear();
-    this.endRun();
-    this.store.dropAll();
+    this.d.steps.dropAll();
     this.hide();
   }
 
   // --- drawing
-
-  private current(): { pause: Pause; running?: Running } | undefined {
-    const uri = this.shownUri;
-    if (!uri) return undefined;
-    const r = this.run;
-    if (r && r.uri === uri) {
-      return {
-        pause: r.pause,
-        running: {
-          label: runningLabel(r.row), message: r.message, seconds: Math.floor((Date.now() - r.started) / 1000),
-          round: r.round ?? runningRound(r.row.choice, r.pause.paused), accepted: r.row.choice === 'accept',
-        },
-      };
-    }
-    const p = this.store.get(uri);
-    return p ? { pause: p } : undefined;
-  }
-
-  private selectedOf(p: Pause): number {
-    return p.selected ?? defaultSelected(entries(p.paused));
-  }
 
   private paint(flash?: 'row' | 'entry', focus = false): void {
     const r = this.rev;
@@ -247,13 +157,11 @@ export class PauseController implements PauseSink {
       this.d.panel.show(view, { beside, flash, focus });
       return;
     }
-    const c = this.current();
-    if (!c) return;
-    const view = conjureView(c.pause.paused, {
-      cols: this.cols, selected: this.selectedOf(c.pause), running: c.running, flipped: this.flipped, help: this.help,
-      chord: chordLabel(this.d.platform, 'C'),
-    });
-    const beside = vscode.window.visibleTextEditors.find(e => e.document.uri.toString() === c.pause.uri)?.viewColumn;
+    const s = this.step;
+    const h = s ? this.d.steps.get(s.uri) : undefined;
+    if (!s || !h) return;
+    const view = stepView(h.shown, { cols: this.cols, selected: s.selected, flipped: this.flipped, help: this.help, busy: h.busy });
+    const beside = vscode.window.visibleTextEditors.find(e => e.document.uri.toString() === s.uri)?.viewColumn;
     this.d.panel.show(view, { beside, flash, focus });
   }
 
@@ -265,138 +173,25 @@ export class PauseController implements PauseSink {
   }
 
   private hide(): void {
-    this.shownUri = undefined;
+    this.step = undefined;
     this.rev = undefined;
     this.help = false;
     this.flipped = false;
     this.d.panel.close();
   }
 
-  // the panel's tab was closed: the source stays (pause stored, run going, review on the server)
+  // the panel's tab was closed: the source stays (the step held, the review on the server)
   closed(): void {
-    this.shownUri = undefined;
+    this.step = undefined;
     this.rev = undefined;
     this.help = false;
     this.flipped = false;
   }
 
-  private dropped(p: Pause, why: string | undefined): void {
-    this.d.reminders.clear(p.uri);
-    if (this.shownUri === p.uri && this.run?.uri !== p.uri) this.hide();
-    if (why) void this.d.say('info', why);
-  }
-
-  // every path that ends a run comes here (its answer, its end, a stop, dispose): its claim goes with it
-  private endRun(): void {
-    if (this.run) {
-      clearInterval(this.run.timer);
-      this.run.claim?.release();
-    }
-    this.run = undefined;
-  }
-
-  // --- the keys (pause.lua M.keys :1095-1126)
-
   private table(): KeyAct[] {
     if (this.rev) return this.reviewTable(this.rev);
-    return [
-      { keys: ['c', 'h', 'C', 'w', 'W', 't', 'T', 'p', 'P', 's', 'a', 'r'], act: k => this.rowKey(k) },
-      { keys: ['['], act: () => this.step(-1) },
-      { keys: [']'], act: () => this.step(1) },
-      { keys: DIGITS, act: k => this.jump(Number(k)) },
-      // the page scrolls the diff pane itself; reported so every key is accounted for
-      { keys: ['j', 'k', 'PageUp', 'PageDown'], act: () => true },
-      { keys: ['Tab'], act: () => this.flip() },
-      { keys: ['d'], act: () => this.details() },
-      { keys: ['x'], act: () => this.cancel() },
-      { keys: ['q', 'Escape'], act: () => { this.hide(); return true; } },
-      { keys: ['?'], act: () => { this.help = !this.help; this.paint(); return true; } },
-    ];
-  }
-
-  private rowsOf(p: Pause): PauseRow[] {
-    const es = entries(p.paused);
-    return rows(p.paused, es[this.selectedOf(p)], layout(this.cols).narrow);
-  }
-
-  private rowKey(k: string): true | string | Promise<true | string> {
-    // one run at a time, whichever file it is in
-    if (this.run) return 'a run is going on · x cancels it';
-    const p = this.shownUri ? this.store.get(this.shownUri) : undefined;
-    if (!p) return 'nothing to do here';
-    const rs = this.rowsOf(p);
-    const row = rs.find(r => r.key === k && r.pressable);
-    if (row) return this.resume(p, row);
-    // why not, with the proposal's own rule (pause.lua no_row :1033-1044)
-    return noRow(rs, k);
-  }
-
-  private async resume(p: Pause, row: PauseRow): Promise<true | string> {
-    // the server check comes first: the pause and the window stay (spec §3.5)
-    if (!this.d.server.client()) return NOT_RUNNING;
-    let hint: string | undefined;
-    if (row.hint) {
-      hint = (await this.d.ui().text({ title: 'hint', value: '', prompt: 'goes to the model with the next round' }).result)?.trim();
-      if (!hint) return true;
-      // dropped or replaced while the sentence was asked: nothing to send
-      if (this.store.get(p.uri) !== p) return true;
-      // a run began while the sentence was asked: one at a time
-      if (this.run) return 'a run is going on · x cancels it';
-    }
-    const params = resumeParams({ uri: p.uri, position: p.position, token: p.token }, row, hint);
-    this.store.take(p.uri);
-    this.d.reminders.clear(p.uri);
-    const hooks: ResumeHooks = { started: f => { if (this.run?.hooks === hooks) this.run.flight = f; } };
-    // the running view ticks only while it is the one shown
-    const timer = setInterval(() => { if (this.shownUri === p.uri) this.paint(); }, 1000);
-    this.run = { uri: p.uri, pause: p, row, started: Date.now(), timer, hooks };
-    const run = this.run;
-    // this run's words; drawn, as the timer's tick, only while its file is the one shown
-    run.claim = this.claims.claim('conjuring', m => {
-      if (this.run !== run) return;
-      const w = progressWords(m, runningLabel(row));
-      run.message = w.text;
-      if (w.round !== undefined) run.round = w.round;
-      if (this.shownUri === run.uri) this.paint();
-    });
-    this.help = false;
-    this.paint('row');
-    void this.d.conjure.resume(params, hooks);
-    return true;
-  }
-
-  private select(i: number): true | string {
-    if (this.run && this.run.uri === this.shownUri) return 'a run is going on · x cancels it';
-    const p = this.shownUri ? this.store.get(this.shownUri) : undefined;
-    if (!p || i < 0 || i >= entries(p.paused).length) return 'nothing to do here';
-    p.selected = i;
-    this.paint('entry');
-    return true;
-  }
-
-  private step(d: number): true | string {
-    if (this.run && this.run.uri === this.shownUri) return 'a run is going on · x cancels it';
-    const p = this.shownUri ? this.store.get(this.shownUri) : undefined;
-    if (!p) return 'nothing to do here';
-    const n = entries(p.paused).length;
-    const from = this.selectedOf(p);
-    const to = Math.min(Math.max(from + d, 0), n - 1);
-    if (to === from || n === 0) return d < 0 ? 'the first entry' : 'the last entry';
-    p.selected = to;
-    this.paint('entry');
-    return true;
-  }
-
-  private jump(n: number): true | string {
-    if (this.run && this.run.uri === this.shownUri) return 'a run is going on · x cancels it';
-    const p = this.shownUri ? this.store.get(this.shownUri) : undefined;
-    if (!p) return 'nothing to do here';
-    const i = entries(p.paused).findIndex(e => e.n === n && e.kind !== 'proposal');
-    if (i < 0) return `no entry ${n}`;
-    if (i === this.selectedOf(p)) return `entry ${n} is shown`;
-    p.selected = i;
-    this.paint('entry');
-    return true;
+    if (this.step) return this.stepTable(this.step);
+    return [];
   }
 
   private flip(): true | string {
@@ -406,23 +201,75 @@ export class PauseController implements PauseSink {
     return true;
   }
 
-  private cancel(): true | string {
-    // the run in the air, whichever file it is in
-    const f = this.run?.flight;
-    if (!f) return 'nothing is running';
-    f.cancel('user');
+  // --- the step source (step.lua M.keys)
+
+  private stepTable(s: StepState): KeyAct[] {
+    return [
+      { keys: ['a'], act: () => this.answerStep(s, 'accept') },
+      { keys: ['r'], act: () => this.answerStep(s, 'reject') },
+      { keys: ['h'], act: () => this.answerStep(s, 'harder') },
+      { keys: ['['], act: () => this.stepFile(s, -1) },
+      { keys: [']'], act: () => this.stepFile(s, 1) },
+      // the page scrolls the diff pane itself; reported so every key is accounted for
+      { keys: ['j', 'k', 'PageUp', 'PageDown'], act: () => true },
+      { keys: ['Tab'], act: () => this.flip() },
+      { keys: ['d'], act: () => this.stepDetails(s) },
+      { keys: ['q', 'Escape'], act: () => { this.hide(); return true; } },
+      { keys: ['?'], act: () => { this.help = !this.help; this.paint(); return true; } },
+    ];
+  }
+
+  // answerStep: the refusals first (nothing sent), then the answer with its busy footer (the
+  // busy choice is the held step's, set by conjure as the request goes). A new shown step (h) is
+  // drawn in place by showStep; a landing or a rejection closes the window; a failed h keeps
+  // the step and says why.
+  private async answerStep(s: StepState, choice: StepChoice): Promise<true | string> {
+    const h = this.d.steps.get(s.uri);
+    if (!h) return 'nothing to do here';
+    const no = stepRefusal(h.shown, choice, h.busy !== undefined);
+    if (no) return no;
+    if (!this.d.server.client()) return NOT_RUNNING;
+    const answered = this.d.conjure.answer(s.uri, choice);
+    this.paint();
+    const kept = await answered;
+    if (kept === undefined) return true;
+    // the window moved on (closed, or another source): the sentence as a notification
+    if (this.step?.uri !== s.uri) {
+      void this.d.say('error', kept);
+      return true;
+    }
+    this.paint();
+    return kept;
+  }
+
+  private stepFile(s: StepState, d: number): true | string {
+    const h = this.d.steps.get(s.uri);
+    const n = h ? stepFiles(h.shown).length : 0;
+    if (n === 0) return 'the step changes no file';
+    const to = Math.min(Math.max(s.selected + d, 0), n - 1);
+    if (to === s.selected) return d < 0 ? 'the first file' : 'the last file';
+    s.selected = to;
+    this.paint('entry');
     return true;
   }
 
-  // details: the pause as a markdown document beside the window (spec §6); the window stays
-  private async details(): Promise<true | string> {
-    const c = this.current();
-    if (!c) return 'nothing to do here';
-    const unit = vscode.Uri.parse(c.pause.uri);
-    const doc = docOf(c.pause.uri);
-    const root = unit.scheme === 'file' ? await findRoot(unit.fsPath) : undefined;
-    const text = conjureDetails(c.pause.paused, { root, lang: doc?.languageId ?? '' });
-    const uri = this.d.docs.set(`details/${c.pause.token}.md`, text);
+  private selectFile(s: StepState, i: number): true | string {
+    const h = this.d.steps.get(s.uri);
+    if (!h || i < 0 || i >= stepFiles(h.shown).length) return 'nothing to do here';
+    s.selected = i;
+    this.paint('entry');
+    return true;
+  }
+
+  // stepDetails: what the writer read and what it replied, as markdown beside the window
+  private async stepDetails(s: StepState): Promise<true | string> {
+    const h = this.d.steps.get(s.uri);
+    if (!h) return 'nothing to do here';
+    const text = reviewDetails(`conjure · ${h.shown.unit}`, [
+      { title: 'the situation the writer read', text: String(h.shown.situation ?? '') },
+      { title: "the writer's reply", text: String(h.shown.reply ?? '') },
+    ]);
+    const uri = this.d.docs.set(`details/${h.shown.token}.md`, text);
     await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri), { viewColumn: vscode.ViewColumn.Beside, preview: false });
     return true;
   }

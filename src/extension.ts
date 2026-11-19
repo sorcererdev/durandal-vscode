@@ -12,8 +12,8 @@ import { Hints } from './hints';
 import { Plans } from './land';
 import { PauseController, SourceKind } from './pause/controller';
 import { PausePanel } from './pause/panel';
-import { Reminders } from './pause/reminder';
 import { Reviews } from './pause/review';
+import { StepStore } from './pause/stepStore';
 import type { FromPage, View } from './pause/viewModel';
 import { EnterRule } from './plans/enterRule';
 import { PlanActions } from './plans/actions';
@@ -51,8 +51,8 @@ export interface TddApi {
   survivors(uri: string): MutateSurvivor[];
 }
 
-// the pause window (M5): its view and source, a key or page message played as if sent, a
-// document's pause and reminder, the footer notices said (the e2e tests read them)
+// the review window (M5): its view and source, a key or page message played as if sent, a
+// document's held step, the footer notices said (the e2e tests read them)
 export interface PauseApi {
   view(): View | undefined;
   source(): SourceKind | undefined;
@@ -60,8 +60,8 @@ export interface PauseApi {
   receive(m: FromPage): Promise<void>;
   // the size reports the window has had (the e2e tests wait for the page's own before sending theirs)
   sizes(): number;
-  stored(uri: string): boolean;
-  reminders(uri: string): number;
+  // the held step's token for a document (spec §3.6), undefined when none is held
+  held(uri: string): string | undefined;
   notices(): string[];
   // a review opened as the lens opens it
   open(uri: string, id: string, entry?: string): Promise<void>;
@@ -86,7 +86,7 @@ export interface Api {
   // the TDD loop (M4): the last run's answer, a Cancel click on every request in the air, the
   // conjure flashes, a document's survivors (the e2e tests read them)
   tdd: TddApi;
-  // the pause window (M5)
+  // the review window (M5)
   pause: PauseApi;
   // the active editor shows a plan (durandal.isPlan)
   isPlan(): boolean;
@@ -161,11 +161,11 @@ export function activate(context: vscode.ExtensionContext): Api {
   tests.register(context);
   new Jump({ server: s, say }).register(context);
   const flashes: { first: number; last: number }[] = [];
-  const conjure = new Conjure({ server: s, say, ui, flights, tests, flashes, landed });
+  // the held conjure steps, one a document: conjure keeps them, the window draws them
+  const steps = new StepStore();
+  const conjure = new Conjure({ server: s, say, flights, tests, flashes, landed, steps });
   conjure.register(context);
-  // the pause window (M5 spec §2): the panel knows nothing of conjure; the controller decides
-  const reminders = new Reminders();
-  reminders.register(context);
+  // the review window (M5 spec §2): the panel knows nothing of conjure; the controller decides
   // the panel needs the controller and the controller the panel: the holder breaks the cycle
   const hold: { c?: PauseController } = {};
   const panel = new PausePanel({
@@ -177,12 +177,11 @@ export function activate(context: vscode.ExtensionContext): Api {
   // the plan verbs are built with the plans below; the reopen reaches them through this holder
   const planHold: { verbs?: PlanVerbs } = {};
   const ctl = new PauseController({
-    server: s, say, ui, docs, panel, reminders, conjure, platform: process.platform, landed,
+    server: s, say, ui, docs, panel, conjure, steps, landed,
     redo: (planUri, line, id, text) => planHold.verbs?.run(planUri, 'do', line, { resume: id, text }) ?? Promise.resolve(),
   });
   hold.c = ctl;
-  ctl.register(context);
-  conjure.setSink(ctl);
+  conjure.setWindow(ctl);
   // the reviews (M5b spec §5): the push after a do, the lens, the chord p r
   const reviews = new Reviews({ server: s, say, controller: ctl });
   reviews.register(context);
@@ -230,8 +229,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     press: k => ctl.press(k),
     receive: m => ctl.receive(m),
     sizes: () => ctl.sizes(),
-    stored: uri => !!ctl.store.get(uri),
-    reminders: uri => reminders.count(uri),
+    held: uri => steps.get(uri)?.shown.token,
     notices: () => ctl.notices(),
     open: (uri, id, entry) => reviews.open(uri, id, entry),
   };
@@ -250,7 +248,6 @@ export function activate(context: vscode.ExtensionContext): Api {
     reconcile.stopped();
     idle.stopped();
   };
-  hooks.progress = (token, v) => ctl.progress(token, v);
 
   // health: the binary, the server, the projects, and olifant doctor for the active file's project
   const health = async (): Promise<string[]> => {

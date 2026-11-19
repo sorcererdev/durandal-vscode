@@ -1,7 +1,7 @@
 import type { Legend } from '../src/plans/legend';
 import { PLAN_TOKEN_MODIFIERS, PLAN_TOKEN_TYPES } from '../src/protocol';
 
-// The plan legend as olifant 48f38ab announces it, and an encoder of absolute tokens into the
+// The plan legend as the pinned olifant announces it, and an encoder of absolute tokens into the
 // LSP's relative 5-int data (the unit tests and the fake server's canned answers use it).
 export const PLAN_LEGEND: Legend = { tokenTypes: PLAN_TOKEN_TYPES, tokenModifiers: PLAN_TOKEN_MODIFIERS };
 

@@ -60,7 +60,7 @@ test('Esc dismisses the snippet ghost only while it is ours and visible (spec §
 test('the settings and the activation', () => {
   assert.deepEqual(Object.keys(pkg.contributes.configuration.properties).sort(),
     ['durandal.actionLog', 'durandal.debounceMs', 'durandal.fills', 'durandal.ghosts', 'durandal.hints', 'durandal.model', 'durandal.path',
-      'durandal.plans.conceal', 'durandal.plans.dir', 'durandal.plans.foldDone', 'durandal.plans.glyphs', 'durandal.plans.reconcile', 'durandal.plans.reviewAnswers', 'durandal.trace.server']);
+      'durandal.plans.conceal', 'durandal.plans.dir', 'durandal.plans.foldDone', 'durandal.plans.glyphs', 'durandal.plans.reconcile', 'durandal.trace.server']);
   // after startup too (issue #1): a project file opened in a window with no project folder
   assert.deepEqual(pkg.activationEvents, ['workspaceContains:**/.olifant/config.toml', 'onStartupFinished']);
   const log = (pkg.contributes.configuration.properties as Record<string, { type: string; default: unknown }>)['durandal.actionLog'];
@@ -202,9 +202,8 @@ test('M6a: the 13 token types with their superTypes, the 6 modifiers, a scope fo
   assert.ok(!Object.keys(scopes).some(k => k.includes('.done')), 'done maps to nothing: the folding does the work');
 });
 
-test('M6b: reviewAnswers is a boolean, false; M7: Plan: Accept Ghost and Plan: Reject Ghost are built on p y and p n', () => {
+test('M7: Plan: Accept Ghost and Plan: Reject Ghost are built on p y and p n', () => {
   const props = pkg.contributes.configuration.properties as Record<string, { type: string; default: unknown; enum?: string[] }>;
-  assert.deepEqual([props['durandal.plans.reviewAnswers'].type, props['durandal.plans.reviewAnswers'].default], ['boolean', false]);
   assert.deepEqual([props['durandal.plans.reconcile'].type, props['durandal.plans.reconcile'].default, props['durandal.plans.reconcile'].enum],
     ['string', 'auto', ['auto', 'key']]);
   assert.equal(BUILT['durandal.plan.accept'].title, 'Plan: Accept Ghost');
@@ -218,6 +217,7 @@ test('M6b: ask, validate, do and cancel are built; Plan: Cancel is palette-only'
     assert.ok(id in BUILT, id);
   }
   assert.equal(BUILT['durandal.plan.cancel'].title, 'Plan: Cancel');
+  assert.equal(BUILT['durandal.plan.ask'].title, 'Plan: Answer This');
   assert.ok(!KEYS.some(k => k.command === 'durandal.plan.cancel'));
 });
 

@@ -100,16 +100,8 @@ main.narrow #foot {
 .k-key { color: var(--vscode-textPreformat-foreground); }
 .k-running { color: var(--vscode-progressBar-background); }
 .k-title { font-weight: bold; }
-.k-paused { font-weight: bold; color: var(--vscode-editorWarning-foreground); }
 .k-proposal { color: var(--vscode-editorInfo-foreground); }
 .k-section { font-weight: bold; }
-.k-spinner {
-  display: inline-block;
-  color: var(--vscode-progressBar-background);
-  animation: durandal-spin 1s steps(8) infinite;
-}
-@keyframes durandal-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .k-spinner { animation: none; } }
 
 /* the key badge: no padding or border width, so the cells stay aligned */
 kbd {

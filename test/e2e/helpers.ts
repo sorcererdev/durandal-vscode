@@ -74,7 +74,7 @@ export async function revert(doc: vscode.TextDocument): Promise<void> {
   await vscode.commands.executeCommand('workbench.action.files.revert');
 }
 
-// windowTab: the pause / review window's tab is up in the workbench. It opens (and closes) there
+// windowTab: the review window's tab is up in the workbench. It opens (and closes) there
 // about 100 ms after the controller has drawn (or dropped) it, in a group of its own that takes
 // the focus, and an editor opened meanwhile goes into that group. Runs 43622964717 (pause) and
 // 43636253604 (review), 1.91.0: an after-each revert failed there with "Could NOT open editor".
@@ -156,4 +156,19 @@ export function actionLog(): Record<string, unknown>[] {
   const p = join(process.env.DURANDAL_LOG_DIR!, 'actions.jsonl');
   if (!existsSync(p)) return [];
   return readFileSync(p, 'utf8').split('\n').filter(l => l !== '').map(l => JSON.parse(l) as Record<string, unknown>);
+}
+
+// QUIET_MS / pageQuiet: once the page's first size report has passed, wait until its size
+// reports stop (#26), so a test's own size is not overwritten by a late one
+const QUIET_MS = 300;
+export async function pageQuiet(a: Api, ms = 5_000): Promise<void> {
+  const end = Date.now() + ms;
+  let seen = a.pause.sizes();
+  let since = Date.now();
+  while (Date.now() - since < QUIET_MS) {
+    if (Date.now() > end) throw new Error('timed out waiting for the page\'s size reports to stop');
+    await new Promise(r => setTimeout(r, 50));
+    const now = a.pause.sizes();
+    if (now !== seen) { seen = now; since = Date.now(); }
+  }
 }
